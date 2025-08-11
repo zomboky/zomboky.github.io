@@ -1,27 +1,20 @@
 <!DOCTYPE html>
 <html>
-<title> acceuil </title>
 <head>
-	<link rel="icon" href="./assets/images/favicon.ico" type="image/x-icon" />
-
-
+  <title>acceuil</title>
+  <link rel="icon" href="assets/images/favicon.ico"/>
 </head>
 <body>
-	<h1>
-		Bienvenue sur mon site
-	</h1>
+  <h1 id="bienvenue">Bienvenue sur mon site</h1>
 
+  <script>
+    const titre = document.getElementById('titre');
+    let dots = 0;
 
-
-
+    setInterval(() => {
+      dots = (dots + 1) % 4; // de 0 à 3 points
+      titre.textContent = 'Bienvenue sur mon site' + '.'.repeat(dots);
+    }, 500); // changement toutes les 500ms
+  </script>
 </body>
-
-
-
-
-
-
-
-
-
 </html>
