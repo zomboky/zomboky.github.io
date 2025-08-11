@@ -65,26 +65,45 @@
     <a href="#applications">Applications</a>
     <a href="#avantages">Avantages</a>
     <a href="#limites">Limites</a>
+    <a href="#histoire">Historique</a>
+    <a href="#fabricants">Fabricants</a>
   </nav>
   <main>
     <article>
       <h2 id="intro">Introduction</h2>
-      <p>Les FPGA (Field Programmable Gate Arrays) sont des circuits logiques reconfigurables. Contrairement aux processeurs classiques, ils permettent de définir leur logique interne après fabrication.</p>
+      <p>Les FPGA (Field Programmable Gate Arrays) sont des circuits logiques reconfigurables. Contrairement aux processeurs classiques, ils permettent de définir leur logique interne après fabrication. Cela les rend extrêmement flexibles et adaptés à une grande variété d'applications, allant du prototypage rapide à la production industrielle.</p>
       <h2 id="fonctionnement">Fonctionnement</h2>
-      <p>Un FPGA est constitué de blocs logiques programmables et d'interconnexions. En utilisant un langage de description matérielle comme VHDL ou Verilog, on configure le FPGA pour exécuter une tâche spécifique.</p>
+      <p>Un FPGA est constitué de blocs logiques programmables (CLB — Configurable Logic Blocks) reliés par un réseau d'interconnexions reconfigurables. Ces blocs peuvent être programmés pour implémenter des portes logiques, des registres, ou même des processeurs entiers. L'utilisateur décrit le circuit à l'aide d'un langage de description matérielle (HDL) comme VHDL ou Verilog, qui est ensuite synthétisé en configuration matérielle.</p>
+      <p>Les FPGA incluent souvent des ressources spécialisées comme des blocs de mémoire (BRAM), des multiplicateurs matériels, des PLL pour la gestion d’horloges, et parfois même des cœurs ARM intégrés.</p>
       <h2 id="applications">Applications</h2>
-      <p>Les FPGA sont utilisés dans les télécommunications, le traitement d'image, la robotique, l'aéronautique, et bien plus encore.</p>
+      <p>Les FPGA trouvent leur place dans :</p>
+      <ul>
+        <li>Les télécommunications : traitement de signaux, cryptographie, encodage/décodage.</li>
+        <li>Le traitement d'image et de vidéo en temps réel.</li>
+        <li>Les systèmes embarqués et la robotique.</li>
+        <li>Les systèmes de contrôle aéronautique et spatial.</li>
+        <li>La finance à haute fréquence (HFT) grâce à leur faible latence.</li>
+      </ul>
       <h2 id="avantages">Avantages</h2>
       <ul>
-        <li>Flexibilité</li>
-        <li>Parallélisme</li>
-        <li>Performances élevées pour des tâches spécifiques</li>
+        <li>Flexibilité de conception et mise à jour possible après fabrication.</li>
+        <li>Parallélisme massif pour des performances supérieures aux CPU dans certaines tâches.</li>
+        <li>Adaptabilité à des besoins très spécifiques sans produire un ASIC sur mesure.</li>
       </ul>
       <h2 id="limites">Limites</h2>
       <ul>
-        <li>Consommation d'énergie plus élevée que des ASIC optimisés</li>
-        <li>Complexité de développement</li>
-        <li>Coût parfois plus élevé pour de grandes séries</li>
+        <li>Consommation d'énergie souvent plus élevée qu'un ASIC dédié.</li>
+        <li>Courbe d'apprentissage importante pour maîtriser le développement FPGA.</li>
+        <li>Coût unitaire élevé pour de grandes productions par rapport à un ASIC.</li>
+      </ul>
+      <h2 id="histoire">Historique</h2>
+      <p>Les FPGA sont apparus dans les années 1980, popularisés par la société Xilinx avec le premier FPGA commercial. Leur usage a rapidement progressé dans les laboratoires de recherche, puis dans l'industrie. Aujourd'hui, les FPGA intègrent des technologies avancées et se rapprochent des SoC (System on Chip) avec des processeurs et périphériques intégrés.</p>
+      <h2 id="fabricants">Principaux fabricants</h2>
+      <ul>
+        <li>Xilinx (désormais AMD)</li>
+        <li>Intel (anciennement Altera)</li>
+        <li>Lattice Semiconductor</li>
+        <li>Microsemi (Microchip)</li>
       </ul>
     </article>
     <aside>
@@ -92,8 +111,9 @@
       <ul>
         <li>Historique des FPGA</li>
         <li>Principaux fabricants</li>
-        <li>Langages de description</li>
-        <li>Exemples de projets</li>
+        <li>Langages de description (VHDL, Verilog, SystemVerilog)</li>
+        <li>Exemples de projets : audio, vidéo, IA</li>
+        <li>Introduction à la DE10-Lite et autres cartes populaires</li>
       </ul>
     </aside>
   </main>
