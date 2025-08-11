@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cube 3D qui tourne</title>
+<style>
+  body {
+    display: flex;
+    height: 100vh;
+    justify-content: center;
+    align-items: center;
+    background: #222;
+    margin: 0;
+  }
+
+  .scene {
+    width: 200px;
+    height: 200px;
+    perspective: 600px;
+  }
+
+  .cube {
+    width: 150px;
+    height: 150px;
+    position: relative;
+    transform-style: preserve-3d;
+    animation: rotateCube 5s linear infinite;
+  }
+
+  .cube__face {
+    position: absolute;
+    width: 150px;
+    height: 150px;
+    background: rgba(0, 150, 255, 0.8);
+    border: 2px solid #005577;
+    box-sizing: border-box;
+  }
+
+  .cube__face--front  { transform: translateZ(75px); }
+  .cube__face--back   { transform: rotateY(180deg) translateZ(75px); background: rgba(255, 100, 100, 0.8);}
+  .cube__face--right  { transform: rotateY(90deg) translateZ(75px); background: rgba(100, 255, 100, 0.8);}
+  .cube__face--left   { transform: rotateY(-90deg) translateZ(75px); background: rgba(255, 255, 100, 0.8);}
+  .cube__face--top    { transform: rotateX(90deg) translateZ(75px); background: rgba(255, 100, 255, 0.8);}
+  .cube__face--bottom { transform: rotateX(-90deg) translateZ(75px); background: rgba(100, 255, 255, 0.8);}
+
+  @keyframes rotateCube {
+    from { transform: rotateX(0deg) rotateY(0deg); }
+    to   { transform: rotateX(360deg) rotateY(360deg); }
+  }
+</style>
+</head>
+<body>
+  <div class="scene">
+    <div class="cube">
+      <div class="cube__face cube__face--front"></div>
+      <div class="cube__face cube__face--back"></div>
+      <div class="cube__face cube__face--right"></div>
+      <div class="cube__face cube__face--left"></div>
+      <div class="cube__face cube__face--top"></div>
+      <div class="cube__face cube__face--bottom"></div>
+    </div>
+  </div>
+</body>
+</html>
