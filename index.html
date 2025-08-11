@@ -1,236 +1,101 @@
 <!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>DE10‑Lite — Carte FPGA — Visualisation</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
-  <style>
-    :root{
-      --bg1: #0f172a; /* deep navy */
-      --bg2: #071129; /* darker */
-      --accent1: #00f0ff; /* cyan */
-      --accent2: #7c5cff; /* purple */
-      --glass: rgba(255,255,255,0.06);
-      --muted: rgba(255,255,255,0.65);
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial}
-    body{
-      background: radial-gradient(1200px 600px at 10% 10%, rgba(124,92,255,0.12), transparent 8%),
-                  radial-gradient(900px 400px at 90% 90%, rgba(0,240,255,0.06), transparent 6%),
-                  linear-gradient(180deg,var(--bg1),var(--bg2));
-      color:#e6eef8;
-      padding:40px;
-      -webkit-font-smoothing:antialiased;
-      -moz-osx-font-smoothing:grayscale;
-    }
-    .container{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:1fr 480px;gap:28px;align-items:start}
-
-    header{display:flex;align-items:center;gap:16px}
-    .logo{
-      width:68px;height:68px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent2),var(--accent1));box-shadow:0 8px 30px rgba(0,0,0,0.6);font-weight:800;font-size:18px
-    }
-    h1{font-size:22px;margin:0}
-    p.lead{margin:6px 0 0;color:var(--muted);font-size:13px}
-
-    /* Board area */
-    .card{
-      background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-      border-radius:16px;padding:18px;box-shadow:0 6px 30px rgba(2,6,23,0.6);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.03)
-    }
-
-    .board-wrap{display:flex;flex-direction:column;gap:12px}
-    .board-canvas{display:grid;grid-template-columns:1fr 220px;gap:14px}
-
-    /* stylized DE10-Lite silhouette */
-    .board{
-      position:relative;width:100%;height:360px;border-radius:12px;overflow:hidden;padding:18px;background:linear-gradient(160deg,#071726 0%, #09223b 100%);box-shadow:inset 0 0 80px rgba(0,0,0,0.6);
-    }
-    svg{width:100%;height:100%}
-
-    .pin{cursor:pointer;transition:transform .18s ease}
-    .pin:hover{transform:translateY(-6px) scale(1.05)}
-
-    /* info column */
-    .info{padding:12px;border-radius:10px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));}
-    .info h3{margin:0 0 6px 0}
-    .specs{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px}
-    .spec{background:var(--glass);padding:10px;border-radius:8px;font-size:13px}
-
-    /* cards list */
-    .right-col{position:sticky;top:28px}
-    .features{display:grid;gap:12px}
-    .feature{display:flex;gap:12px;align-items:flex-start}
-    .dot{width:12px;height:12px;border-radius:3px;background:linear-gradient(135deg,var(--accent1),var(--accent2));box-shadow:0 6px 20px rgba(124,92,255,0.12)}
-
-    /* footer and accent */
-    footer{grid-column:1/-1;margin-top:18px;color:var(--muted);font-size:13px;text-align:center}
-
-    /* tooltip */
-    .tooltip{position:absolute;pointer-events:none;padding:10px 12px;border-radius:10px;background:linear-gradient(180deg,rgba(20,25,40,0.98),rgba(12,16,28,0.98));border:1px solid rgba(255,255,255,0.04);box-shadow:0 10px 30px rgba(2,6,23,0.6);transform:translate(-50%,-120%);white-space:nowrap;z-index:50;font-size:13px}
-
-    /* responsive */
-    @media (max-width:980px){.container{grid-template-columns:1fr;}.board-canvas{grid-template-columns:1fr}.right-col{position:static;}}
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cartes FPGA — Guide rétro</title>
+<style>
+  body {
+    margin: 0;
+    font-family: 'Courier New', monospace;
+    background-color: #f5ecd8;
+    color: #3b2f1d;
+    line-height: 1.6;
+  }
+  header {
+    background-color: #e6d8b5;
+    padding: 20px;
+    border-bottom: 2px solid #cbbf9e;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 28px;
+  }
+  nav {
+    background-color: #d6c69a;
+    padding: 10px;
+  }
+  nav a {
+    color: #3b2f1d;
+    text-decoration: none;
+    margin: 0 10px;
+    font-weight: bold;
+  }
+  nav a:hover {
+    text-decoration: underline;
+  }
+  main {
+    display: flex;
+    padding: 20px;
+  }
+  article {
+    flex: 3;
+    margin-right: 20px;
+  }
+  aside {
+    flex: 1;
+    background-color: #efe5cc;
+    padding: 15px;
+    border: 1px solid #cbbf9e;
+  }
+  h2 {
+    border-bottom: 1px solid #cbbf9e;
+    padding-bottom: 5px;
+  }
+</style>
 </head>
 <body>
-  <div class="container">
-    <div>
-      <header>
-        <div class="logo">FPGA</div>
-        <div>
-          <h1>DE10‑Lite — Aperçu visuel</h1>
-          <p class="lead">Carte FPGA — visualisation interactive et esthétique. Survolez les éléments pour voir des infos.</p>
-        </div>
-      </header>
-
-      <section style="margin-top:18px" class="card board-wrap">
-        <div class="board-canvas">
-          <div class="board card" id="board">
-            <!-- SVG stylisé représentant la carte (simplifié) -->
-            <svg viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="g1" x1="0" x2="1"><stop offset="0%" stop-color="#09314a"/><stop offset="100%" stop-color="#07122b"/></linearGradient>
-                <filter id="glow"><feGaussianBlur stdDeviation="6" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-              </defs>
-
-              <!-- board outline -->
-              <rect x="40" y="36" rx="18" ry="18" width="920" height="528" fill="url(#g1)" stroke="rgba(255,255,255,0.04)" stroke-width="2"/>
-
-              <!-- big chip (FPGA) -->
-              <rect id="chip" x="220" y="120" width="280" height="200" rx="10" fill="#061a2b" stroke="#1b77ff" stroke-opacity="0.6" stroke-width="3"/>
-              <text x="360" y="230" font-size="20" text-anchor="middle" fill="#9fd8ff" style="font-weight:700">FPGA</text>
-
-              <!-- headers / connectors -->
-              <g id="connectors" fill="#0ea5b3" opacity="0.9">
-                <rect class="pin" data-tip="PWR: Alimentation 5V/3.3V" x="80" y="480" width="110" height="32" rx="6"/>
-                <rect class="pin" data-tip="GPIO Header" x="200" y="480" width="380" height="32" rx="6"/>
-                <rect class="pin" data-tip="USB & UART" x="600" y="480" width="300" height="32" rx="6"/>
-              </g>
-
-              <!-- LEDs -->
-              <g id="leds">
-                <circle class="pin" data-tip="LED utilisateur 1" cx="540" cy="110" r="10" fill="#ffd166"/>
-                <circle class="pin" data-tip="LED utilisateur 2" cx="570" cy="110" r="10" fill="#ffd166"/>
-                <circle class="pin" data-tip="LED statut" cx="600" cy="110" r="10" fill="#ffd166"/>
-              </g>
-
-              <!-- SD card slot (stylised) -->
-              <rect class="pin" data-tip="Slot microSD" x="740" y="120" width="140" height="38" rx="6" fill="#123" stroke="#5cf" stroke-opacity="0.12"/>
-
-              <!-- USER BUTTONS -->
-              <rect class="pin" data-tip="Boutons utilisateur" x="80" y="120" width="92" height="36" rx="8" fill="#0b2" stroke="#9fefc8" stroke-opacity="0.12"/>
-
-              <!-- traces (decorative) -->
-              <path d="M360 160 C420 120, 620 120, 680 160" stroke="#3bd3ff" stroke-opacity="0.08" stroke-width="8" fill="none"/>
-              <path d="M260 360 C320 320, 560 320, 640 360" stroke="#b98aff" stroke-opacity="0.06" stroke-width="8" fill="none"/>
-
-            </svg>
-
-            <div id="tooltip" class="tooltip" style="display:none">Info</div>
-          </div>
-
-          <aside class="info card">
-            <h3 id="title">Survolez un élément</h3>
-            <div id="description" style="color:var(--muted);margin-top:6px;font-size:14px">Aucun élément sélectionné. Passez la souris sur la puce FPAG, les connecteurs, la carte SD ou les LED pour voir des détails.</div>
-
-            <div class="specs">
-              <div class="spec">
-                <strong>Famille</strong>
-                <div style="color:var(--muted);font-size:13px;margin-top:6px">FPGA / Logic</div>
-              </div>
-              <div class="spec">
-                <strong>Interfaces</strong>
-                <div style="color:var(--muted);font-size:13px;margin-top:6px">GPIO, USB, SD, UART</div>
-              </div>
-              <div class="spec">
-                <strong>Utilité</strong>
-                <div style="color:var(--muted);font-size:13px;margin-top:6px">Prototypage & apprentissage</div>
-              </div>
-              <div class="spec">
-                <strong>Visual</strong>
-                <div style="color:var(--muted);font-size:13px;margin-top:6px">Sombre, néon, moderne</div>
-              </div>
-            </div>
-
-            <div style="margin-top:12px;font-size:13px;color:var(--muted)">
-              Astuce: ce fichier est éditable — remplacez les textes des attributs <code>data-tip</code> par des informations techniques réelles (références, tensions, brochages) si vous voulez.
-            </div>
-
-          </aside>
-        </div>
-      </section>
-    </div>
-
-    <div class="right-col">
-      <div class="card">
-        <h3 style="margin:0">Faits rapides</h3>
-        <p style="color:var(--muted);margin-top:8px">Résumé visuel et notes personnalisables. Les points ci‑dessous sont modulables — je peux remplir avec des specs complètes si vous le souhaitez.</p>
-
-        <div style="margin-top:12px" class="features">
-          <div class="feature"><div class="dot"></div><div><strong>Prototypage rapide</strong><div style="color:var(--muted);font-size:13px">Accès direct aux headers pour capteurs et modules</div></div></div>
-          <div class="feature"><div class="dot"></div><div><strong>IDE & outils</strong><div style="color:var(--muted);font-size:13px">Support des outils Intel/Quartus & open-source</div></div></div>
-          <div class="feature"><div class="dot"></div><div><strong>Performances</strong><div style="color:var(--muted);font-size:13px">Parfait pour la logique embarquée et traitements temps-réel</div></div></div>
-        </div>
-
-      </div>
-
-      <div style="margin-top:12px" class="card">
-        <h4 style="margin:0">Personnaliser</h4>
-        <p style="color:var(--muted);margin-top:8px;font-size:13px">Souhaitez-vous que j'ajoute :</p>
-        <ul style="color:var(--muted);font-size:13px;margin:8px 0 0 18px">
-          <li>Brochage complet (pinout) de la DE10‑Lite</li>
-          <li>Références de composants & liens vers datasheets</li>
-          <li>Animation montrant des signaux logiques</li>
-        </ul>
-      </div>
-    </div>
-
-    <footer class="card">Visuel généré — modifiable. Dites-moi ce que vous voulez ajouter (pinout, datasheets, animation ...)</footer>
-  </div>
-
-  <script>
-    // comportement simple du tooltip + panneau d'information
-    const board = document.getElementById('board');
-    const tooltip = document.getElementById('tooltip');
-    const title = document.getElementById('title');
-    const desc = document.getElementById('description');
-
-    function showTip(e, text){
-      tooltip.style.display = 'block';
-      tooltip.textContent = text;
-      const rect = board.getBoundingClientRect();
-      // position relative
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      tooltip.style.left = x + 'px';
-      tooltip.style.top = y + 'px';
-    }
-
-    function hideTip(){ tooltip.style.display = 'none'; }
-
-    // delegate: tous les éléments SVG avec class 'pin' et attribut 'data-tip'
-    board.addEventListener('mousemove', function(ev){
-      const t = ev.target.closest && ev.target.closest('.pin');
-      if(t && t.dataset && t.dataset.tip){
-        showTip(ev, t.dataset.tip);
-      } else {
-        hideTip();
-      }
-    });
-
-    board.addEventListener('click', function(ev){
-      const t = ev.target.closest && ev.target.closest('.pin');
-      if(t && t.dataset && t.dataset.tip){
-        title.textContent = t.dataset.tip.split(':')[0] || 'Élément';
-        desc.textContent = 'Détails : ' + (t.dataset.tip.split(':')[1] ? t.dataset.tip.split(':')[1].trim() : 'Information générale sur \"' + (t.dataset.tip) + '\".');
-      }
-    });
-
-    // tidy: hide tooltip when leaving the board area
-    board.addEventListener('mouseleave', hideTip);
-
-  </script>
+  <header>
+    <h1>Cartes FPGA — Comprendre et explorer</h1>
+    <p>Un guide rétro complet sur le monde des FPGA, leurs usages et leurs secrets.</p>
+  </header>
+  <nav>
+    <a href="#intro">Introduction</a>
+    <a href="#fonctionnement">Fonctionnement</a>
+    <a href="#applications">Applications</a>
+    <a href="#avantages">Avantages</a>
+    <a href="#limites">Limites</a>
+  </nav>
+  <main>
+    <article>
+      <h2 id="intro">Introduction</h2>
+      <p>Les FPGA (Field Programmable Gate Arrays) sont des circuits logiques reconfigurables. Contrairement aux processeurs classiques, ils permettent de définir leur logique interne après fabrication.</p>
+      <h2 id="fonctionnement">Fonctionnement</h2>
+      <p>Un FPGA est constitué de blocs logiques programmables et d'interconnexions. En utilisant un langage de description matérielle comme VHDL ou Verilog, on configure le FPGA pour exécuter une tâche spécifique.</p>
+      <h2 id="applications">Applications</h2>
+      <p>Les FPGA sont utilisés dans les télécommunications, le traitement d'image, la robotique, l'aéronautique, et bien plus encore.</p>
+      <h2 id="avantages">Avantages</h2>
+      <ul>
+        <li>Flexibilité</li>
+        <li>Parallélisme</li>
+        <li>Performances élevées pour des tâches spécifiques</li>
+      </ul>
+      <h2 id="limites">Limites</h2>
+      <ul>
+        <li>Consommation d'énergie plus élevée que des ASIC optimisés</li>
+        <li>Complexité de développement</li>
+        <li>Coût parfois plus élevé pour de grandes séries</li>
+      </ul>
+    </article>
+    <aside>
+      <h3>Menu Thématique</h3>
+      <ul>
+        <li>Historique des FPGA</li>
+        <li>Principaux fabricants</li>
+        <li>Langages de description</li>
+        <li>Exemples de projets</li>
+      </ul>
+    </aside>
+  </main>
 </body>
 </html>
