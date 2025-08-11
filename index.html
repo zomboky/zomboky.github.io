@@ -1,11 +1,26 @@
 <!DOCTYPE html>
 <html>
 
-<!-- STYLE -->
+<!-- STYLE 
+on définit le style des éléments de la page
+-->
+
  <style>
+
 body {
   background-image: url('assets/images/campagne.jpg');
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
 }
+
+/* le # veut dire qu'on sélectionne un élément par son id */
+
+#lien a {
+    color: greenyellow;                /* Texte rouge */
+	text-decoration: none;
+  }
+
 </style> 
 
 <!-- HEAD-->
@@ -19,14 +34,19 @@ body {
 
 <body>
   <!-- Bienvenue sur mon site avec les trois petits points-->
-  <h1 id="bienvenue">Bienvenue sur mon site</h1>
+  <h2 id="bienvenue">Bienvenue sur mon site</h2>
   <script src="scripts/trois-points.js"></script>
   
   <!-- status de construction -->
   <p>Ce site est en cours de construction, merci de votre patience.</p>
 
   <!-- CUBE	-->
-  <div> <h1> <a href = "./assets/cube/cube.html" > Ne Cliquez surtout pas sur ce cube </h1> </a></div>
+  <div id="lien">
+
+  	<h1> <a href="./assets/cube/cube.html"> Ne Cliquez surtout pas sur ce cube </a> </h1>
+
+  </div>
+
 
   <!-- OURS -->
    <div> <img> <img src="assets/images/ours.png" alt="un ours qui tient une bière"></div>
