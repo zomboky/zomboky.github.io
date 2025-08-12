@@ -12,14 +12,37 @@ body {
   background-size: 1920px 1080px;
   background-position: center;
   background-repeat: no-repeat;
+
+
+
 }
 
 /* le # veut dire qu'on sélectionne un élément par son id */
 
 #lien a {
-    color: greenyellow;                /* Texte rouge */
+    color: greenyellow;               
 	text-decoration: none;
   }
+
+
+
+  .bob {
+    position: fixed;    /* fixé dans la fenêtre */
+    top: 0;             /* en haut */
+    right: 0;           /* à droite */
+    width: 68px;
+    height: 52px;
+  }
+
+  .bob img {
+    width: 68px;
+    height: 52px;
+    image-rendering: pixelated;
+    display: block;
+  }
+
+
+
 
 </style> 
 
@@ -64,6 +87,23 @@ body {
    <!-- SCRIPT POUR RÉCUPÉRER LA POSITION DE LA SOURIS-->
 
   <script src="scripts/mouse-position.js"></script>
+
+
+  <!-- BOB -->
+     <!-- Script pour les yeux -->
+     <script src="yeux.js"></script>
+
+
+<div class="bob">
+
+  <img src="assets/entities/bob.png" alt="pixel art" />
+  <div id="rightPupil" style="position:absolute; width:1px; height:1px; background:red; pointer-events:none;"></div>
+  <div id="leftPupil"  style="position:absolute; width:1px; height:1px; background:red; pointer-events:none;"></div>
+
+</div>
+
+
+
 
 
 
