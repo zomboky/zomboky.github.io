@@ -24,17 +24,19 @@ function clamp(n, min, max) {
 //////////////////////////////////////////////////////////
 // Les variables mouse_pos_x et mouse_pos_y sont définie dans mouse-position.js préalablement chargé
 
-bob.addEventListener('mousemove', () => {
+document.addEventListener('mousemove', () => {
   const rect = bob.getBoundingClientRect();
   const mouseX = Math.floor(mouse_pos_x - rect.left);
   const mouseY = Math.floor(mouse_pos_y - rect.top);
 
   oeildroit.style.left = clamp(mouseX, zoneoeildroit.xMin, zoneoeildroit.xMax) + 'px';
-  oeildroit.style.top = clamp(mouseY, zoneoeildroit.yMin, zoneoeildroit.yMax) + 'px';
+  oeildroit.style.top  = clamp(mouseY, zoneoeildroit.yMin, zoneoeildroit.yMax) + 'px';
 
   oeilgauche.style.left = clamp(mouseX, zoneoeilgauche.xMin, zoneoeilgauche.xMax) + 'px';
-  oeilgauche.style.top = clamp(mouseY, zoneoeilgauche.yMin, zoneoeilgauche.yMax) + 'px';
+  oeilgauche.style.top  = clamp(mouseY, zoneoeilgauche.yMin, zoneoeilgauche.yMax) + 'px';
+
+  // débugage console
+  console.log('Oeil droit en:', oeildroit.style.left, oeildroit.style.top);
+  console.log('Oeil gauche en:', oeilgauche.style.left, oeilgauche.style.top);
 });
-
-
 
