@@ -83,24 +83,27 @@ body {
   <!-- OURS -->
    <div> <img> <img src="assets/images/ours.png" alt="un ours qui tient une bière"></div>
 
+  <!-- BOB -->
 
-   <!-- SCRIPT POUR RÉCUPÉRER LA POSITION DE LA SOURIS-->
+<div class="bob" id="bob">
+
+  <img src="assets/entities/bob.png" alt="pixel art" />
+  <div id="oeil-droit"  style="position:absolute; left:24px; top:16px; width:1px; height:1px; background:red; pointer-events:none;"></div>
+  <div id="oeil-gauche" style="position:absolute; left:38px; top:16px; width:1px; height:1px; background:red; pointer-events:none;"></div>
+
+
+</div>
+
+  <!-- SCRIPT POUR RÉCUPÉRER LA POSITION DE LA SOURIS-->
 
   <script src="scripts/mouse-position.js"></script>
 
 
-  <!-- BOB -->
-     <!-- Script pour les yeux -->
-     <script src="yeux.js"></script>
+
+  <!-- Script pour les yeux -->
+  <script src="scripts/yeux.js"></script> 
 
 
-<div class="bob">
-
-  <img src="assets/entities/bob.png" alt="pixel art" />
-  <div id="rightPupil" style="position:absolute; width:1px; height:1px; background:red; pointer-events:none;"></div>
-  <div id="leftPupil"  style="position:absolute; width:1px; height:1px; background:red; pointer-events:none;"></div>
-
-</div>
 
 
 
