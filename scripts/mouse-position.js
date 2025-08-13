@@ -9,6 +9,6 @@ document.addEventListener('mousemove', function(event) {
   mouse_pos_y = event.clientY;
   
   // débugage console
-  //console.log('Souris en:', mouse_pos_x, mouse_pos_y);
+  console.log('Souris en:', mouse_pos_x, mouse_pos_y);
 });
 
