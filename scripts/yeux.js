@@ -36,7 +36,7 @@ document.addEventListener('mousemove', () => {
   oeilgauche.style.top  = clamp(mouseY, zoneoeilgauche.yMin, zoneoeilgauche.yMax) + 'px';
 
   // débugage console
-  console.log('Oeil droit en:', oeildroit.style.left, oeildroit.style.top);
-  console.log('Oeil gauche en:', oeilgauche.style.left, oeilgauche.style.top);
+  //console.log('Oeil droit en:', oeildroit.style.left, oeildroit.style.top);
+  //console.log('Oeil gauche en:', oeilgauche.style.left, oeilgauche.style.top);
 });
 
