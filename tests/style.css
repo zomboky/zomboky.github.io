@@ -1,0 +1,28 @@
+/* canvas en background, non interactif */
+canvas#background {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  pointer-events: none;
+  display: block;
+}
+
+/* évite la répétition de canvas{...} ailleurs */
+
+/* main : le faire participer au flux normal (scroll) */
+main {
+  position: relative;        /* <-- important : ne pas rester absolute */
+  z-index: 1;
+  width: 100%;
+  color: white;
+  margin: 0 auto;
+  padding: 120px 0;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  /* si tu veux forcer du scroll pendant les tests : */
+  /* min-height: 200vh; */
+}
+
+/* le reste de ton CSS peut rester identique */
