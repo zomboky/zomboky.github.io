@@ -69,7 +69,7 @@ const axesHelper = new THREE.AxesHelper(10); // 10 = longueur des axes
 
 
 
-scene.add(axesHelper);
+//scene.add(axesHelper);
 
 
 
