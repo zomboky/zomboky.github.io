@@ -69,13 +69,13 @@ function addStar() {
 
   const [x, y, z] = Array(3)
     .fill()
-    .map(() => THREE.MathUtils.randFloatSpread(100));
+    .map(() => THREE.MathUtils.randFloatSpread(300));
 
   star.position.set(x, y, z);
   scene.add(star);
 }
 
-Array(200).fill().forEach(addStar);
+Array(400).fill().forEach(addStar);
 
 
 // Move Camera 
@@ -83,11 +83,9 @@ Array(200).fill().forEach(addStar);
 function MoveCamera(){
     const t = document.body.getBoundingClientRect().top;
 
-    camera.position.z = t * -0.001;
+    camera.position.z = t * -0.01;
     camera.position.x = t * -0.01;
-    camera.position.y = t * -0.002;
-
-
+    camera.position.y = t * -0.1;
 
 }
 
