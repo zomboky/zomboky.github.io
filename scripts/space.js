@@ -88,8 +88,8 @@ const saturn_material = new THREE.MeshStandardMaterial({map : saturn_texture});
 const saturn = new THREE.Mesh(saturn_geometry, saturn_material);
 
 
-saturn.rotation.x = THREE.MathUtils.degToRad(90);  //axe rouge 
-saturn.rotation.y = THREE.MathUtils.degToRad(0);  // vert
+saturn.rotation.x = THREE.MathUtils.degToRad(90);    //axe rouge 
+saturn.rotation.y = THREE.MathUtils.degToRad(0);    // vert
 saturn.rotation.z = THREE.MathUtils.degToRad(90);  //axe bleu
 
 
@@ -167,7 +167,7 @@ for (let i = 0; i < numStars; i++) {
 
 // position initiale de la caméra
 
-const basePos = new THREE.Vector3(50, 20, 50);
+const basePos = new THREE.Vector3(2, 5, 7); // position initiale caméra
 camera.position.copy(basePos);
 camera.lookAt(0,0,0);
 controls.update();
@@ -180,9 +180,9 @@ function MoveCamera(){
 
     const t = document.body.getBoundingClientRect().top;
 
-    camera.position.z = t * -0.01;
-    camera.position.x = t * -0.01;
-    camera.position.y = t * -0.1;
+    camera.position.z = basePos.z + t * -0.01;
+    camera.position.x = basePos.x + t * -0.01;
+    camera.position.y = basePos.y + t * -0.2;
     camera.lookAt(0, 0, 0);
     controls.update();
 
