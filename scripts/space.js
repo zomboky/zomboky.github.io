@@ -57,7 +57,7 @@ const pointlight = new THREE.PointLight(0xffffff);
 pointlight.position.set(0, 0, 0);
 
 const ambientlight = new THREE.AmbientLight(0xffffff);
-ambientlight.position.set()
+ambientlight.position.set()   
 
 scene.add(pointlight, ambientlight); // le code parle de lui même c'est golmon
 
@@ -99,8 +99,38 @@ scene.add(saturn);
 
 // Add Saturn Rings
 
-const rings_geometry = new THREE.RingGeometry( 3.6, 6.5, 32 ); 
-const rings_material = new THREE.MeshBasicMaterial( { color: 0xffff00, side: THREE.DoubleSide } );
+const innerRadius = 3.6;
+const outerRadius = 6.5;
+const segments = 128;
+
+const rings_geometry = new THREE.RingGeometry(innerRadius, outerRadius, segments);
+
+// Ajustement de la texture (rotation et formatage)
+const pos = rings_geometry.attributes.position;
+const uv = new Float32Array(pos.count * 2);
+
+for (let i = 0; i < pos.count; i++) {
+  const x = pos.getX(i);
+  const y = pos.getY(i);
+  const r = Math.sqrt(x * x + y * y);
+
+  // U = rayon normalisé (0 - 1)
+  uv[i * 2] = (r - innerRadius) / (outerRadius - innerRadius);
+
+  // V = angle normalisé (0 - 1)
+  const angle = Math.atan2(y, x);
+  uv[i * 2 + 1] = (angle + Math.PI) / (2 * Math.PI);
+}
+
+rings_geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+
+const rings_texture = new THREE.TextureLoader().load('../assets/textures/saturn_rings.png');
+
+
+const rings_material = new THREE.MeshBasicMaterial( {
+   side: THREE.DoubleSide,
+   map : rings_texture,
+   transparent : true} );
 const rings = new THREE.Mesh( rings_geometry, rings_material ); 
 
 
@@ -110,7 +140,6 @@ rings.rotation.z = THREE.MathUtils.degToRad(0);  //axe bleu
 
 scene.add(rings);
 
-//scene.add(rings);
 
 
 // Add stars
