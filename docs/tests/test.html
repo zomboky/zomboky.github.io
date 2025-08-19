@@ -2,40 +2,34 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <title>Cadre centré</title>
-  <style>
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #000;    /* fond noir */
-      color: #eee;         /* texte gris clair */
-      font-family: monospace; /* style rétro */
+  <title>TEST</title>
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "../three/build/three.module.min.js"
     }
-    .frame {
-      border: 2px solid #ccc;       /* bordure claire */
-      outline: 4px solid #000;      /* espace noir */
-      box-shadow: 0 0 0 6px #ccc;   /* deuxième cadre */
-      padding: 2rem;
-      max-width: 600px;
-      text-align: center;           /* texte centré */
-    }
-    h1 {
-      margin: 0 0 1rem;
-      font-size: 1.5rem;
-    }
-    p {
-      margin: .5rem 0;
-    }
-  </style>
+  }
+  </script>
+
+
+      <style>
+        canvas {
+            position : fixed;
+            top : 0;
+            left : 0;
+
+        }
+    </style>
+
 </head>
 <body>
-  <div class="frame">
-    <h1>Bienvenue</h1>
-    <p>Ceci est un cadre centré comme sur feelingmachine.moe.</p>
-    <p>Tu peux ajouter tes textes, liens, ou images ici.</p>
-  </div>
+
+  <canvas id="background"></canvas>
+
+  
+  <script type = "module" src = "/tests/corridor.js"></script>
+
 </body>
 </html>
+
+

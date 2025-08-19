@@ -64,3 +64,19 @@ body {
   align-items: center;        /* aligne verticalement */
   gap: 2rem;                  /* espace entre les éléments */
 }
+
+
+
+
+.tunnel_container {
+  display: flex;
+  width: 100%;
+  height: 200px;
+  border: 1px solid black;
+}
+
+.tunnel {
+  flex: 1 1 0;
+  height: 100%;
+  object-fit: cover;
+}
