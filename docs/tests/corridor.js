@@ -3,6 +3,13 @@ import {OrbitControls} from '../three/examples/jsm/controls/OrbitControls.js';
 
 console.log("le script corridor.js a bien été chargé");
 
+
+// Corridor parameters 
+
+const lenght = 30; 
+const width = 10;
+
+
 // scene 
 const scene = new THREE.Scene();
 
@@ -14,8 +21,10 @@ const camera = new THREE.PerspectiveCamera(
     1000
 );
 
+camera.position.set(-15, 5, 5); 
+// regarde vers X positif
 
-camera.position.set(0, 0, 30); 
+
 
 // renderer 
 const renderer = new THREE.WebGLRenderer({
@@ -27,7 +36,7 @@ const renderer = new THREE.WebGLRenderer({
 // lumière 
 
 const pointlight = new THREE.PointLight(0xffffff, 10); // blanc, intensité 1
-pointlight.position.set(0, 5, 5);
+pointlight.position.set(-10, -10, -10);
 scene.add(pointlight);
 
 const ambient = new THREE.AmbientLight(0xffffff, 0.3);
@@ -51,23 +60,40 @@ window.addEventListener('resize', () => {
 
 // Construction du corridor
 
-const lenght = 30; 
-const width = 10;
-
 const plane_geometry = new THREE.PlaneGeometry(lenght, width, 400, 400);
-const plane_texture = new THREE.TextureLoader().load('../assets/textures/rockwall8.png');
-const plane_normal_map = new THREE.TextureLoader().load('../assets/textures/rockwall8_normalmap.png');
-const displacementmap = new THREE.TextureLoader().load('../assets/textures/rockwall8_displacementmap.png');
-const plane_material = new THREE.MeshStandardMaterial({
+
+const basement_texture = new THREE.TextureLoader().load('../assets/textures/basement_wall.png');
+const basement_normal_map = new THREE.TextureLoader().load('../assets/textures/basement_wall_normalmap.png');
+const basement_displacement_map = new THREE.TextureLoader().load('../assets/textures/basement_wall_displacementmap.png');
+const basement_bumpmap = new THREE.TextureLoader().load('../assets/textures/basement_wall_bumpmap.png');
+
+const brick_texture = new THREE.TextureLoader().load('../assets/textures/rockwall8.png');
+const brick_normal_map = new THREE.TextureLoader().load('../assets/textures/rockwall8_normalmap.png');
+const brick_displacement_map = new THREE.TextureLoader().load('../assets/textures/rockwall8_displacementmap.png');
+
+const basement_material = new THREE.MeshStandardMaterial({
     //map : plane_texture,
     side : THREE.DoubleSide,
-    map : plane_texture,
-    normalMap : plane_normal_map,
-    displacementMap : displacementmap,
+    map : basement_texture,
+    normalMap : basement_normal_map,
+    displacementMap : basement_displacement_map,
+    displacementScale : 0.05,
+    bumpMap : basement_bumpmap
+});
+
+
+const brick_material = new THREE.MeshStandardMaterial({
+    //map : plane_texture,
+    side : THREE.DoubleSide,
+    map : brick_texture,
+    normalMap : brick_normal_map,
+    displacementMap : brick_displacement_map,
     displacementScale : 0.05
 });
 
-const mur_gauche = new THREE.Mesh(plane_geometry, plane_material);
+// MUR GAUCHE
+
+const mur_gauche = new THREE.Mesh(plane_geometry, brick_material);
 
 mur_gauche.position.set(0, 5, 0);
 
@@ -79,7 +105,7 @@ scene.add(mur_gauche);
 
 // PLAFOND
 const plafond = new THREE.Mesh(
-    new THREE.PlaneGeometry(lenght, width), plane_material);
+    new THREE.PlaneGeometry(lenght, width), basement_material);
 
 plafond.position.set(0, 10, 5);
 plafond.rotation.x = THREE.MathUtils.degToRad(90);
@@ -88,7 +114,7 @@ scene.add(plafond);
 
 // MUR DROIT
 const mur_droit = new THREE.Mesh(
-    new THREE.PlaneGeometry(lenght, width), plane_material);
+    new THREE.PlaneGeometry(lenght, width), brick_material);
 
 mur_droit.position.set(0, 5, 10);
 
@@ -98,7 +124,7 @@ scene.add(mur_droit);
 // SOL
 
 const sol = new THREE.Mesh(
-    new THREE.PlaneGeometry(lenght, width), plane_material);
+    new THREE.PlaneGeometry(lenght, width), basement_material);
 
 sol.position.set(0, 0, 5);
 sol.rotation.x = THREE.MathUtils.degToRad(90); // à plat
@@ -112,14 +138,19 @@ scene.add(sol);
 const lighthelper = new THREE.PointLightHelper(pointlight);
 const gridhelper = new THREE.GridHelper(200, 50);
 const axesHelper = new THREE.AxesHelper(10); // 10 = longueur des axes
+const camerahelper = new THREE.CameraHelper( camera );
 
-scene.add(axesHelper, gridhelper, lighthelper);
+//scene.add(axesHelper, gridhelper, lighthelper, camerahelper);
 
 
 
 // OrbitControls    
 
 const controls = new OrbitControls(camera, renderer.domElement);
+//camera OrbitControls regarde vers X positif de base
+controls.target.set(camera.position.x + 1, camera.position.y, camera.position.z);
+controls.update();
+
 
 function animate(){
 
@@ -128,6 +159,38 @@ function animate(){
     controls.update(); 
     renderer.render(scene, camera); 
 
+     // Faire suivre la lumière à la caméra à chaque frame
+      pointlight.position.copy(camera.position);
+
+     // Mettre à jour le helper pour qu'il suive la light
+     lighthelper.update();
+
 }
 
 animate();
+
+// Ajout du zoom caméra 
+
+const maxscroll = document.body.scrollHeight - window.innerHeight;
+
+
+window.addEventListener("scroll", () => {
+    const currentscroll = window.scrollY;                // position actuelle du scroll
+        console.log(`Camera position: x=${camera.position.x}, y=${camera.position.y}, z=${camera.position.z}`);
+    const scrollratio = currentscroll / maxscroll;    // ratio du scoll entre 0 et 1
+        console.log('scrollration   : ', scrollratio);
+    camera.position.x = - 15 + scrollratio * 30;
+    controls.target.set(camera.position.x + 1, camera.position.y, camera.position.z);
+    
+    controls.update();
+});
+
+
+
+
+// DESACTIVER/ACTIVER ORBIT CONTROLS
+
+controls.enableRotate = false;
+controls.enableZoom   = false;
+controls.enablePan    = false;
+
