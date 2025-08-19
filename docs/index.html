@@ -4,133 +4,102 @@
 <!-- STYLE 
 on définit le style des éléments de la page
 -->
-
- <style>
-
-body {
-  background-image: url('assets/images/campagne.jpg');
-  background-size: 1920px 1080px;
-  background-position: center;
-  background-repeat: no-repeat;
-
-
-
-}
-
-/* le # veut dire qu'on sélectionne un élément par son id */
-
-#lien a {
-    color: greenyellow;               
-	text-decoration: none;
-  }
-
-
-
-  .bob {
-    position: fixed;    /* fixé dans la fenêtre */
-    top: 0;             /* en haut */
-    right: 0;           /* à droite */
-    width: 68px;
-    height: 52px;
-  }
-
-  .bob img {
-    width: 68px;
-    height: 52px;
-    image-rendering: pixelated;
-    display: block;
-  }
-
-
-
-
-</style> 
-
 <!-- HEAD-->
 <head>
+
   <title>acceuil</title>
-  <link rel="shortcut icon" type="image/x-icon" href="assets/images/flavicon.ico">
+  <link rel="stylesheet" href="styles/welcome.css">
+  <link rel="shortcut icon" type="image/x-icon" href="assets/icons/ours.png">
 
 </head>
 
 <!-- BODY-->
 
-<body>
-  <!-- Bienvenue sur mon site avec les trois petits points-->
-  <h2 id="bienvenue">Bienvenue sur mon site</h2>
-  <script src="scripts/trois-points.js"></script>
-  
-  <!-- status de construction -->
-  <p>Ce site est en cours de construction, merci de votre patience.</p>
+<body> <!-- ---------------------------------------------------------------------------------------------------------------------------- -->
 
-  <!-- MENU-->
-  <div id="menu">
-    <ul>
-      <li><a href="data.html">Data</a></li>
-      <li><a href="space.html">Allez dans l'espace</a></li>
-      
-    </ul>
-  </div>
+<div id = "titre" >
+
+  <img src = 'assets/texts/welcome_ice.png'>
+  </img>
 
 
-  <!-- CUBE	-->
-  <div id="lien">
+</div>
 
-  	<h1> <a href="./assets/cube/cube.html"> Ne Cliquez surtout pas sur ce cube </a> </h1>
+<div id = "Under Construction" >
 
-  </div>
+  <h1 id = "blurtext" >
+    This site is under construction, please be patient
+  </h1>
 
+
+
+</div>
+
+<div class = "frame">
+
+  <p> Vous pouvez toujours essayer d'aller dans l'espace en attendant :</p>
+  <a id = "lien" href = "space.html" > Décollez ici </a>
+
+</div>
+
+
+
+  <!-- CHATBOX-->
+  <!-- <iframe src="https://www5.cbox.ws/box/?boxid=958197&boxtag=aIzGxa"
+   width="100%" 
+   height="450" 
+   allowtransparency="yes" 
+   allow="autoplay" 
+   frameborder="0" 
+   marginheight="0" 
+   marginwidth="0" 
+   scrolling="auto"></iframe>	
+ -->
 
   <!-- OURS -->
-   <div id="ours"> <img> <img src="assets/images/ours.png" alt="un ours qui tient une bière"></div>
-
-  <!-- CLICK-COUNTER-->
-
-  <div id="click-counter" style=
-    "position: fixed; 
-    top: 10px; 
-    right: 100px; 
-    font-size: 12px; 
-    color: yellow;">
-      Score d'ours : 0
+  <div class = "ours_img">
+    <img id = "ours" src="assets/images/ours.png"
+      alt="un ours qui tient une bière"></img>
   </div>
 
-  <!-- Script pour compter les clics-->
-  <script src="scripts/click-counter.js"></script>
+  <div class = "ours_gif_lavalamp">
+    <img src = "assets/gif/ours_biere_lavalamp.gif",
+      alt="cet ours a bu trop de bière"></img>
+  </div>
 
-  <!-- BOB -->
 
+  
+
+<!-- Script pour compter les clics-->
+<script src="scripts/click-counter.js"></script>
+
+<!--  BOB -->
+<!-- 
 <div class="bob" id="bob">
 
   <img src="assets/entities/bob.png" alt="pixel art" />
   <div id="oeil-droit"  style="position:absolute; left:24px; top:16px; width:1px; height:1px; background:red; pointer-events:none;"></div>
   <div id="oeil-gauche" style="position:absolute; left:38px; top:16px; width:1px; height:1px; background:red; pointer-events:none;"></div>
-</div>
-
+</div> -->
 
 
   <!-- GIF CRANE1-->
-<div id = "crane1">
+<!-- <div id = "crane1">
   <img src="assets/gif/crane1.gif"
        alt="gif d'un crane qui tire la langue" 
        style="
         position: absolute;
         left: 290px;
         top: 380px">
-</div>
+</div> -->
 
 
   <!-- SCRIPT POUR RÉCUPÉRER LA POSITION DE LA SOURIS-->
 
-  <script src="scripts/mouse-position.js"></script>
+<script src="scripts/mouse-position.js"></script>
 
 
-
-  <!-- Script pour les yeux -->
-  <script src="scripts/yeux.js"></script> 
-
-
-</body>
+</body> <!-- ---------------------------------------------------------------------------------------------------------------------------- -->
 
 </html>
 
