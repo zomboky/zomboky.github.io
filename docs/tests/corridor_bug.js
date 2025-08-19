@@ -21,7 +21,7 @@ const camera = new THREE.PerspectiveCamera(
     1000
 );
 
-camera.position.set(-15, 5, 5); 
+camera.position.set(-15, 5, 5);
 // regarde vers X positif
 
 
@@ -36,7 +36,7 @@ const renderer = new THREE.WebGLRenderer({
 // lumière 
 
 const pointlight = new THREE.PointLight(0xffffff, 10); // blanc, intensité 1
-pointlight.position.set(-10, -10, -10);
+pointlight.position.set(-10, -10,);
 scene.add(pointlight);
 
 const ambient = new THREE.AmbientLight(0xffffff, 0.3);
@@ -76,7 +76,6 @@ const rusty_wall_normal_map = new THREE.TextureLoader().load('../assets/textures
 const rusty_wall_displacement_map = new THREE.TextureLoader().load('../assets/textures/rusty_wall/rusty_wall_disp.png');
 const rust_wall_ao = new THREE.TextureLoader().load('../assets/textures/rusty_wall/rusty_wall_ao.png');
 
-
 const basement_material = new THREE.MeshStandardMaterial({
     //map : plane_texture,
     side : THREE.DoubleSide,
@@ -98,7 +97,6 @@ const brick_material = new THREE.MeshStandardMaterial({
 });
 
 const rusty_wall_material = new THREE.MeshPhongMaterial({
-    side : THREE.DoubleSide,
     map : rusty_wall_texture,
     normalMap : rusty_wall_normal_map,
     displacementMap : rusty_wall_displacement_map,
@@ -112,13 +110,7 @@ const rusty_wall_material = new THREE.MeshPhongMaterial({
 const mur_fond = new THREE.Mesh(
     new THREE.PlaneGeometry(width, width), rusty_wall_material);
 
-
-scene.add(mur_fond);
-
-mur_fond.position.set(15, 5, 5);
-mur_fond.rotation.y = THREE.MathUtils.degToRad(90); // à plat
-
-
+mur_fond.position.set(0, 5, 0);
 
 // MUR GAUCHE
 
@@ -169,7 +161,7 @@ const gridhelper = new THREE.GridHelper(200, 50);
 const axesHelper = new THREE.AxesHelper(10); // 10 = longueur des axes
 const camerahelper = new THREE.CameraHelper( camera );
 
-//scene.add(axesHelper, gridhelper, lighthelper, camerahelper);
+scene.add(axesHelper, gridhelper, lighthelper, camerahelper);
 
 
 
@@ -215,8 +207,10 @@ window.addEventListener("scroll", () => {
 });
 
 
-
 // DESACTIVER/ACTIVER ORBIT CONTROLS
-controls.enableRotate = false;
-controls.enableZoom   = false;
-controls.enablePan    = false;
+
+controls.enableRotate = true
+controls.enableZoom   = true
+controls.enablePan    = true
+
+
