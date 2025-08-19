@@ -1,0 +1,66 @@
+body {
+  background-image: url('../assets/textures/rockwall8.png');
+  background-repeat: repeat; /* motif répété */
+  background-size: 128px 128px; /* garde la taille d'origine */
+  image-rendering: pixelated; /* garde l'effet pixel rétro */
+  margin: 0; /* enlève la marge par défaut */
+  min-height: 100vh;
+  color: #eee; /* texte gris clair */
+  font-family: monospace; /* style rétro */
+}
+
+/* titre centré en haut */
+#titre img {
+  display: block;     /* rend l'image un bloc pour que margin auto fonctionne */
+  margin: 0 auto;     /* centre horizontalement */
+  max-width: 100%;    /* responsive : l'image ne dépasse pas le conteneur */
+  height: auto;       /* conserve les proportions */
+  margin-top : 2rem;  /* 1rem = la taille de la police par défaut */
+}
+
+/* liens */
+#lien {
+  color: black;
+  text-decoration: none;
+  background: #fdf6e3;
+}
+
+/* effet glow */
+#blurtext {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.5rem 1rem;
+  background: #333333;
+  color: #fff;
+  text-shadow: -9px -7px 11px #EDEDED;
+  text-align: center;
+  border-radius: 4px;
+  z-index: 1000;
+}
+
+/* cadre */
+.frame {
+  border: 2px solid #ccc;       /* bordure claire */
+  outline: 4px solid #000;      /* espace noir */
+  box-shadow: 0 0 0 6px #ccc;   /* deuxième cadre */
+  padding: 2rem;
+  max-width: 600px;             /* largeur max */
+  text-align: center;           /* texte centré */
+  margin: 4rem auto;            /* centre horizontalement et espace en haut/bas */
+}
+
+.ours_img {
+  display: flex;              /* mets ours et frame côte à côte */
+  justify-content: center;    /* centre le bloc global horizontalement */
+  align-items: center;        /* aligne verticalement l’ours et la frame */
+  
+}
+
+.aligner {
+  display: flex;              /* mets les éléments côte à côte */
+  justify-content: center;    /* centre horizontalement */
+  align-items: center;        /* aligne verticalement */
+  gap: 2rem;                  /* espace entre les éléments */
+}
