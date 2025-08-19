@@ -26,3 +26,9 @@ main {
 }
 
 /* le reste de ton CSS peut rester identique */
+
+html, body {
+    height: 400vh; /* 4 fois la hauteur de la fenêtre */
+    margin: 0;
+    padding: 0;
+}
