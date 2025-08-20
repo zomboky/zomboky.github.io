@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Saturne 3D</title>
+  <style>
+    body { margin: 0; overflow: auto; height: 200vh; } /* scroll volontaire */
+    #background { display: block; }
+    #toggleModeBtn {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+  </style>
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "../three/build/three.module.min.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <button id="toggleModeBtn">Passer en Orbit Controls</button>
+  <canvas id="background"></canvas>
+  <script type="module" src="test_space.js"></script>
+</body>
+</html>

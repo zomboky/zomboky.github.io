@@ -1,5 +1,7 @@
 import * as THREE from '../three/build/three.module.min.js';
 import {OrbitControls} from '../three/examples/jsm/controls/OrbitControls.js';
+import { OBJExporter } from '../three/examples/jsm/exporters/OBJExporter.js';
+
 
 console.log("le script test.js a bien été chargé");
 
@@ -83,8 +85,16 @@ const axesHelper = new THREE.AxesHelper(10); // 10 = longueur des axes
 
 // Add Saturn 
 const saturn_geometry = new THREE.SphereGeometry(3, 64, 64);
-const saturn_texture = new THREE.TextureLoader().load('../assets/textures/saturn_planet.jpg');
-const saturn_material = new THREE.MeshStandardMaterial({map : saturn_texture});
+const saturn_texture = new THREE.TextureLoader().load('../assets/textures/saturn_planet/saturn_planet.jpg');
+const saturn_material = new THREE.MeshPhongMaterial({
+  map : saturn_texture,
+  normalMap : new THREE.TextureLoader().load('../assets/textures/saturn_planet/saturn_planet_normal.png'),
+  displacementMap : new THREE.TextureLoader().load('../assets/textures/saturn_planet/saturn_planet_disp.png'),
+  aoMap : new THREE.TextureLoader().load('../assets/textures/saturn_planet/saturn_planet_ao.png'),
+  displacementScale : 0.05,
+  aoMapIntensity : 0.1,
+});
+
 const saturn = new THREE.Mesh(saturn_geometry, saturn_material);
 
 
@@ -124,12 +134,15 @@ for (let i = 0; i < pos.count; i++) {
 
 rings_geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
 
-const rings_texture = new THREE.TextureLoader().load('../assets/textures/saturn_rings.png');
+const rings_texture = new THREE.TextureLoader().load('../assets/textures/saturn_rings/saturn_rings.png');
 
 
-const rings_material = new THREE.MeshBasicMaterial( {
+const rings_material = new THREE.MeshPhongMaterial({
    side: THREE.DoubleSide,
    map : rings_texture,
+   normalMap : new THREE.TextureLoader().load('../assets/textures/saturn_rings/saturn_rings_normal.png'),
+   displacementMap : new THREE.TextureLoader().load('../assets/textures/saturn_rings/saturn_rings_disp.png'),
+    displacementScale : 0.01,
    transparent : true} );
 const rings = new THREE.Mesh( rings_geometry, rings_material ); 
 
@@ -169,24 +182,24 @@ for (let i = 0; i < numStars; i++) {
 
 const basePos = new THREE.Vector3(2, 5, 7); // position initiale caméra
 camera.position.copy(basePos);
-camera.lookAt(0,0,0);
+camera.lookAt(0,0,0); // Camera scroll
+
+
 controls.update();
 
 
 
 // Move Camera 
 
-function MoveCamera(){
+function MoveCamera() {
 
-    const t = document.body.getBoundingClientRect().top;
 
-    camera.position.z = basePos.z + t * -0.01;
-    camera.position.x = basePos.x + t * -0.01;
-    camera.position.y = basePos.y + t * -0.2;
-    camera.lookAt(0, 0, 0);
-    controls.update();
-
-} 
+  const t = document.body.getBoundingClientRect().top;
+  camera.position.z = basePos.z + t * -0.01;
+  camera.position.x = basePos.x + t * -0.01;
+  camera.position.y = basePos.y + t * -0.2;
+  camera.lookAt(0, 0, 0);
+}
 
 document.body.onscroll = MoveCamera;
 MoveCamera();
@@ -202,6 +215,7 @@ function animate(){
 
     controls.update();
 
+
     renderer.render( scene, camera);
 
 }
@@ -209,5 +223,20 @@ function animate(){
 animate();
 
 
+
+const exporter = new OBJExporter();
+const obj = exporter.parse(scene);
+
+
+function download( content, filename, mimeType ) {
+    const blob = new Blob([content], {type: mimeType});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+}
+
+//download(obj, 'model.obj', 'text/plain');
 
 
