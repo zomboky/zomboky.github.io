@@ -22,11 +22,14 @@ const camera = new THREE.PerspectiveCamera(
 // renderer 
 
 const renderer = new THREE.WebGLRenderer({
-    canvas : document.querySelector("#background")
+    canvas : document.querySelector("#background"),
+    antialias: true, // anti-aliasing pour lisser les bords
 });
 
 renderer.setPixelRatio( window.devicePixelRatio) ; 
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 // Contrôle souris
 
@@ -58,10 +61,27 @@ const object = new THREE.Mesh(geometry, material_standard);
 const pointlight = new THREE.PointLight(0xffffff);
 pointlight.position.set(0, 0, 0);
 
-const ambientlight = new THREE.AmbientLight(0xffffff);
+const ambientlight = new THREE.AmbientLight(0xffffff, 0.3);
 ambientlight.position.set()   
 
-scene.add(pointlight, ambientlight); // le code parle de lui même c'est golmon
+
+// Lumière du soleil 
+const sunLight = new THREE.DirectionalLight(0xffffff, 2); // couleur, intensité
+sunLight.position.set(50, 100, 50); // direction de la lumière (origine des rayons)
+sunLight.castShadow = true;         // activer les ombres
+
+// Paramètres des ombres pour plus de réalisme
+sunLight.shadow.mapSize.width = 4096;
+sunLight.shadow.mapSize.height = 4096;
+sunLight.shadow.camera.near = 0.5;
+sunLight.shadow.camera.far = 500;
+sunLight.shadow.camera.left = -30;
+sunLight.shadow.camera.right = 30;
+sunLight.shadow.camera.top = 30;
+sunLight.shadow.camera.bottom = -30;
+
+
+scene.add(pointlight, sunLight); // le code parle de lui même c'est golmon
 
 // helpers 
 
@@ -104,6 +124,8 @@ saturn.rotation.z = THREE.MathUtils.degToRad(90);  //axe bleu
 
 
 scene.add(saturn);
+saturn.castShadow = true; 
+saturn.receiveShadow = true; 
 
 
 
@@ -152,6 +174,8 @@ rings.rotation.y = THREE.MathUtils.degToRad(90);  // vert
 rings.rotation.z = THREE.MathUtils.degToRad(0);  //axe bleu
 
 scene.add(rings);
+rings.castShadow = true;
+rings.receiveShadow = true;
 
 
 
