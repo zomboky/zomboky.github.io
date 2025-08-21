@@ -49,6 +49,7 @@ body {
   max-width: 600px;             /* largeur max */
   text-align: center;           /* texte centré */
   margin: 4rem auto;            /* centre horizontalement et espace en haut/bas */
+  background-image: url(/assets/gif/space_wallpaper_hd.gif);
 }
 
 .ours_img {
@@ -64,8 +65,6 @@ body {
   align-items: center;        /* aligne verticalement */
   gap: 2rem;                  /* espace entre les éléments */
 }
-
-
 
 
 .tunnel_container {

@@ -62,14 +62,14 @@ window.addEventListener('resize', () => {
 
 const plane_geometry = new THREE.PlaneGeometry(lenght, width, 400, 400);
 
-const basement_texture = new THREE.TextureLoader().load('../assets/textures/basement_wall.png');
-const basement_normal_map = new THREE.TextureLoader().load('../assets/textures/basement_wall_normalmap.png');
-const basement_displacement_map = new THREE.TextureLoader().load('../assets/textures/basement_wall_displacementmap.png');
-const basement_bumpmap = new THREE.TextureLoader().load('../assets/textures/basement_wall_bumpmap.png');
+const basement_texture = new THREE.TextureLoader().load('../assets/textures/basement_wall_1/basement_wall.png');
+const basement_normal_map = new THREE.TextureLoader().load('../assets/textures/basement_wall_1/basement_wall_normalmap.png');
+const basement_displacement_map = new THREE.TextureLoader().load('../assets/textures/basement_wall_1/basement_wall_displacementmap.png');
+const basement_bumpmap = new THREE.TextureLoader().load('../assets/textures/basement_wall_1/basement_wall_bumpmap.png');
 
-const brick_texture = new THREE.TextureLoader().load('../assets/textures/rockwall8.png');
-const brick_normal_map = new THREE.TextureLoader().load('../assets/textures/rockwall8_normalmap.png');
-const brick_displacement_map = new THREE.TextureLoader().load('../assets/textures/rockwall8_displacementmap.png');
+const brick_texture = new THREE.TextureLoader().load('../assets/textures/rockwall8/rockwall8.png');
+const brick_normal_map = new THREE.TextureLoader().load('../assets/textures/rockwall8/rockwall8_normalmap.png');
+const brick_displacement_map = new THREE.TextureLoader().load('../assets/textures/rockwall8/rockwall8_displacementmap.png');
 
 const rusty_wall_texture = new THREE.TextureLoader().load('../assets/textures/rusty_wall/rusty_wall.png');
 const rusty_wall_normal_map = new THREE.TextureLoader().load('../assets/textures/rusty_wall/rusty_wall_normal.png');
