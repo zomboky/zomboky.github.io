@@ -105,12 +105,12 @@ const axesHelper = new THREE.AxesHelper(10); // 10 = longueur des axes
 
 // Add Saturn 
 const saturn_geometry = new THREE.SphereGeometry(3, 64, 64);
-const saturn_texture = new THREE.TextureLoader().load('../assets/textures/saturn_planet/saturn_planet.jpg');
+const saturn_texture = new THREE.TextureLoader().load('./assets/textures/saturn_planet/saturn_planet.jpg');
 const saturn_material = new THREE.MeshPhongMaterial({
   map : saturn_texture,
-  normalMap : new THREE.TextureLoader().load('../assets/textures/saturn_planet/saturn_planet_normal.png'),
-  displacementMap : new THREE.TextureLoader().load('../assets/textures/saturn_planet/saturn_planet_disp.png'),
-  aoMap : new THREE.TextureLoader().load('../assets/textures/saturn_planet/saturn_planet_ao.png'),
+  normalMap : new THREE.TextureLoader().load('./assets/textures/saturn_planet/saturn_planet_normal.png'),
+  displacementMap : new THREE.TextureLoader().load('./assets/textures/saturn_planet/saturn_planet_disp.png'),
+  aoMap : new THREE.TextureLoader().load('./assets/textures/saturn_planet/saturn_planet_ao.png'),
   displacementScale : 0.05,
   aoMapIntensity : 0.1,
 });
@@ -156,14 +156,14 @@ for (let i = 0; i < pos.count; i++) {
 
 rings_geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
 
-const rings_texture = new THREE.TextureLoader().load('../assets/textures/saturn_rings/saturn_rings.png');
+const rings_texture = new THREE.TextureLoader().load('./assets/textures/saturn_rings/saturn_rings.png');
 
 
 const rings_material = new THREE.MeshPhongMaterial({
    side: THREE.DoubleSide,
    map : rings_texture,
-   normalMap : new THREE.TextureLoader().load('../assets/textures/saturn_rings/saturn_rings_normal.png'),
-   displacementMap : new THREE.TextureLoader().load('../assets/textures/saturn_rings/saturn_rings_disp.png'),
+   normalMap : new THREE.TextureLoader().load('./assets/textures/saturn_rings/saturn_rings_normal.png'),
+   displacementMap : new THREE.TextureLoader().load('./assets/textures/saturn_rings/saturn_rings_disp.png'),
     displacementScale : 0.01,
    transparent : true} );
 const rings = new THREE.Mesh( rings_geometry, rings_material ); 
@@ -183,7 +183,11 @@ rings.receiveShadow = true;
 
 function addStar(color) {
   const geometry = new THREE.SphereGeometry(0.25, 24, 24);
-  const material = new THREE.MeshStandardMaterial({ color });
+  const material = new THREE.MeshStandardMaterial({ 
+    color,
+    emissive: color,
+    emissiveIntensity: 2
+   });
   const star = new THREE.Mesh(geometry, material);
 
   const [x, y, z] = Array(3)
@@ -191,6 +195,7 @@ function addStar(color) {
     .map(() => THREE.MathUtils.randFloatSpread(300));
 
   star.position.set(x, y, z);
+
   scene.add(star);
 }
 
