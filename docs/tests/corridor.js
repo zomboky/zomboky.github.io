@@ -209,14 +209,16 @@ window.addEventListener("scroll", () => {
     const scrollratio = currentscroll / maxscroll;    // ratio du scoll entre 0 et 1
         console.log('scrollration   : ', scrollratio);
     camera.position.x = - 15 + scrollratio * 30;
+    camera.rotation.x = Math.PI;
     controls.target.set(camera.position.x + 1, camera.position.y, camera.position.z);
     
-    controls.update();
+    //controls.update();
 });
 
 
 
 // DESACTIVER/ACTIVER ORBIT CONTROLS
+controls.enabled = false
 controls.enableRotate = false;
 controls.enableZoom   = false;
 controls.enablePan    = false;
