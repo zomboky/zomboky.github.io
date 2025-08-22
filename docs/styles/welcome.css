@@ -1,5 +1,5 @@
 body {
-  background-image: url('../assets/textures/rockwall8.png');
+  background-image: url('../assets/textures/rockwall8/rockwall8.png');
   background-repeat: repeat; /* motif répété */
   background-size: 128px 128px; /* garde la taille d'origine */
   image-rendering: pixelated; /* garde l'effet pixel rétro */
@@ -49,7 +49,7 @@ body {
   max-width: 600px;             /* largeur max */
   text-align: center;           /* texte centré */
   margin: 4rem auto;            /* centre horizontalement et espace en haut/bas */
-  background-image: url(/assets/gif/space_wallpaper_hd.gif);
+  background-image: url('../assets/gif/space_wallpaper_hd.gif');
 }
 
 .ours_img {
