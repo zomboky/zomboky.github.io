@@ -1,3 +1,4 @@
+import { degToRad } from '../three/src/math/MathUtils.js';
 import * as THREE from '../three/build/three.module.min.js';
 import {OrbitControls} from '../three/examples/jsm/controls/OrbitControls.js';
 import { OBJExporter } from '../three/examples/jsm/exporters/OBJExporter.js';
@@ -47,12 +48,7 @@ const controls = new OrbitControls(camera, renderer.domElement);
 
 //const geometry = new THREE.SphereGeometry( 15, 32, 16 ); 
 
-const geometry = new THREE.TorusGeometry(10, 3, 16, 100);
-const material_basic = new THREE.MeshBasicMaterial( { color: 0xFF6347, wireframe : true } ); 
-const material_standard = new THREE.MeshStandardMaterial( { color : 0xFF6347 });
-const object = new THREE.Mesh(geometry, material_standard);
 
-//scene.add(object);
 
 
 
@@ -91,7 +87,7 @@ const axesHelper = new THREE.AxesHelper(10); // 10 = longueur des axes
 
 
 
-//scene.add(axesHelper);
+scene.add(axesHelper);
 
 
 
@@ -206,6 +202,20 @@ for (let i = 0; i < numStars; i++) {
 }
 
 
+// Ajout de jupiter 
+const jupiter = new THREE.Mesh(
+  new THREE.SphereGeometry(3, 64, 64),
+  new THREE.MeshPhongMaterial({
+    map : new THREE.TextureLoader().load('./assets/textures/jupiter_planet/jupiter_planet.jpg')
+  })
+);
+
+scene.add(jupiter);
+jupiter.position.set(-5, 40, 8);
+
+jupiter.rotation.x = THREE.MathUtils.degToRad(90);  //axe rouge 
+jupiter.rotation.y = THREE.MathUtils.degToRad(90);
+
 
 // position initiale de la caméra
 
@@ -228,6 +238,9 @@ function MoveCamera() {
   camera.position.x = basePos.x + t * -0.01;
   camera.position.y = basePos.y + t * -0.2;
   camera.lookAt(0, 0, 0);
+
+  //partie debug
+  console.log("Position caméra : ", camera.position) //3, 40, 8 
 }
 
 document.body.onscroll = MoveCamera;
@@ -237,10 +250,6 @@ function animate(){
 
 
     requestAnimationFrame( animate );
-
-    object.rotation.x += 0.01; 
-    object.rotation.y += 0.005;
-    object.rotation.z += 0.01;
 
     controls.update();
 
