@@ -2,6 +2,10 @@ import { degToRad } from '../three/src/math/MathUtils.js';
 import * as THREE from '../three/build/three.module.min.js';
 import {OrbitControls} from '../three/examples/jsm/controls/OrbitControls.js';
 import { OBJExporter } from '../three/examples/jsm/exporters/OBJExporter.js';
+import { EffectComposer } from '../three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from '../three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from '../three/examples/jsm/postprocessing/UnrealBloomPass.js';
+
 
 
 console.log("le script test.js a bien été chargé");
@@ -87,7 +91,7 @@ const axesHelper = new THREE.AxesHelper(10); // 10 = longueur des axes
 
 
 
-scene.add(axesHelper);
+//scene.add(axesHelper);
 
 
 
@@ -160,7 +164,7 @@ const rings_material = new THREE.MeshPhongMaterial({
    map : rings_texture,
    normalMap : new THREE.TextureLoader().load('./assets/textures/saturn_rings/saturn_rings_normal.png'),
    displacementMap : new THREE.TextureLoader().load('./assets/textures/saturn_rings/saturn_rings_disp.png'),
-    displacementScale : 0.01,
+   displacementScale : 0.01,
    transparent : true} );
 const rings = new THREE.Mesh( rings_geometry, rings_material ); 
 
@@ -176,6 +180,20 @@ rings.receiveShadow = true;
 
 
 // Add stars
+
+const composer = new EffectComposer(renderer);         // On a besoin de ça pour le shader bloom
+const renderScene = new RenderPass(scene, camera);    //  et de ça également
+
+const bloomPass = new UnrealBloomPass(                          // Création du bllom
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  1.5,  // intensité du bloom
+  0.4,  // radius
+  0.85  // threshold
+);
+
+composer.addPass(renderScene);
+composer.addPass(bloomPass);
+
 
 function addStar(color) {
   const geometry = new THREE.SphereGeometry(0.25, 24, 24);
@@ -206,11 +224,16 @@ for (let i = 0; i < numStars; i++) {
 const jupiter = new THREE.Mesh(
   new THREE.SphereGeometry(3, 64, 64),
   new THREE.MeshPhongMaterial({
-    map : new THREE.TextureLoader().load('./assets/textures/jupiter_planet/jupiter_planet.jpg')
+    map : new THREE.TextureLoader().load('./assets/textures/jupiter_planet/jupiter_planet.jpg'),
+    //normalMap : new THREE.TextureLoader().load('./assets/textures/upiter_planet/jupiter_planet_normal.png'),
+    displacementMap : new THREE.TextureLoader().load('./assets/textures/jupiter_planet/jupiter_planet_disp.png'),
+    aoMap : new THREE.TextureLoader().load('./assets/textures/jupiter_planet/jupiter_planet_ao.png')
   })
 );
 
 scene.add(jupiter);
+jupiter.castShadow = true;
+jupiter.receiveShadow = true;
 jupiter.position.set(-5, 40, 8);
 
 jupiter.rotation.x = THREE.MathUtils.degToRad(90);  //axe rouge 
@@ -254,8 +277,8 @@ function animate(){
     controls.update();
 
 
-    renderer.render( scene, camera);
-
+    //renderer.render( scene, camera);
+    composer.render();
 }
 
 animate();
