@@ -91,7 +91,7 @@ const axesHelper = new THREE.AxesHelper(10); // 10 = longueur des axes
 
 
 
-//scene.add(axesHelper);
+scene.add(axesHelper);
 
 
 
@@ -238,6 +238,24 @@ jupiter.position.set(-5, 40, 8);
 
 jupiter.rotation.x = THREE.MathUtils.degToRad(90);  //axe rouge 
 jupiter.rotation.y = THREE.MathUtils.degToRad(90);
+
+// Ajout de Neptune
+
+const neptune = new THREE.Mesh(
+  new THREE.SphereGeometry(3, 128, 128),
+  new THREE.MeshPhongMaterial({
+    map : new THREE.TextureLoader().load('./assets/textures/neptune_planet/neptune_planet.jpg'),
+  })
+);
+
+scene.add(neptune);
+neptune.castShadow = true;
+neptune.receiveShadow = true;
+neptune.position.set(10, 85, 11);
+
+neptune.rotation.x = THREE.MathUtils.degToRad(90);  //axe rouge 
+neptune.rotation.y = THREE.MathUtils.degToRad(0);
+//neptune.rotation.z = THREE.MathUtils.degToRad(90);
 
 
 // position initiale de la caméra
