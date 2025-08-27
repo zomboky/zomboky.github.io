@@ -257,6 +257,22 @@ neptune.rotation.x = THREE.MathUtils.degToRad(90);  //axe rouge
 neptune.rotation.y = THREE.MathUtils.degToRad(0);
 //neptune.rotation.z = THREE.MathUtils.degToRad(90);
 
+// Ajout de Uranus
+const uranus = new THREE.Mesh(
+  new THREE.SphereGeometry(3, 128, 128),
+  new THREE.MeshPhongMaterial({
+    map : new THREE.TextureLoader().load('./assets/textures/uranus_planet/uranus_planet.jpg'),
+  })
+);
+
+scene.add(uranus);
+uranus.castShadow = true;
+uranus.receiveShadow = true;
+uranus.position.set(6.8, 106, 15);
+
+uranus.rotation.x = THREE.MathUtils.degToRad(90);  //axe rouge 
+uranus.rotation.y = THREE.MathUtils.degToRad(0);
+
 
 // position initiale de la caméra
 
@@ -317,5 +333,7 @@ function download( content, filename, mimeType ) {
 }
 
 //download(obj, 'model.obj', 'text/plain');
+
+
 
 
