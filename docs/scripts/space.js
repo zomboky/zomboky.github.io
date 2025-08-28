@@ -323,7 +323,7 @@ const mars = new THREE.Mesh(
   new THREE.MeshPhongMaterial({
     map : new THREE.TextureLoader().load('./assets/textures/mars_planet/mars_planet.jpg'),
     normalMap : new THREE.TextureLoader().load('./assets/textures/mars_planet/mars_planet_normal.jpg'),
-    displacementMapMap : new THREE.TextureLoader().load('./assets/textures/mars_planet/mars_planet_bump.jpg'),
+    displacementMapMap : new THREE.TextureLoader().load('./assets/textures/mars_planet/mars_planet_disp.jpg'),
     displacementScale : 0.05,
   })
 );
@@ -336,6 +336,26 @@ mars.position.set(14, 146, 14);
 mars.rotation.x = THREE.MathUtils.degToRad(90);  //axe rouge 
 mars.rotation.y = THREE.MathUtils.degToRad(0);
 
+
+// Ajout de la Terre
+
+const earth = new THREE.Mesh(
+  new THREE.SphereGeometry(3, 128, 128),
+  new THREE.MeshPhongMaterial({
+    map : new THREE.TextureLoader().load('./assets/textures/earth_planet/earth_planet.jpg'),
+    normalMap : new THREE.TextureLoader().load('./assets/textures/earth_planet/earth_planet_normal.jpg'),
+    displacementMapMap : new THREE.TextureLoader().load('./assets/textures/earth_planet/earth_planet_disp.jpg'),
+    displacementScale : 0.05,
+  })
+);
+
+scene.add(earth);
+earth.castShadow = true;
+earth.receiveShadow = true;
+earth.position.set(11, 200, 16);
+
+earth.rotation.x = THREE.MathUtils.degToRad(90);  //axe rouge 
+earth.rotation.y = THREE.MathUtils.degToRad(0);
 
 
 // position initiale de la caméra
