@@ -135,47 +135,47 @@ const innerRadius = 3.6;
 const outerRadius = 6.5;
 const segments = 128;
 
-const rings_geometry = new THREE.RingGeometry(innerRadius, outerRadius, segments);
+const saturn_rings_geometry = new THREE.RingGeometry(innerRadius, outerRadius, segments);
 
 // Ajustement de la texture (rotation et formatage)
-const pos = rings_geometry.attributes.position;
-const uv = new Float32Array(pos.count * 2);
+const pos_saturn_rings = saturn_rings_geometry.attributes.position;
+const uv_saturn_rings = new Float32Array(pos_saturn_rings.count * 2);
 
-for (let i = 0; i < pos.count; i++) {
-  const x = pos.getX(i);
-  const y = pos.getY(i);
+for (let i = 0; i < pos_saturn_rings.count; i++) {
+  const x = pos_saturn_rings.getX(i);
+  const y = pos_saturn_rings.getY(i);
   const r = Math.sqrt(x * x + y * y);
 
   // U = rayon normalisé (0 - 1)
-  uv[i * 2] = (r - innerRadius) / (outerRadius - innerRadius);
+  uv_saturn_rings[i * 2] = (r - innerRadius) / (outerRadius - innerRadius);
 
   // V = angle normalisé (0 - 1)
   const angle = Math.atan2(y, x);
-  uv[i * 2 + 1] = (angle + Math.PI) / (2 * Math.PI);
+  uv_saturn_rings[i * 2 + 1] = (angle + Math.PI) / (2 * Math.PI);
 }
 
-rings_geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+saturn_rings_geometry.setAttribute('uv', new THREE.BufferAttribute(uv_saturn_rings, 2));
 
-const rings_texture = new THREE.TextureLoader().load('./assets/textures/saturn_rings/saturn_rings.png');
+const saturn_rings_texture = new THREE.TextureLoader().load('./assets/textures/saturn_rings/saturn_rings.png');
 
 
-const rings_material = new THREE.MeshPhongMaterial({
+const saturn_rings_material = new THREE.MeshPhongMaterial({
    side: THREE.DoubleSide,
-   map : rings_texture,
+   map : saturn_rings_texture,
    normalMap : new THREE.TextureLoader().load('./assets/textures/saturn_rings/saturn_rings_normal.png'),
    displacementMap : new THREE.TextureLoader().load('./assets/textures/saturn_rings/saturn_rings_disp.png'),
    displacementScale : 0.01,
    transparent : true} );
-const rings = new THREE.Mesh( rings_geometry, rings_material ); 
+const saturn_rings = new THREE.Mesh( saturn_rings_geometry, saturn_rings_material ); 
 
 
-rings.rotation.x = THREE.MathUtils.degToRad(0);  //axe rouge 
-rings.rotation.y = THREE.MathUtils.degToRad(90);  // vert
-rings.rotation.z = THREE.MathUtils.degToRad(0);  //axe bleu
+saturn_rings.rotation.x = THREE.MathUtils.degToRad(0);  //axe rouge 
+saturn_rings.rotation.y = THREE.MathUtils.degToRad(90);  // vert
+saturn_rings.rotation.z = THREE.MathUtils.degToRad(0);  //axe bleu
 
-scene.add(rings);
-rings.castShadow = true;
-rings.receiveShadow = true;
+scene.add(saturn_rings);
+saturn_rings.castShadow = true;
+saturn_rings.receiveShadow = true;
 
 
 
@@ -272,6 +272,45 @@ uranus.position.set(6.8, 106, 15);
 
 uranus.rotation.x = THREE.MathUtils.degToRad(90);  //axe rouge 
 uranus.rotation.y = THREE.MathUtils.degToRad(0);
+
+// Uranus Rings
+const uranus_innerRadius = 3.5;
+const uranus_outerRadius = 6.5;
+const uranus_segments = 128;
+
+const uranus_ringsGeometry = new THREE.RingGeometry(uranus_innerRadius, uranus_outerRadius, uranus_segments);
+
+// Recalcul des UV pour que la texture s’affiche correctement
+const posUranus = uranus_ringsGeometry.attributes.position;
+const uvUranus = new Float32Array(posUranus.count * 2);
+
+for (let i = 0; i < posUranus.count; i++) {
+  const x = posUranus.getX(i);
+  const y = posUranus.getY(i);
+  const r = Math.sqrt(x * x + y * y);
+
+  uvUranus[i * 2] = (r - uranus_innerRadius) / (uranus_outerRadius - uranus_innerRadius);
+  const angle = Math.atan2(y, x);
+  uvUranus[i * 2 + 1] = (angle + Math.PI) / (2 * Math.PI);
+}
+
+uranus_ringsGeometry.setAttribute('uv', new THREE.BufferAttribute(uvUranus, 2));
+
+const uranus_ringsMaterial = new THREE.MeshPhongMaterial({
+  side: THREE.DoubleSide,
+  map: new THREE.TextureLoader().load('./assets/textures/uranus_rings/uranus_rings_color.jpg'),
+  alphaMap: new THREE.TextureLoader().load('./assets/textures/uranus_rings/uranus_rings_alpha.jpg'),
+  transparent: true
+});
+
+const uranus_rings = new THREE.Mesh(uranus_ringsGeometry, uranus_ringsMaterial);
+uranus_rings.position.set(6.8, 106, 15);
+
+uranus_rings.rotation.x = THREE.MathUtils.degToRad(60);
+
+scene.add(uranus_rings);
+uranus_rings.castShadow = true;
+uranus_rings.receiveShadow = true;
 
 
 // position initiale de la caméra
