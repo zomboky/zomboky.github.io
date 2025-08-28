@@ -7,6 +7,7 @@ import { OBJExporter } from '../three/examples/jsm/exporters/OBJExporter.js';
 import { EffectComposer } from '../three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from '../three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OBJLoader } from '../three/examples/jsm/loaders/OBJLoader.js';
 
 
 
@@ -69,7 +70,7 @@ ambientlight.position.set()
 
 // Lumière du soleil 
 const sunLight = new THREE.DirectionalLight(0xffffff, 2); // couleur, intensité
-sunLight.position.set(50, 100, 50); // direction de la lumière (origine des rayons)
+sunLight.position.set(100, 50, 50); // direction de la lumière (origine des rayons)
 sunLight.castShadow = true;         // activer les ombres
 
 // Paramètres des ombres pour plus de réalisme
@@ -208,14 +209,14 @@ function addStar(color) {
 
   const [x, y, z] = Array(3)
     .fill()
-    .map(() => THREE.MathUtils.randFloatSpread(300));
+    .map(() => THREE.MathUtils.randFloatSpread(600)); // Espace de 600 unités autour de la scène
 
   star.position.set(x, y, z);
 
   scene.add(star);
 }
 
-const numStars = 600;
+const numStars = 900;
 for (let i = 0; i < numStars; i++) {
   const color = i < numStars / 2 ? 0xffff00 : 0xffffff; // jaune ou blanc
   addStar(color);
@@ -313,6 +314,28 @@ uranus_rings.rotation.x = THREE.MathUtils.degToRad(60);
 uranus.add(uranus_rings);
 uranus_rings.castShadow = true;
 uranus_rings.receiveShadow = true;
+
+
+// Add planet mars
+
+const mars = new THREE.Mesh(
+  new THREE.SphereGeometry(3, 128, 128),
+  new THREE.MeshPhongMaterial({
+    map : new THREE.TextureLoader().load('./assets/textures/mars_planet/mars_planet.jpg'),
+    normalMap : new THREE.TextureLoader().load('./assets/textures/mars_planet/mars_planet_normal.jpg'),
+    displacementMapMap : new THREE.TextureLoader().load('./assets/textures/mars_planet/mars_planet_bump.jpg'),
+    displacementScale : 0.05,
+  })
+);
+
+scene.add(mars);
+mars.castShadow = true;
+mars.receiveShadow = true;
+mars.position.set(14, 146, 14);
+
+mars.rotation.x = THREE.MathUtils.degToRad(90);  //axe rouge 
+mars.rotation.y = THREE.MathUtils.degToRad(0);
+
 
 
 // position initiale de la caméra
