@@ -337,13 +337,15 @@ let targetPos = basePos.clone(); // copie de basePos pour pas changer sa valeur 
 function MoveCamera() {
 
 
+
   const t = document.body.getBoundingClientRect().top;
   targetPos.set(
-    basePos.z + t * -0.01,
-    basePos.x + t * -0.01,
-    basePos.y + t * -0.2,
+    basePos.x + t * -0.01, // X
+    basePos.y + t * -0.2,  // Y
+    basePos.z + t * -0.01  // Z
+  );
 
-);
+
   camera.lookAt(0, 0, 0);
  
 
