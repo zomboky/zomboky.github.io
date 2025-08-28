@@ -324,6 +324,12 @@ camera.lookAt(0,0,0); // Camera scroll
 
 controls.update();
 
+// Caméra fluide 
+let targetPos = basePos.clone(); // copie de basePos pour pas changer sa valeur initiale
+                                //  stocke la position vers laquelle la caméra doit aller
+
+ 
+
 
 
 // Move Camera 
@@ -332,19 +338,14 @@ function MoveCamera() {
 
 
   const t = document.body.getBoundingClientRect().top;
-  camera.position.z = basePos.z + t * -0.01;
-  camera.position.x = basePos.x + t * -0.01;
-  camera.position.y = basePos.y + t * -0.2;
+  targetPos.set(
+    basePos.z + t * -0.01,
+    basePos.x + t * -0.01,
+    basePos.y + t * -0.2,
+
+);
   camera.lookAt(0, 0, 0);
-  // 2. Ensuite on applique une rotation autour de son axe de vision
-  const forward = new THREE.Vector3();
-  camera.getWorldDirection(forward); // vecteur avant de la caméra
-
-  // angle en radians
-  const angle = THREE.MathUtils.degToRad(120);
-
-  // Appliquer le roulis autour de l'axe de vision
-  camera.rotateOnWorldAxis(forward.normalize(), angle);
+ 
 
   //partie debug
   console.log("Position caméra : ", camera.position) //3, 40, 8 
@@ -355,13 +356,18 @@ MoveCamera();
 
 
 
+
 function animate(){
 
 
     requestAnimationFrame( animate );
 
 
+
     controls.update();
+    camera.position.lerp(targetPos, 0.05); // 0.05 = vitesse de lissage
+    camera.lookAt(0, 0, 0);
+
 
 
     //renderer.render( scene, camera);
