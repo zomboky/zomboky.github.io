@@ -70,8 +70,9 @@ ambientlight.position.set()
 
 // Lumière du soleil 
 const sunLight = new THREE.DirectionalLight(0xffffff, 2); // couleur, intensité
-sunLight.position.set(100, 50, 50); // direction de la lumière (origine des rayons)
+sunLight.position.set(-100, 50, 50); // direction de la lumière (origine des rayons)
 sunLight.castShadow = true;         // activer les ombres
+
 
 // Paramètres des ombres pour plus de réalisme
 sunLight.shadow.mapSize.width = 4096;
@@ -121,12 +122,13 @@ const saturn_material = new THREE.MeshPhongMaterial({
 const saturn = new THREE.Mesh(saturn_geometry, saturn_material);
 
 
-saturn.rotation.x = THREE.MathUtils.degToRad(90);    //axe rouge 
+saturn.rotation.x = THREE.MathUtils.degToRad(115);    //axe rouge 
 saturn.rotation.y = THREE.MathUtils.degToRad(0);    // vert
-saturn.rotation.z = THREE.MathUtils.degToRad(90);  //axe bleu
+saturn.rotation.z = THREE.MathUtils.degToRad(0);  //axe bleu
 
 
 scene.add(saturn);
+saturn.position.set(7, 68, 10);
 saturn.castShadow = true; 
 saturn.receiveShadow = true; 
 
@@ -172,9 +174,10 @@ const saturn_rings_material = new THREE.MeshPhongMaterial({
 const saturn_rings = new THREE.Mesh( saturn_rings_geometry, saturn_rings_material ); 
 
 
-saturn_rings.rotation.x = THREE.MathUtils.degToRad(0);  //axe rouge 
-saturn_rings.rotation.y = THREE.MathUtils.degToRad(90);  // vert
-saturn_rings.rotation.z = THREE.MathUtils.degToRad(0);  //axe bleu
+
+saturn_rings.position.set(7, 68, 10);
+saturn_rings.rotation.x = THREE.MathUtils.degToRad(30);
+saturn_rings.rotation.z = THREE.MathUtils.degToRad(30);
 
 scene.add(saturn_rings);
 saturn_rings.castShadow = true;
@@ -237,7 +240,7 @@ const jupiter = new THREE.Mesh(
 scene.add(jupiter);
 jupiter.castShadow = true;
 jupiter.receiveShadow = true;
-jupiter.position.set(-5, 40, 8);
+jupiter.position.set(3, 100, 11);
 
 jupiter.rotation.x = THREE.MathUtils.degToRad(90);  //axe rouge 
 jupiter.rotation.y = THREE.MathUtils.degToRad(90);
@@ -254,7 +257,7 @@ const neptune = new THREE.Mesh(
 scene.add(neptune);
 neptune.castShadow = true;
 neptune.receiveShadow = true;
-neptune.position.set(10, 85, 11);
+//neptune.position.set(10, 85, 11);
 
 neptune.rotation.x = THREE.MathUtils.degToRad(90);  //axe rouge 
 neptune.rotation.y = THREE.MathUtils.degToRad(0);
@@ -271,7 +274,7 @@ const uranus = new THREE.Mesh(
 scene.add(uranus);
 uranus.castShadow = true;
 uranus.receiveShadow = true;
-uranus.position.set(6.8, 106, 15);
+uranus.position.set(-5, 40, 8);
 
 uranus.rotation.x = THREE.MathUtils.degToRad(90);  //axe rouge 
 uranus.rotation.y = THREE.MathUtils.degToRad(0);
@@ -377,6 +380,26 @@ venus.position.set(19, 250, 20);
 
 venus.rotation.x = THREE.MathUtils.degToRad(90);  //axe rouge 
 venus.rotation.y = THREE.MathUtils.degToRad(0);
+
+// Ajout de mercure
+
+const mercury = new THREE.Mesh(
+  new THREE.SphereGeometry(3, 128, 128),
+  new THREE.MeshPhongMaterial({
+    map : new THREE.TextureLoader().load('./assets/textures/mercury_planet/mercury_planet.jpg'),
+    normalMap : new THREE.TextureLoader().load('./assets/textures/mercury_planet/mercury_planet_normal.png'),
+    displacementMapMap : new THREE.TextureLoader().load('./assets/textures/mercury_planet/mercury_planet_disp.png'),
+    displacementScale : 0.1,
+  })
+);
+
+scene.add(mercury);
+mercury.castShadow = true;
+mercury.receiveShadow = true;
+mercury.position.set(11, 280, 20);
+
+mercury.rotation.x = THREE.MathUtils.degToRad(90);  //axe rouge 
+mercury.rotation.y = THREE.MathUtils.degToRad(0);
 
 
 
