@@ -343,8 +343,8 @@ const earth = new THREE.Mesh(
   new THREE.SphereGeometry(3, 128, 128),
   new THREE.MeshPhongMaterial({
     map : new THREE.TextureLoader().load('./assets/textures/earth_planet/earth_planet.jpg'),
-    normalMap : new THREE.TextureLoader().load('./assets/textures/earth_planet/earth_planet_normal.jpg'),
-    displacementMapMap : new THREE.TextureLoader().load('./assets/textures/earth_planet/earth_planet_disp.jpg'),
+    normalMap : new THREE.TextureLoader().load('./assets/textures/earth_planet/earth_planet_normal.png'),
+    displacementMapMap : new THREE.TextureLoader().load('./assets/textures/earth_planet/earth_planet_disp.png'),
     displacementScale : 0.05,
   })
 );
@@ -356,6 +356,29 @@ earth.position.set(11, 200, 16);
 
 earth.rotation.x = THREE.MathUtils.degToRad(90);  //axe rouge 
 earth.rotation.y = THREE.MathUtils.degToRad(0);
+
+
+// Ajout de Vénus
+
+const venus = new THREE.Mesh(
+  new THREE.SphereGeometry(3, 128, 128),
+  new THREE.MeshPhongMaterial({
+    map : new THREE.TextureLoader().load('./assets/textures/venus_planet/venus_planet.jpg'),
+    normalMap : new THREE.TextureLoader().load('./assets/textures/venus_planet/venus_planet_normal.png'),
+    displacementMapMap : new THREE.TextureLoader().load('./assets/textures/venus_planet/venus_planet_disp.png'),
+    displacementScale : 0.1,
+  })
+);
+
+scene.add(venus);
+venus.castShadow = true;
+venus.receiveShadow = true;
+venus.position.set(19, 250, 20);
+
+venus.rotation.x = THREE.MathUtils.degToRad(90);  //axe rouge 
+venus.rotation.y = THREE.MathUtils.degToRad(0);
+
+
 
 
 // position initiale de la caméra
