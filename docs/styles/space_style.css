@@ -54,6 +54,17 @@ html, body {
   transform: translate(-50%, -50%);
   font-size: 2rem;
   color: white;
+  text-shadow: rgba(255,255,255,1) 0px 0px 47px; 
   z-index: 10; /* index de l'empilement dans le canva */
-  
+
 }
+
+#scroll-info{
+  position: fixed; 
+  top : 10%;
+  right : 10%;
+  z-index : 11;
+  color : white;
+
+}
+
