@@ -1,4 +1,5 @@
 body {
+  cursor : url('../assets/cursors/real_hand_cursor.cur'), auto; /* curseur personnalisé */
   background-image: url('../assets/gif/space_wallpaper_hd.gif');
   background-repeat: repeat; /* motif répété */
   background-size: 128px 128px; /* garde la taille d'origine */
@@ -92,8 +93,13 @@ body {
   align-items: center;        /* aligne verticalement l’ours et la frame */
   position : relative;      /* pour le positionnement absolu du gif avec z-index */
   z-index : 2;
+  filter: drop-shadow(0 0 30px rgba(255,255,255,1));
+    transition: filter 0.01s linear; /* transition très rapide pour fluidité */
+  }
+
+
   
-}
+
 
 .aligner {
   display: flex;              /* mets les éléments côte à côte */
