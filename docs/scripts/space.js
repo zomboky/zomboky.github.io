@@ -442,6 +442,7 @@ function MoveCamera() {
   console.log("Position caméra : ", camera.position) //3, 40, 8 
 }
 
+
 document.body.onscroll = MoveCamera;
 MoveCamera();
 
