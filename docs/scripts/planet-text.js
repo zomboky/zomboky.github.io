@@ -12,7 +12,7 @@ const planets = [
             masse: "102",
             diametre: "49528",
             gravite: "11.0",
-            vitesse: "23.5",
+            liberation: "23.5",
             rotation: "16.1",
             distance: "4495100000"
         }
@@ -24,7 +24,7 @@ const planets = [
             masse: "86.8",
             diametre: "51118",
             gravite: "8.7",
-            vitesse: "21.3",
+            liberation: "21.3",
             rotation: "-17.2",
             distance: "2872500000"
         }
@@ -36,7 +36,7 @@ const planets = [
             masse: "568",
             diametre: "120536",
             gravite: "9.0",
-            vitesse: "35.5",
+            liberation: "35.5",
             rotation: "10.7",
             distance: "1433500000"
         }
@@ -48,7 +48,7 @@ const planets = [
             masse: "1898",
             diametre: "142984",
             gravite: "23.1",
-            vitesse: "59.5",
+            liberation: "59.5",
             rotation: "9.9",
             distance: "778600000"
         }
@@ -60,7 +60,7 @@ const planets = [
             masse: "0.642",
             diametre: "6792",
             gravite: "3.7",
-            vitesse: "5.0",
+            liberation: "5.0",
             rotation: "24.6",
             distance: "227900000"
         }
@@ -72,7 +72,7 @@ const planets = [
             masse: "5.97",
             diametre: "12756",
             gravite: "9.8",
-            vitesse: "11.2",
+            liberation: "11.2",
             rotation: "23.9",
             distance: "149600000"
         }
@@ -84,7 +84,7 @@ const planets = [
             masse: "4.87",
             diametre: "12104",
             gravite: "8.9",
-            vitesse: "10.4",
+            liberation: "10.4",
             rotation: "-5832.5",
             distance: "108200000"
         }
@@ -96,7 +96,7 @@ const planets = [
             masse: "0.330",
             diametre: "4879",
             gravite: "3.7",
-            vitesse: "4.3",
+            liberation: "4.3",
             rotation: "1407.6",
             distance: "57900000"
         }
@@ -125,12 +125,14 @@ function updatePlanetText() {
 
                 // Cartouche
         dataBox.innerHTML = `
-            <div>Masse : ${planet.data.masse}</div>
-            <div>Diamètre : ${planet.data.diametre}</div>
-            <div>Gravité : ${planet.data.gravite}</div>
-            <div>Vitesse d’évasion : ${planet.data.echap}</div>
-            <div>Rotation : ${planet.data.rotation}</div>
-            <div>Distance au Soleil : ${planet.data.distance}</div>`;
+            <h3>${planet.name}</h3>
+            <div>Masse : ${planet.data.masse} ×10^24 kg</div>
+            <div>Diamètre : ${planet.data.diametre} km</div>
+            <div>Gravité : ${planet.data.gravite} m/s²</div>
+            <div>Vitesse d’évasion : ${planet.data.liberation} km/s</div>
+            <div>Rotation : ${planet.data.rotation} h</div>
+            <div>Distance au Soleil : ${planet.data.distance} km</div>
+        `;
 
             // Positionnement du cartouche en x et y
         dataBox.style.top = planet.cartouchePos.top;
