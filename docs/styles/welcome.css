@@ -93,7 +93,7 @@ body {
   align-items: center;        /* aligne verticalement l’ours et la frame */
   position : relative;      /* pour le positionnement absolu du gif avec z-index */
   z-index : 2;
-  filter: drop-shadow(0 0 30px rgba(255,255,255,1));
+  filter: drop-shadow(0 0 30px rgba(255,255,255,0));
     transition: filter 0.01s linear; /* transition très rapide pour fluidité */
   }
 
