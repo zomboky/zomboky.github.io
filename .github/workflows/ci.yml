@@ -1,23 +1,50 @@
-name: Deploy to neocities
+# name: Deploy to neocities
+
+# on:
+#   push:
+#     branches:
+#       - master # Change to name of branch you're deploying from
+
+# concurrency:
+#   group: deploy-to-neocities
+#   cancel-in-progress: true
+
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#     - uses: actions/checkout@v3
+#     - name: Deploy to neocities
+#       uses: bcomnes/deploy-to-neocities@v1
+#       with:
+  #       api_token: ${{ secrets.NEOCITIES_API_KEY }}
+#         cleanup: false
+#         dist_dir: docs # Change to fold your site is in, it's set to the root by default
+
+name: Deploy to Neocities
 
 on:
   push:
     branches:
-      - master # Change to name of branch you're deploying from
-
-concurrency:
-  group: deploy-to-neocities
-  cancel-in-progress: true
+      - master  # ou master selon ta branche par défaut
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Deploy to neocities
-      uses: bcomnes/deploy-to-neocities@v1
-      with:
-        api_token: ${{ secrets.NEOCITIES_API_KEY }}
-        cleanup: false
-        dist_dir: docs # Change to fold your site is in, it's set to the root by default
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install curl
+        run: sudo apt-get install -y curl zip
+
+      - name: Zip website files
+        run: zip -r site.zip . -x "*.git*"
+
+      - name: Deploy to Neocities
+        run: |
+          curl -H "Authorization: Bearer ${{ secrets.NEOCITIES_API_KEY }}" \
+               -F "file=@site.zip" \
+               https://neocities.org/api/upload
