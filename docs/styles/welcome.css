@@ -10,7 +10,7 @@ body {
   font-family: monospace; /* style rétro */
 }
 
-/* titre centré en haut */
+/* titre centré en haut test*/
 #titre img {
   display: block;     /* rend l'image un bloc pour que margin auto fonctionne */
   margin: 0 auto;     /* centre horizontalement */
@@ -57,7 +57,7 @@ body {
   z-index : 2;
 }
 
-/* Main Frame */
+/* Main Frame  */
 
 .main-frame {
   position: absolute;                 /* pour pouvoir contrôler top/bottom */
