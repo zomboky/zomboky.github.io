@@ -2,24 +2,23 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Plateau d'Échecs Simple</title>
-    <link rel="stylesheet" href="https://unpkg.com/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <title>Plateau d'Échecs - Version 0.0.1</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/chessboardjs@0.0.1/www/css/chessboard.css">
     
     <style>
-        /* CSS pour centrer le plateau */
+        /* CSS pour centrer et définir la taille du plateau (inchangé) */
         body {
             display: flex;
-            justify-content: center; /* Centrage horizontal */
-            align-items: center;     /* Centrage vertical (optionnel, si vous voulez au milieu de l'écran) */
-            min-height: 100vh;       /* Assure que le corps prend toute la hauteur de la fenêtre */
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
             margin: 0;
             background-color: #f0f0f0;
         }
-
-        /* Conteneur pour définir la taille du plateau */
         #myBoard {
-            width: 400px; /* Taille désirée pour le plateau */
-            max-width: 90vw; /* Rend le plateau réactif */
+            width: 400px;
+            max-width: 90vw;
         }
     </style>
 </head>
@@ -28,16 +27,16 @@
     <div id="myBoard"></div>
 
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <script src="https://unpkg.com/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    
+    <script src="https://unpkg.com/chessboardjs@0.0.1/www/js/chessboard.js"></script>
 
     <script>
-        // Configuration de base pour le plateau
         var config = {
-            draggable: true, // Permet de glisser les pièces
-            position: 'start' // Position de départ standard
+            draggable: true,
+            position: 'start'
         };
 
-        // Initialisation du plateau
+        // L'objet 'Chessboard' sera maintenant défini
         var board = Chessboard('myBoard', config);
     </script>
 
