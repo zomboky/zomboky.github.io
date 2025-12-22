@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="chessground/chessground.base.css">
+    <link rel="stylesheet" href="chessground/chessground.brown.css">
+    <link rel="stylesheet" href="chessground/chessground.cburnett.css">
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background: #eee; }
+        .chess-container { background: white; padding: 20px; border-radius: 8px; margin: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        .board { width: 400px; height: 400px; cursor: pointer; }
+        .controls { margin-top: 15px; display: flex; justify-content: center; gap: 15px; align-items: center; }
+        .btn-sm { padding: 8px 15px; cursor: pointer; border: 1px solid #ccc; background: #fff; border-radius: 4px; }
+        .btn-sm:hover { background: #f0f0f0; }
+        .move-indicator { font-weight: bold; min-width: 120px; text-align: center; }
+        h2 { color: #333; }
+    </style>
+</head>
+<body>
+
+    <div id="london-box" class="chess-container">
+        <h2>Système de Londres</h2>
+        <div class="board brown cburnett"></div>
+        <div class="controls">
+            <button class="prev-btn btn-sm">Précédent</button>
+            <span class="move-indicator"></span>
+            <button class="next-btn btn-sm">Suivant</button>
+        </div>
+    </div>
+
+    <div id="sicilian-box" class="chess-container">
+        <h2>Défense Sicilienne</h2>
+        <div class="board brown cburnett"></div>
+        <div class="controls">
+            <button class="prev-btn btn-sm">Précédent</button>
+            <span class="move-indicator"></span>
+            <button class="next-btn btn-sm">Suivant</button>
+        </div>
+    </div>
+
+    <script src="chess/chess.min.js"></script>
+    <script src="chessground/chessground.min.js"></script>
+    <script src="scripts/CreateBoard.js"></script>
+
+    <script>
+        // Annotations pour le Londres
+        const londonAnnos = {
+            0: [{ orig: "d2", dest: "d4", brush: "green" }], // 1. d4
+            2: [{ orig: "c1", dest: "f4", brush: "blue" }],  // 2. Bf4
+            4: [{ orig: "d4", dest: "e5", brush: "red" }]    // Ta flèche perso au coup 3
+        };
+
+        // Annotations pour la Sicilienne
+        const sicilianAnnos = {
+            0: [{ orig: "e2", dest: "e4", brush: "green" }], // 1. e4
+            1: [{ orig: "c7", dest: "c5", brush: "yellow" }] // 1... c5
+        };
+
+        // Lancement des deux instances
+        createInteractiveBoard("london-box", "1. d4 d5 2. Bf4 Nf6 3. e3", londonAnnos);
+        createInteractiveBoard("sicilian-box", "1. e4 c5 2. Nf3 d6", sicilianAnnos);
+    </script>
+</body>
+</html>
