@@ -5,72 +5,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Le Système de Londres: Répertoire Agressif (Côté Blancs)</title>
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+    <link rel="stylesheet" href="chessground/chessground.base.css">
+    <link rel="stylesheet" href="chessground/chessground.brown.css">
+    <link rel="stylesheet" href="chessground/chessground.cburnett.css">
 
     <script>
         window.MathJax = {
-            tex: {
-                inlineMath: [['$', '$'], ['\\(', '\\)']],
-                displayMath: [['$$', '$$'], ['\\[', '\\]']],
-                processEscapes: true
-            },
-            options: {
-                ignoreHtmlClass: 'chessboard'
-            }
+            tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$']], processEscapes: true },
+            options: { ignoreHtmlClass: 'board' }
         };
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
     <style>
-        .webpage-container {
-            max-width: 1200px;
-            margin: auto;
-            font-family: Arial, sans-serif;
-            padding: 20px;
-            line-height: 1.6;
-        }
-        .page-header {
-            border-bottom: 2px solid #333;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-        }
-        .position-section {
-            border: 1px solid #ccc;
-            margin-bottom: 30px;
-            padding: 15px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-            background-color: #f9f9f9;
-        }
-        .position-diagram {
-            flex: 1 1 350px;
-        }
-        .position-analysis {
-            flex: 2 1 600px;
-        }
-        .chessboard {
-            width: 100%;
-            max-width: 350px;
-            margin: 10px 0;
-            border: 2px solid #333;
-        }
-        .moves {
-            font-style: italic;
-            font-weight: bold;
-            background: #eee;
-            padding: 5px;
-            display: block;
-        }
-        .citation-note {
-            font-size: 0.8em;
-            color: #666;
-            margin-top: 20px;
-        }
-        h2 { margin-top: 40px; color: #333; }
-        h3 { margin-top: 20px; color: #444; }
+        .webpage-container { max-width: 1200px; margin: auto; font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; }
+        .page-header { border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+        .position-section { border: 1px solid #ccc; margin-bottom: 30px; padding: 15px; display: flex; flex-wrap: wrap; gap: 20px; background-color: #f9f9f9; }
+        .position-diagram { flex: 1 1 350px; }
+        .position-analysis { flex: 2 1 600px; }
+        
+        /* Styles des échiquiers */
+        .board { width: 350px; height: 350px; border: 2px solid #333; margin: 10px 0; cursor: pointer; }
+        .controls { display: flex; gap: 10px; align-items: center; margin-top: 5px; }
+        .btn-sm { padding: 5px 10px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; background: #fff; }
+        .move-indicator { font-weight: bold; font-family: monospace; min-width: 90px; text-align: center; }
+        
+        .moves { font-style: italic; font-weight: bold; background: #eee; padding: 5px; display: block; margin-top: 10px;}
+        .citation-note { font-size: 0.8em; color: #666; margin-top: 20px; }
+        h1, h2, h3 { color: #333; }
     </style>
 </head>
 <body>
@@ -88,21 +50,34 @@
 
     <h3>1.1 Le Setup Standard du Londres</h3>
 
-    <div class="position-section">
+    <div id="section1_1_1" class="position-section">
         <div class="position-diagram">
             <h3 class="position-title">Position 1.1.1: Structure de base (Le Triangle)</h3>
-            <div id="board1_1_1" class="chessboard"></div>
-            <p class="moves">1. d4 d5 2. Bf4 Nf6 3. e3 e6 4. c3 (FEN: rnbqkb1r/ppp2ppp/4pn2/3p4/3P1B2/2P1P3/PP3PPP/RN1QKBNR w KQkq - 0 4)</p>
+            <div class="board brown cburnett"></div>
+            <div class="controls">
+                <button class="prev-btn btn-sm">«</button>
+                <span class="move-indicator"></span>
+                <button class="next-btn btn-sm">»</button>
+            </div>
+            <p class="moves">1. d4 d5 2. Bf4 Nf6 3. e3 e6 4. c3</p>
         </div>
         <div class="position-analysis">
             <p><strong>Analyse:</strong> Le centre est extrêmement solide, défendu par $c3$ et $e3$. Le **Fou** est actif sur $f4$, prêt à se retirer ou à menacer. La structure idéale des Blancs est complète, et ils peuvent maintenant développer leurs Cavaliers ($Nf3$ ou $Nd2$) et roquer.</p>
             <p><strong>Points Positifs (Blancs):</strong> La structure est difficile à briser et $d4$ est bien protégé contre $...c5$ ou $...e5$.</p>
             <p><strong>Points Négatifs (Blancs):</strong> Le pion $b2$ est souvent exposé, car le **Fou** n'est plus en $c1$ pour le défendre, permettant des idées précoces comme $...Qb6$ dans d'autres lignes.</p>
         </div>
+    </div>
+
+    <div id="section1_1_2" class="position-section">
         <div class="position-diagram">
             <h3 class="position-title">Position 1.1.2: Après développement (Menace Ne5)</h3>
-            <div id="board1_1_2" class="chessboard"></div>
-            <p class="moves">1. d4 d5 2. Bf4 Nf6 3. e3 c5 4. c3 Nc6 5. Nf3 e6 6. Nbd2 Bd6 7. Bd3 O-O 8. O-O Rooke8 9. Ne5 (FEN: r1bqr1k1/pp3ppp/2nbpn2/2ppN3/3P1B2/2PBP3/PP1N1PPP/R2Q1RK1 b - - 0 9)</p>
+            <div class="board brown cburnett"></div>
+            <div class="controls">
+                <button class="prev-btn btn-sm">«</button>
+                <span class="move-indicator"></span>
+                <button class="next-btn btn-sm">»</button>
+            </div>
+            <p class="moves">1. d4 d5 2. Bf4 Nf6 3. e3 c5 4. c3 Nc6 5. Nf3 e6 6. Nbd2 Bd6 7. Bd3 O-O 8. O-O Re8 9. Ne5</p>
         </div>
         <div class="position-analysis">
             <p><strong>Analyse:</strong> L'un des plans clés est l'utilisation de l'avant-poste $e5$ pour le Cavalier, ce qui est rendu possible par cette structure de pions. Les Noirs tentent de contester le **Fou** en $f4$ avec $...Bd6$. White devrait généralement reculer le **Fou** à $g3$ pour éviter l'échange, à moins que l'échange soit favorable.</p>
@@ -114,12 +89,16 @@
     <p>Le coup $...c5$ précoce perturbe les plans normaux du Londres en attaquant $d4$ avant la consolidation $c3/e3$. Les Blancs doivent jouer activement pour l'avantage.</p>
 
     <h3>2.1 Variation: Transposition à la Benoni (3. d5)</h3>
-
-    <div class="position-section">
+    <div id="section2_1_1" class="position-section">
         <div class="position-diagram">
             <h3 class="position-title">Position 2.1.1: Entrée en Benoni</h3>
-            <div id="board2_1_1" class="chessboard"></div>
-            <p class="moves">1. d4 Nf6 2. Bf4 c5 3. d5 (FEN: rnbqkb1r/pp2pppp/5n2/2pP4/5B2/8/PPP1PPPP/RN1QKBNR b KQkq - 0 3)</p>
+            <div class="board brown cburnett"></div>
+            <div class="controls">
+                <button class="prev-btn btn-sm">«</button>
+                <span class="move-indicator"></span>
+                <button class="next-btn btn-sm">»</button>
+            </div>
+            <p class="moves">1. d4 Nf6 2. Bf4 c5 3. d5</p>
         </div>
         <div class="position-analysis">
             <p><strong>Analyse:</strong> $3. d5$ est le coup le plus actif et le meilleur pour jouer pour le plus grand avantage. Cette réponse force une transposition dans la Défense Benoni, car les Blancs réclament l'espace central et obtiennent une structure favorable, même si ce n'est plus un Londres pur.</p>
@@ -128,230 +107,278 @@
     </div>
 
     <h3>2.2 Variation: L'Aventure du Pion Empoisonné (3. e3 Qb6)</h3>
-
-    <div class="position-section">
+    <div id="section2_2_1" class="position-section">
         <div class="position-diagram">
             <h3 class="position-title">Position 2.2.1: L'Attaque sur b2</h3>
-            <div id="board2_2_1" class="chessboard"></div>
-            <p class="moves">1. d4 Nf6 2. Bf4 c5 3. e3 Qb6 4. Nc3 (FEN: rnb1kb1r/pp2pppp/1q3n2/2pP4/3P1B2/2N1P3/PPP2PPP/R2QKBNR b KQkq - 0 4)</p>
+            <div class="board brown cburnett"></div>
+            <div class="controls">
+                <button class="prev-btn btn-sm">«</button>
+                <span class="move-indicator"></span>
+                <button class="next-btn btn-sm">»</button>
+            </div>
+            <p class="moves">1. d4 Nf6 2. Bf4 c5 3. e3 Qb6 4. Nc3</p>
         </div>
         <div class="position-analysis">
             <p><strong>Analyse:</strong> En jouant $3. e3$, les Blancs maintiennent la structure Londonienne, mais $3... Qb6$ exploite immédiatement le pion $b2$ non défendu. $4. Nc3$ est la seule réponse active.</p>
             <p><strong>Points Clés:</strong> Si les Noirs ne prennent pas en $b2$, les Blancs continuent le développement. Si les Noirs prennent $4... Qxb2$ (le pion empoisonné), les Blancs doivent jouer pour la victoire en sacrifiant du matériel ou en forçant des complications.</p>
         </div>
+    </div>
+
+    <div id="section2_2_2" class="position-section">
         <div class="position-diagram">
             <h3 class="position-title">Position 2.2.2: Le Piège Agressif (5. a3)</h3>
-            <div id="board2_2_2" class="chessboard"></div>
-            <p class="moves">1. d4 Nf6 2. Bf4 c5 3. e3 Qb6 4. Nc3 Qxb2 5. a3 (FEN: rnb1kb1r/pp2pppp/5n2/2pP4/3P1B2/P1N1P3/1qP2PPP/R2QKBNR b KQkq - 0 5)</p>
+            <div class="board brown cburnett"></div>
+            <div class="controls">
+                <button class="prev-btn btn-sm">«</button>
+                <span class="move-indicator"></span>
+                <button class="next-btn btn-sm">»</button>
+            </div>
+            <p class="moves">1. d4 Nf6 2. Bf4 c5 3. e3 Qb6 4. Nc3 Qxb2 5. a3</p>
         </div>
         <div class="position-analysis">
             <p><strong>Analyse:</strong> $5. a3$ est une ligne extrêmement risquée, jouée pour la victoire mais au risque de la défaite, car elle menace de piéger la Dame Noire. Le Cavalier $b5$ (après $5. Nb5$) est également une option, mais $5. a3$ est la ligne la plus tactique.</p>
-            <p><strong>Conséquence:</strong> Si les Noirs connaissent la séquence défensive (par exemple $...a6$ et les échanges forcés), ils obtiennent un avantage significatif. Si les Blancs veulent une nulle rapide contre un adversaire expérimenté, ils devraient jouer $5. Rook b1$ et accepter la répétition.</p>
+            <p><strong>Conséquence:</strong> Si les Noirs connaissent la séquence défensive, ils obtiennent un avantage significatif. Si les Blancs veulent une nulle rapide, ils devraient jouer $5. Rb1$ et accepter la répétition.</p>
         </div>
     </div>
 
     <h2>3. Contre les Fianchettos Côté Roi (KI et Grünfeld)</h2>
-    <p>Ces setups (avec $g6$) peuvent être rencontrés via l'ordre de coups $1. d4 Nf6 2. Bf4 g6$. Les Blancs doivent décider s'ils jouent agressivement sur le côté Roi ($h4$) ou s'ils se consolident positionnellement.</p>
+    <p>Ces setups peuvent être rencontrés via l'ordre de coups $1. d4 Nf6 2. Bf4 g6$.</p>
 
     <h3>3.1 Variation: Le Setup King's Indian (KI) avec $...d6$</h3>
-
-    <div class="position-section">
+    <div id="section3_1_1" class="position-section">
         <div class="position-diagram">
             <h3 class="position-title">Position 3.1.1: Attaque H4 contre le fianchetto (KI)</h3>
-            <div id="board3_1_1" class="chessboard"></div>
-            <p class="moves">1. d4 Nf6 2. Bf4 g6 3. e3 Bg7 4. h4 (FEN: rnbqk2r/pp2ppbp/5np1/8/3P1B1P/4P3/PPP2PP1/RN1QKBNR b KQkq - 0 4)</p>
+            <div class="board brown cburnett"></div>
+            <div class="controls">
+                <button class="prev-btn btn-sm">«</button>
+                <span class="move-indicator"></span>
+                <button class="next-btn btn-sm">»</button>
+            </div>
+            <p class="moves">1. d4 Nf6 2. Bf4 g6 3. e3 Bg7 4. h4</p>
         </div>
         <div class="position-analysis">
-            <p><strong>Analyse:</strong> $4. h4$ est l'approche agressive qui cherche à créer une rupture $h5$, menaçant la structure de roque des Noirs. Si les Noirs roquent sans précaution, les Blancs peuvent obtenir un avantage décisif ou un grand avantage pratique en lançant $h5$.</p>
-            <p><strong>Points Clés:</strong> Les Noirs sont contraints de répondre par $4... h5$ pour stopper l'avancée, affaiblissant ainsi le côté Roi. S'ils choisissent d'ignorer la menace et jouent $...d6$, $h5$ peut mener à un sacrifice d'échange très dangereux pour les Noirs, avec une activité des pièces Blanches écrasante.</p>
+            <p><strong>Analyse:</strong> $4. h4$ est l'approche agressive qui cherche à créer une rupture $h5$. Si les Noirs roquent sans précaution, les Blancs peuvent obtenir un avantage décisif.</p>
+            <p><strong>Points Clés:</strong> Les Noirs sont contraints de répondre par $4... h5$. S'ils jouent $...d6$, $h5$ peut mener à un sacrifice d'échange très dangereux.</p>
         </div>
+    </div>
+
+    <div id="section3_1_2" class="position-section">
         <div class="position-diagram">
             <h3 class="position-title">Position 3.1.2: L'Avantage central $E4$ (Pirc Transposition)</h3>
-            <div id="board3_1_2" class="chessboard"></div>
-            <p class="moves">1. d4 Nf6 2. Bf4 g6 3. Nc3 Bg7 4. e4 (FEN: rnbqk2r/pp2ppbp/5np1/8/3PPB2/2N5/PPP2PPP/R2QKBNR b KQkq - 0 4)</p>
+            <div class="board brown cburnett"></div>
+            <div class="controls">
+                <button class="prev-btn btn-sm">«</button>
+                <span class="move-indicator"></span>
+                <button class="next-btn btn-sm">»</button>
+            </div>
+            <p class="moves">1. d4 Nf6 2. Bf4 g6 3. Nc3 Bg7 4. e4</p>
         </div>
         <div class="position-analysis">
-            <p><strong>Analyse:</strong> En jouant $3. Nc3$, les Blancs encouragent $3... d5$ (transposition Grünfeld). S'ils jouent $3... Bg7$, les Blancs obtiennent un centre large et puissant avec $4. e4$, transposant dans la Défense Pirc (ou $King's Indian Attack$ inversée).</p>
-            <p><strong>Stratégie:</strong> Dans cette position, l'idée des Blancs est de roquer long et d'attaquer avec le **Fou** h6 pour échanger le **Fou** $g7$, affaiblissant la défense du Roi Noir.</p>
+            <p><strong>Analyse:</strong> En jouant $3. Nc3$, les Blancs encouragent $3... d5$ (Grünfeld). Sur $3... Bg7$, les Blancs obtiennent un centre large avec $4. e4$, transposant dans la Pirc.</p>
+            <p><strong>Stratégie:</strong> L'idée est de roquer long et d'attaquer avec Bh6 pour échanger le Fou g7.</p>
         </div>
     </div>
 
     <h3>3.2 Variation: Le Setup Grünfeld avec $...d5$</h3>
-
-    <div class="position-section">
+    <div id="section3_2_1" class="position-section">
         <div class="position-diagram">
             <h3 class="position-title">Position 3.2.1: Le Centre Solide (Contre Grünfeld)</h3>
-            <div id="board3_2_1" class="chessboard"></div>
-            <p class="moves">1. d4 Nf6 2. Bf4 g6 3. e3 d5 4. Nf3 Bg7 5. Nbd2 O-O 6. c3 (FEN: rnbq1rk1/pp2ppbp/5np1/3p4/3P1B2/2P1PN2/PP1N1PPP/R2QKB1R w KQ - 0 6)</p>
+            <div class="board brown cburnett"></div>
+            <div class="controls">
+                <button class="prev-btn btn-sm">«</button>
+                <span class="move-indicator"></span>
+                <button class="next-btn btn-sm">»</button>
+            </div>
+            <p class="moves">1. d4 Nf6 2. Bf4 g6 3. e3 d5 4. Nf3 Bg7 5. Nbd2 O-O 6. c3</p>
         </div>
         <div class="position-analysis">
-            <p><strong>Analyse:</strong> Contre le Grünfeld, le centre est fermé par $d5$. La stratégie des Blancs est de jouer positionnellement, car le $h4/h5$ est moins efficace quand Black peut répondre $...c5$ ou $...e5$. Les Blancs jouent $c3$ pour consolider le centre et préserver le **Fou** $f4$.</p>
-            <p><strong>Points Clés:</strong> L'objectif principal est de neutraliser l'activité du **Fou** $g7$ et de se concentrer sur l'avant-poste $e5$. Le Grünfeld est une excellente option pour les Noirs cherchant à égaliser facilement contre le Londres.</p>
+            <p><strong>Analyse:</strong> Contre le Grünfeld, le centre est fermé. La stratégie est de jouer positionnellement. Les Blancs jouent $c3$ pour consolider le centre et préserver le Fou $f4$.</p>
         </div>
     </div>
 
-    <h2>4. Contre la Défense Indienne Dame (QI) (1. d4 Nf6 2. Bf4 e6 3. e3 b6)</h2>
-    <p>Cette ligne est plus positionnelle. Les Noirs se fianchettent sur le côté Dame et préparent la poussée $c5$.</p>
-
-    <h3>4.1 Variation: Consolidation et Réponse au $C5$</h3>
-
-    <div class="position-section">
+    <h2>4. Contre la Défense Indienne Dame (QI)</h2>
+    <div id="section4_1_1" class="position-section">
         <div class="position-diagram">
             <h3 class="position-title">Position 4.1.1: Setup QI Standard</h3>
-            <div id="board4_1_1" class="chessboard"></div>
-            <p class="moves">1. d4 Nf6 2. Bf4 e6 3. e3 b6 4. Nf3 Bb7 5. Nbd2 Be7 6. Bd3 O-O 7. h3 c5 8. c3 (FEN: r2q1rk1/pb1pbppp/1p2pn2/2p5/3P1B2/2PBPn1P/PP1N1PP1/R2QK2R w KQ - 0 8)</p>
+            <div class="board brown cburnett"></div>
+            <div class="controls">
+                <button class="prev-btn btn-sm">«</button>
+                <span class="move-indicator"></span>
+                <button class="next-btn btn-sm">»</button>
+            </div>
+            <p class="moves">1. d4 Nf6 2. Bf4 e6 3. e3 b6 4. Nf3 Bb7 5. Nbd2 Be7 6. Bd3 O-O 7. h3 c5 8. c3</p>
         </div>
         <div class="position-analysis">
-            <p><strong>Analyse:</strong> Les Blancs achèvent leur développement de Londres et jouent $8. c3$ pour contrecarrer la pression des Noirs sur $d4$ après $...c5$. Le coup $7. h3$ est essentiel, non seulement pour éviter $...Nh5$ ou $...Bg4$ (qui échangeraient le **Fou** $f4$), mais aussi parce que $h3$ sera utile dans les plans d'attaque potentiels.</p>
-            <p><strong>Points Clés:</strong> Les Noirs doivent choisir entre $...d5$ (plus Indien Dame, cherchant $e4$) ou $...d6$ (qui donne plus d'options pour l'attaque $e4$ aux Blancs). Si les Noirs jouent $...d5$, les Blancs se concentrent sur l'avant-poste $e5$.</p>
+            <p><strong>Analyse:</strong> Les Blancs achèvent leur développement. Le coup $7. h3$ est essentiel pour éviter Nh5 ou Bg4.</p>
         </div>
     </div>
 
-    <h3>4.2 Variation: L'échange Central ($...cxd4$ et $c3$)</h3>
-
-    <div class="position-section">
+    <div id="section4_2_1" class="position-section">
         <div class="position-diagram">
             <h3 class="position-title">Position 4.2.1: Échange Cxd4</h3>
-            <div id="board4_2_1" class="chessboard"></div>
-            <p class="moves">1. d4 Nf6 2. Bf4 e6 3. e3 b6 4. Nf3 Bb7 5. Nbd2 Be7 6. Bd3 O-O 7. h3 c5 8. c3 cxd4 9. exd4 (FEN: r2q1rk1/pb1pbppp/1p2pn2/8/3P1B2/2PB1N1P/PP1N1PP1/R2Q1RK1 b - - 0 9)</p>
+            <div class="board brown cburnett"></div>
+            <div class="controls">
+                <button class="prev-btn btn-sm">«</button>
+                <span class="move-indicator"></span>
+                <button class="next-btn btn-sm">»</button>
+            </div>
+            <p class="moves">1. d4 Nf6 2. Bf4 e6 3. e3 b6 4. Nf3 Bb7 5. Nbd2 Be7 6. Bd3 O-O 7. h3 c5 8. c3 cxd4 9. exd4</p>
         </div>
         <div class="position-analysis">
-            <p><strong>Analyse:</strong> Lorsque les Noirs échangent $...cxd4$ (souvent après avoir mis leurs pions en $d6$ ou $d5$), les Blancs peuvent reprendre avec $9. exd4$ ou $9. cxd4$. Reprendre avec le pion $e$ ($exd4$) est souvent préféré car cela verrouille le centre et enlève la pression le long de la colonne $c$.</p>
-            <p><strong>Conséquence:</strong> Reprendre avec $9. cxd4$ permet aux Blancs de mettre le Cavalier sur $c3$, ce qui est plus actif, mais cela ouvre la colonne $c$. Cependant, $exd4$ conduit à une structure similaire au Scheveningen de la Sicilienne ou au Hedgehog, ce qui est très solide pour les Noirs, rendant difficile l'obtention d'un avantage décisif.</p>
+            <p><strong>Analyse:</strong> Reprendre avec $9. exd4$ verrouille le centre et enlève la pression sur la colonne c.</p>
         </div>
     </div>
 
     <h2>5. Contre le Setup Chigorin (1. d4 d5 2. Nf3 Nc6)</h2>
-    <p>Le Chigorin ($...Nc6$) est considéré comme plus facile à affronter que d'autres lignes. Pour cette variation, il est conseillé de commencer par $2. Nf3$ afin d'éviter le $...e5$ précoce si $2. Bf4$ était joué.</p>
-
-    <h3>5.1 Variation: Réponse Agressive avec $C4$</h3>
-
-    <div class="position-section">
+    <div id="section5_1_1" class="position-section">
         <div class="position-diagram">
             <h3 class="position-title">Position 5.1.1: Transposition C4</h3>
-            <div id="board5_1_1" class="chessboard"></div>
-            <p class="moves">1. d4 d5 2. Nf3 Nc6 3. Bf4 Bg4 4. e3 e6 5. c4 (FEN: r1bqkbnr/ppp2ppp/2n1p3/3p4/2PP1B2/4PN2/PP3PPP/RN1QKB1R b KQkq - 0 5)</p>
+            <div class="board brown cburnett"></div>
+            <div class="controls">
+                <button class="prev-btn btn-sm">«</button>
+                <span class="move-indicator"></span>
+                <button class="next-btn btn-sm">»</button>
+            </div>
+            <p class="moves">1. d4 d5 2. Nf3 Nc6 3. Bf4 Bg4 4. e3 e6 5. c4</p>
         </div>
         <div class="position-analysis">
-            <p><strong>Analyse:</strong> Contre le Chigorin, $5. c4$ est l'approche la plus agressive et recommandée, car elle met immédiatement la pression sur le centre non soutenu par $...c6$ ou $...c5$. Cela force une transposition vers une ligne principale du Gambit Dame (Queen's Gambit), souvent plus complexe que le Londres normal.</p>
-            <p><strong>Stratégie:</strong> En jouant $c4$, les Blancs exploitent la position du Cavalier $c6$ et évitent la structure passive $c3$. Les Blancs visent à briser le centre Noir.</p>
+            <p><strong>Analyse:</strong> $5. c4$ est l'approche la plus agressive contre le Chigorin. On exploite le fait que Nc6 bloque la poussée c7-c6.</p>
         </div>
+    </div>
 
+    <div id="section5_1_2" class="position-section">
         <div class="position-diagram">
             <h3 class="position-title">Position 5.1.2: Ligne Aigue après $E5$</h3>
-            <div id="board5_1_2" class="chessboard"></div>
-            <p class="moves">1. d4 d5 2. Nf3 Nc6 3. Bf4 Bg4 4. e3 e6 5. c4 dxc4 6. Bxc4 Nf6 7. Nc3 Bd6 8. Bg3 O-O 9. O-O e5 (FEN: r2q1rk1/ppp2ppp/2nb1n2/4p3/2BP2b1/2N1PNB1/PP3PPP/R2Q1RK1 w - - 0 10)</p>
+            <div class="board brown cburnett"></div>
+            <div class="controls">
+                <button class="prev-btn btn-sm">«</button>
+                <span class="move-indicator"></span>
+                <button class="next-btn btn-sm">»</button>
+            </div>
+            <p class="moves">1. d4 d5 2. Nf3 Nc6 3. Bf4 Bg4 4. e3 e6 5. c4 dxc4 6. Bxc4 Nf6 7. Nc3 Bd6 8. Bg3 O-O 9. O-O e5</p>
         </div>
         <div class="position-analysis">
-            <p><strong>Analyse:</strong> Les joueurs expérimentés du Chigorin joueront pour la rupture $...e5$. Les Blancs doivent généralement ignorer le pion $e5$ et jouer $cxd5$ pour ouvrir la position, car si les Noirs parviennent à ouvrir le centre, ils obtiennent souvent l'avantage. Les Blancs sont légèrement avantagés dans les lignes précises où le Cavalier Noir $d4$ est échangé.</p>
+            <p><strong>Analyse:</strong> Les Blancs doivent généralement ignorer e5 et jouer cxd5 pour ouvrir la position.</p>
         </div>
     </div>
 
     <h2>6. Contre la Défense Hollandaise (1. d4 f5 2. Bf4)</h2>
-    <p>La Hollandaise est une défense agressive pour les Noirs. Les Blancs doivent prendre l'initiative de l'attaque sur le côté Roi.</p>
-
-    <h3>6.1 Variation: Leningrad (G6) et l'Attaque $H4$</h3>
-
-    <div class="position-section">
+    <div id="section6_1_1" class="position-section">
         <div class="position-diagram">
             <h3 class="position-title">Position 6.1.1: H4 Immédiat</h3>
-            <div id="board6_1_1" class="chessboard"></div>
-            <p class="moves">1. d4 f5 2. Bf4 Nf6 3. e3 g6 4. h4 (FEN: rnbqkb1r/ppppp2p/5np1/5p2/3P1B1P/4P3/PPP2PP1/RN1QKBNR b KQkq - 0 4)</p>
+            <div class="board brown cburnett"></div>
+            <div class="controls">
+                <button class="prev-btn btn-sm">«</button>
+                <span class="move-indicator"></span>
+                <button class="next-btn btn-sm">»</button>
+            </div>
+            <p class="moves">1. d4 f5 2. Bf4 Nf6 3. e3 g6 4. h4</p>
         </div>
         <div class="position-analysis">
-            <p><strong>Analyse:</strong> Contre le fianchetto $g6$ (Leningrad), $4. h4$ est le meilleur coup. Le coup menace $h5$, exploitant la faiblesse créée par $g6$. Si les Noirs tentent $...h6$, ils arrêtent la poussée mais affaiblissent leur structure.</p>
-            <p><strong>Conséquence:</strong> Si $4... Bg7$, $5. h5$ est un sacrifice d'échange potentiel qui mène à des positions gagnantes pour les Blancs en raison de l'activité des pièces et de l'insécurité du Roi Noir.</p>
+            <p><strong>Analyse:</strong> Contre le Leningrad (g6), $4. h4$ exploite la faiblesse créée par le pion f5.</p>
         </div>
+    </div>
+
+    <div id="section6_1_2" class="position-section">
         <div class="position-diagram">
             <h3 class="position-title">Position 6.1.2: Attaque Côté Dame et Roi</h3>
-            <div id="board6_1_2" class="chessboard"></div>
-            <p class="moves">1. d4 f5 2. Bf4 Nf6 3. e3 g6 4. h4 h6 5. Nc3 d6 6. Qf3 Bg7 7. Qg3 Kf7 8. O-O-O (FEN: r1bq3r/ppp1pbbk/3p1npp/5p2/3P1B1P/2N1P1Q1/PPP2PP1/2KR1BNR b - - 0 8)</p>
+            <div class="board brown cburnett"></div>
+            <div class="controls">
+                <button class="prev-btn btn-sm">«</button>
+                <span class="move-indicator"></span>
+                <button class="next-btn btn-sm">»</button>
+            </div>
+            <p class="moves">1. d4 f5 2. Bf4 Nf6 3. e3 g6 4. h4 h6 5. Nc3 d6 6. Qf3 Bg7 7. Qg3 Kf7 8. O-O-O</p>
         </div>
         <div class="position-analysis">
-            <p><strong>Stratégie:</strong> Après que $h6$ ait paré la menace $h5$, les Blancs préparent un Grand Roque ($O-O-O$) et utilisent la Dame sur $g3$ pour préparer une attaque de mat sur le côté Roi (l'idée est d'aller à $h5$ ou de préparer $g4$). Les Blancs ont l'avantage pratique et stratégique.</p>
+            <p><strong>Stratégie:</strong> Les Blancs préparent le Grand Roque et utilisent la Dame sur g3 pour attaquer.</p>
         </div>
     </div>
 
-    <h3>6.2 Variation: Stonewall (E6/D5/C6)</h3>
-
-    <div class="position-section">
+    <div id="section6_2_1" class="position-section">
         <div class="position-diagram">
             <h3 class="position-title">Position 6.2.1: Contre le Stonewall</h3>
-            <div id="board6_2_1" class="chessboard"></div>
-            <p class="moves">1. d4 f5 2. Bf4 Nf6 3. e3 e6 4. c4 (FEN: rnbqkb1r/pppp2pp/4pn2/5p2/2PP1B2/4P3/PP3PPP/RN1QKBNR b KQkq - 0 4)</p>
+            <div class="board brown cburnett"></div>
+            <div class="controls">
+                <button class="prev-btn btn-sm">«</button>
+                <span class="move-indicator"></span>
+                <button class="next-btn btn-sm">»</button>
+            </div>
+            <p class="moves">1. d4 f5 2. Bf4 Nf6 3. e3 e6 4. c4</p>
         </div>
         <div class="position-analysis">
-            <p><strong>Analyse:</strong> Si les Noirs jouent un Stonewall classique ($...e6, ...d5$), les Blancs devraient jouer $4. c4$ pour éviter la consolidation des Noirs et capitaliser sur leur $Bf4$. Ce coup vise à atteindre des positions de Stonewall normales où les Blancs cherchent à échanger le « mauvais **Fou** » des Noirs ($c8$) ou à exploiter la faiblesse de la diagonale.</p>
-            <p><strong>Note:</strong> Le **Fou** $f4$ est très bien placé contre le Stonewall, car il conteste la case $d6$ que les Noirs veulent généralement utiliser pour leur **Fou**.</p>
+            <p><strong>Analyse:</strong> Contre le Stonewall, le Fou f4 est excellent car il conteste d6.</p>
         </div>
     </div>
 
-    <h2>7. Autres Setups Critiques (Bishop F5 et Boring Line)</h2>
-
-    <h3>7.1 Variation: **Fou** F5 Précoce (**Fou** F5 Setup)</h3>
-    <p>Les Noirs jouent $...Bf5$ pour jouer une sorte de Londres inversé ou pour contester immédiatement le **Fou** $f4$.</p>
-
-    <div class="position-section">
+    <h2>7. Autres Setups Critiques</h2>
+    <div id="section7_1_1" class="position-section">
         <div class="position-diagram">
             <h3 class="position-title">Position 7.1.1: BxG3 Contre **Fou** F5 Précoce</h3>
-            <div id="board7_1_1" class="chessboard"></div>
-            <p class="moves">1. d4 d5 2. Bf4 Bf5 3. e3 e6 4. c4 (FEN: r2qkbnr/ppp2ppp/4p3/3p1b2/2PP1B2/4P3/PP3PPP/RN1QKBNR b KQkq - 0 4)</p>
+            <div class="board brown cburnett"></div>
+            <div class="controls">
+                <button class="prev-btn btn-sm">«</button>
+                <span class="move-indicator"></span>
+                <button class="next-btn btn-sm">»</button>
+            </div>
+            <p class="moves">1. d4 d5 2. Bf4 Bf5 3. e3 e6 4. c4</p>
         </div>
         <div class="position-analysis">
-            <p><strong>Analyse:</strong> Contre $2... Bf5$, l'approche agressive $4. c4$ est recommandée pour obtenir l'avantage. Si les Noirs tentent $...c6$, les Blancs continuent avec $Nc3$ et $Queen b3$, mettant la pression sur $b7$.</p>
-            <p><strong>Points Clés:</strong> Si les Noirs défendent $b7$ par $...Qb6$, les Blancs peuvent jouer $C5$ et forcer l'ouverture du côté Dame, capturant potentiellement la Dame ou gagnant du matériel. Les Blancs doivent se méfier d'une contre-attaque tactique et maintenir la pression sur le côté Dame.</p>
+            <p><strong>Analyse:</strong> L'approche agressive 4. c4 est recommandée. On met la pression sur b7.</p>
         </div>
     </div>
 
-    <h3>7.2 Variation: La Ligne Ennuyeuse (The Boring Line)</h3>
-    <p>Cette ligne est considérée comme l'une des façons les plus faciles pour les Noirs d'égaliser et de neutraliser les attaques Blanches.</p>
-
-    <div class="position-section">
+    <div id="section7_2_1" class="position-section">
         <div class="position-diagram">
             <h3 class="position-title">Position 7.2.1: Le Setup Ennuyeux</h3>
-            <div id="board7_2_1" class="chessboard"></div>
-            <p class="moves">1. d4 d5 2. Bf4 e6 3. e3 Bd6 4. Bg3 O-O 5. Nf3 c5 6. c3 Nc6 7. Nbd2 Qe7 8. Bd3 (FEN: r1b2rk1/pp2qppp/2nbp3/2pp4/3P4/2PBPNB1/PP1N1PPP/R2QK2R w KQ - 0 8)</p>
+            <div class="board brown cburnett"></div>
+            <div class="controls">
+                <button class="prev-btn btn-sm">«</button>
+                <span class="move-indicator"></span>
+                <button class="next-btn btn-sm">»</button>
+            </div>
+            <p class="moves">1. d4 d5 2. Bf4 e6 3. e3 Bd6 4. Bg3 O-O 5. Nf3 c5 6. c3 Nc6 7. Nbd2 Qe7 8. Bd3</p>
         </div>
         <div class="position-analysis">
-            <p><strong>Analyse:</strong> Après l'échange $...Bxg3$, les Noirs ont égalisé car la position est symétrique et manque de faiblesses évidentes, souvent menant à une nulle si les deux joueurs sont précis. Pour tenter de gagner, les Blancs doivent jouer $h3$ et préparer une expansion côté Dame avec $a4$ et $c4$.</p>
-            <p><strong>Stratégie:</strong> Les Blancs jouent $A4$ et $C4$ pour saper la structure Noire et forcer une ouverture pour les Tours. Cette approche passe du jeu d'ouverture à une stratégie de milieu de jeu visant à exploiter les faiblesses positionnelles sans lancer d'attaque de mat rapide.</p>
+            <p><strong>Analyse:</strong> Pour tenter de gagner ici, il faut préparer a4 et c4 pour saper la structure Noire.</p>
         </div>
     </div>
 
 </main>
 <footer class="page-footer">
-    <p class="citation-note">
-        Ces analyses détaillées sont basées sur la théorie d'ouverture présentée dans les sources. L'appelation "**Fou**" est utilisée pour désigner la pièce correspondant à "Bishop" (B) dans la notation anglaise.
-    </p>
+    <p class="citation-note">Ces analyses détaillées sont basées sur la théorie d'ouverture présentée dans les sources.</p>
 </footer>
 </div>
 
-<script>
-$(document).ready(function() {
-    var cfg = {
-        draggable: false,
-        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
-    };
+<script src="chess/chess.min.js"></script>
+<script src="chessground/chessground.min.js"></script>
+<script src="scripts/CreateBoard.js"></script>
 
-    // Initialisation des échiquiers
-    Chessboard('board1_1_1', $.extend({}, cfg, {position: 'rnbqkb1r/ppp2ppp/4pn2/3p4/3P1B2/2P1P3/PP3PPP/RN1QKBNR w KQkq - 0 4'}));
-    Chessboard('board1_1_2', $.extend({}, cfg, {position: 'r1bqr1k1/pp3ppp/2nbpn2/2ppN3/3P1B2/2PBP3/PP1N1PPP/R2Q1RK1 b - - 0 9'}));
-    Chessboard('board2_1_1', $.extend({}, cfg, {position: 'rnbqkb1r/pp2pppp/5n2/2pP4/5B2/8/PPP1PPPP/RN1QKBNR b KQkq - 0 3'}));
-    Chessboard('board2_2_1', $.extend({}, cfg, {position: 'rnb1kb1r/pp2pppp/1q3n2/2pP4/3P1B2/2N1P3/PPP2PPP/R2QKBNR b KQkq - 0 4'}));
-    Chessboard('board2_2_2', $.extend({}, cfg, {position: 'rnb1kb1r/pp2pppp/5n2/2pP4/3P1B2/P1N1P3/1qP2PPP/R2QKBNR b KQkq - 0 5'}));
-    Chessboard('board3_1_1', $.extend({}, cfg, {position: 'rnbqk2r/pp2ppbp/5np1/8/3P1B1P/4P3/PPP2PP1/RN1QKBNR b KQkq - 0 4'}));
-    Chessboard('board3_1_2', $.extend({}, cfg, {position: 'rnbqk2r/pp2ppbp/5np1/8/3PPB2/2N5/PPP2PPP/R2QKBNR b KQkq - 0 4'}));
-    Chessboard('board3_2_1', $.extend({}, cfg, {position: 'rnbq1rk1/pp2ppbp/5np1/3p4/3P1B2/2P1PN2/PP1N1PPP/R2QKB1R w KQ - 0 6'}));
-    Chessboard('board4_1_1', $.extend({}, cfg, {position: 'r2q1rk1/pb1pbppp/1p2pn2/2p5/3P1B2/2PBPn1P/PP1N1PP1/R2QK1NR b KQ - 0 8'}));
-    Chessboard('board4_2_1', $.extend({}, cfg, {position: 'r2q1rk1/pb1pbppp/1p2pn2/8/3P1B2/2PB1N1P/PP1N1PP1/R2Q1RK1 b - - 0 9'}));
-    Chessboard('board5_1_1', $.extend({}, cfg, {position: 'r1bqkbnr/ppp2ppp/2n1p3/3p4/2PP1B2/4PN2/PP3PPP/RN1QKB1R b KQkq - 0 5'}));
-    Chessboard('board5_1_2', $.extend({}, cfg, {position: 'r2q1rk1/ppp2ppp/2nb1n2/4p3/2BP2b1/2N1PNB1/PP3PPP/R2Q1RK1 w - - 0 10'}));
-    Chessboard('board6_1_1', $.extend({}, cfg, {position: 'rnbqkb1r/ppppp2p/5np1/5p2/3P1B1P/4P3/PPP2PP1/RN1QKBNR b KQkq - 0 4'}));
-    Chessboard('board6_1_2', $.extend({}, cfg, {position: 'r1bq3r/ppp1pbbk/3p1npp/5p2/3P1B1P/2N1P1Q1/PPP2PP1/2KR1BNR b - - 0 8'}));
-    Chessboard('board6_2_1', $.extend({}, cfg, {position: 'rnbqkb1r/pppp2pp/4pn2/5p2/2PP1B2/4P3/PP3PPP/RN1QKBNR b KQkq - 0 4'}));
-    Chessboard('board7_1_1', $.extend({}, cfg, {position: 'r2qkbnr/ppp2ppp/4p3/3p1b2/2PP1B2/4P3/PP3PPP/RN1QKBNR b KQkq - 0 4'}));
-    Chessboard('board7_2_1', $.extend({}, cfg, {position: 'r1b2rk1/pp2qppp/2nbp3/2pp4/3P4/2PBPNB1/PP1N1PPP/R2Q1RK1 w - - 0 8'}));
-});
+<script>
+    // Initialisation massive de tous les échiquiers
+    const boards = [
+        { id: "section1_1_1", pgn: "1. d4 d5 2. Bf4 Nf6 3. e3 e6 4. c3" },
+        { id: "section1_1_2", pgn: "1. d4 d5 2. Bf4 Nf6 3. e3 c5 4. c3 Nc6 5. Nf3 e6 6. Nbd2 Bd6 7. Bd3 O-O 8. O-O Re8 9. Ne5" },
+        { id: "section2_1_1", pgn: "1. d4 Nf6 2. Bf4 c5 3. d5" },
+        { id: "section2_2_1", pgn: "1. d4 Nf6 2. Bf4 c5 3. e3 Qb6 4. Nc3" },
+        { id: "section2_2_2", pgn: "1. d4 Nf6 2. Bf4 c5 3. e3 Qb6 4. Nc3 Qxb2 5. a3" },
+        { id: "section3_1_1", pgn: "1. d4 Nf6 2. Bf4 g6 3. e3 Bg7 4. h4" },
+        { id: "section3_1_2", pgn: "1. d4 Nf6 2. Bf4 g6 3. Nc3 Bg7 4. e4" },
+        { id: "section3_2_1", pgn: "1. d4 Nf6 2. Bf4 g6 3. e3 d5 4. Nf3 Bg7 5. Nbd2 O-O 6. c3" },
+        { id: "section4_1_1", pgn: "1. d4 Nf6 2. Bf4 e6 3. e3 b6 4. Nf3 Bb7 5. Nbd2 Be7 6. Bd3 O-O 7. h3 c5 8. c3" },
+        { id: "section4_2_1", pgn: "1. d4 Nf6 2. Bf4 e6 3. e3 b6 4. Nf3 Bb7 5. Nbd2 Be7 6. Bd3 O-O 7. h3 c5 8. c3 cxd4 9. exd4" },
+        { id: "section5_1_1", pgn: "1. d4 d5 2. Nf3 Nc6 3. Bf4 Bg4 4. e3 e6 5. c4" },
+        { id: "section5_1_2", pgn: "1. d4 d5 2. Nf3 Nc6 3. Bf4 Bg4 4. e3 e6 5. c4 dxc4 6. Bxc4 Nf6 7. Nc3 Bd6 8. Bg3 O-O 9. O-O e5" },
+        { id: "section6_1_1", pgn: "1. d4 f5 2. Bf4 Nf6 3. e3 g6 4. h4" },
+        { id: "section6_1_2", pgn: "1. d4 f5 2. Bf4 Nf6 3. e3 g6 4. h4 h6 5. Nc3 d6 6. Qf3 Bg7 7. Qg3 Kf7 8. O-O-O" },
+        { id: "section6_2_1", pgn: "1. d4 f5 2. Bf4 Nf6 3. e3 e6 4. c4" },
+        { id: "section7_1_1", pgn: "1. d4 d5 2. Bf4 Bf5 3. e3 e6 4. c4" },
+        { id: "section7_2_1", pgn: "1. d4 d5 2. Bf4 e6 3. e3 Bd6 4. Bg3 O-O 5. Nf3 c5 6. c3 Nc6 7. Nbd2 Qe7 8. Bd3" }
+    ];
+
+    boards.forEach(b => {
+        createInteractiveBoard(b.id, b.pgn, {});
+    });
 </script>
 
 </body>
