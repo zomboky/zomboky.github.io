@@ -17,7 +17,7 @@ jobs:
           script: |
             sudo git config --global --add safe.directory /var/www/html
             cd /var/www/html
-            sudo git pull origin main
+            sudo git pull origin master
             sudo cp -R docs/* .
             sudo chown -R apache:apache /var/www/html
             sudo restorecon -Rv /var/www/html
