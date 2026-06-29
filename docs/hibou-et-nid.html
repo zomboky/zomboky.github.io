@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🦉 Hibou &amp; Nid</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #04040e; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+
+const S = { START: 0, PLAY: 1, OVER: 2 };
+let state = S.START;
+
+// ── Resize ──────────────────────────────────────
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+window.addEventListener('resize', () => { resize(); initStars(); });
+resize();
+
+// ── Helpers ─────────────────────────────────────
+const rnd  = (a, b) => a + Math.random() * (b - a);
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+function rrect(x, y, w, h, r, fill, stroke, lw) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y,     x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x,     y + h, r);
+  ctx.arcTo(x,     y + h, x,     y,     r);
+  ctx.arcTo(x,     y,     x + w, y,     r);
+  ctx.closePath();
+  if (fill)   { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.lineWidth = lw || 1.5; ctx.strokeStyle = stroke; ctx.stroke(); }
+}
+
+function drawEmoji(e, x, y, size) {
+  ctx.font = size + 'px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(e, x, y);
+}
+
+// ── Stars ───────────────────────────────────────
+let stars = [];
+function initStars() {
+  stars = Array.from({ length: 180 }, () => ({
+    x: rnd(0, canvas.width),
+    y: rnd(0, canvas.height * 0.8),
+    r: rnd(0.3, 2),
+    a: Math.random(),
+    da: rnd(0.005, 0.02) * (Math.random() < 0.5 ? 1 : -1)
+  }));
+}
+initStars();
+
+// ── Input ───────────────────────────────────────
+const keys  = {};
+const mouse = { x: -999, y: -999, on: false };
+
+document.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  mouse.on = false;
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+  if (state !== S.PLAY) beginGame();
+});
+document.addEventListener('keyup', e => { keys[e.key] = false; });
+document.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true; });
+canvas.addEventListener('click', () => { if (state !== S.PLAY) beginGame(); });
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  mouse.x = e.touches[0].clientX; mouse.y = e.touches[0].clientY; mouse.on = true;
+}, { passive: false });
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  mouse.x = e.touches[0].clientX; mouse.y = e.touches[0].clientY; mouse.on = true;
+  if (state !== S.PLAY) beginGame();
+}, { passive: false });
+
+// ── Entities ────────────────────────────────────
+const owl = { x: 0, y: 0, size: 50, speed: 5, bob: 0 };
+let branches = [], bears = [], particles = [];
+let score = 0, nest = 0, best = 0;
+
+const BRANCH_E = ['🪵','🌿','🍃','🍂'];
+
+function bearSpeed()  { return 1.3 + Math.min(score * 0.09, 4); }
+function bearTarget() { return Math.min(1 + Math.floor(score / 5), 9); }
+
+function newBranch() {
+  const m = 80;
+  return {
+    x: rnd(m, canvas.width - m),
+    y: rnd(m, canvas.height - m),
+    e: BRANCH_E[Math.floor(Math.random() * 4)],
+    size: 36, w: rnd(0, Math.PI * 2), ws: rnd(0.025, 0.05)
+  };
+}
+
+function newBear() {
+  const side = Math.floor(Math.random() * 4);
+  const x = side === 0 ? -50 : side === 1 ? canvas.width  + 50 : rnd(0, canvas.width);
+  const y = side === 2 ? -50 : side === 3 ? canvas.height + 50 : rnd(0, canvas.height);
+  const chases = Math.random() > 0.35;
+  let vx = rnd(-1, 1) || 0.5, vy = rnd(-1, 1) || 0.5;
+  const mag = Math.hypot(vx, vy) || 1;
+  return { x, y, size: 44, speed: bearSpeed(), chases, vx: vx/mag, vy: vy/mag, bob: rnd(0, Math.PI * 2) };
+}
+
+function spawnFX(x, y) {
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2, spd = rnd(2.5, 6);
+    particles.push({
+      type: 'dot', x, y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, life: 1,
+      c: ['#ffd700','#7ec850','#a8ff80','#ffe999','#ffffff'][Math.floor(Math.random() * 5)]
+    });
+  }
+  particles.push({ type: 'txt', x, y, vx: 0, vy: -2.5, life: 1.3 });
+}
+
+function beginGame() {
+  state = S.PLAY;
+  canvas.style.cursor = 'none';
+  owl.x = canvas.width / 2;
+  owl.y = canvas.height / 2;
+  owl.bob = 0;
+  score = 0; nest = 0;
+  branches  = Array.from({ length: 4 }, newBranch);
+  bears     = [newBear()];
+  particles = [];
+  mouse.on  = false;
+}
+
+// ── Update ──────────────────────────────────────
+function update() {
+  if (state !== S.PLAY) return;
+
+  owl.bob += 0.065;
+
+  if (mouse.on) {
+    owl.x += (mouse.x - owl.x) * 0.13;
+    owl.y += (mouse.y - owl.y) * 0.13;
+  } else {
+    if (keys['ArrowLeft']  || keys['a']) owl.x -= owl.speed;
+    if (keys['ArrowRight'] || keys['d']) owl.x += owl.speed;
+    if (keys['ArrowUp']    || keys['w']) owl.y -= owl.speed;
+    if (keys['ArrowDown']  || keys['s']) owl.y += owl.speed;
+  }
+  const r = owl.size * 0.42;
+  owl.x = Math.max(r, Math.min(canvas.width  - r, owl.x));
+  owl.y = Math.max(r, Math.min(canvas.height - r, owl.y));
+
+  for (const s of stars) {
+    s.a += s.da;
+    if (s.a > 1 || s.a < 0.05) s.da *= -1;
+  }
+
+  // Branch collection
+  for (let i = branches.length - 1; i >= 0; i--) {
+    branches[i].w += branches[i].ws;
+    if (dist(owl, branches[i]) < r + branches[i].size * 0.38) {
+      spawnFX(branches[i].x, branches[i].y);
+      branches.splice(i, 1);
+      branches.push(newBranch());
+      score++;
+      nest = Math.min(100, nest + 10);
+      bears.forEach(b => b.speed = bearSpeed());
+      while (bears.length < bearTarget()) bears.push(newBear());
+    }
+  }
+
+  // Bears
+  for (const b of bears) {
+    b.bob += 0.09;
+    if (b.chases) {
+      const dx = owl.x - b.x, dy = owl.y - b.y, d = Math.hypot(dx, dy) || 1;
+      b.x += (dx / d) * b.speed;
+      b.y += (dy / d) * b.speed;
+    } else {
+      b.x += b.vx * b.speed;
+      b.y += b.vy * b.speed;
+      if (b.x < 25 || b.x > canvas.width  - 25) b.vx *= -1;
+      if (b.y < 25 || b.y > canvas.height - 25) b.vy *= -1;
+    }
+    if (dist(owl, b) < r + b.size * 0.35) {
+      best = Math.max(best, score);
+      state = S.OVER;
+      canvas.style.cursor = 'default';
+    }
+  }
+
+  // Particles
+  for (const p of particles) {
+    p.x += p.vx; p.y += p.vy;
+    if (p.vx) p.vx *= 0.9;
+    p.vy *= (p.type === 'txt' ? 0.95 : 0.9);
+    p.life -= (p.type === 'txt' ? 0.025 : 0.04);
+  }
+  particles = particles.filter(p => p.life > 0);
+}
+
+// ── Draw ────────────────────────────────────────
+function draw() {
+  const W = canvas.width, H = canvas.height;
+
+  // Sky gradient
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, '#04040e');
+  sky.addColorStop(1, '#0c1030');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+
+  // Stars
+  for (const s of stars) {
+    ctx.save(); ctx.globalAlpha = s.a;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  // Moon
+  const mx = W * 0.82, my = H * 0.11, mr = 44;
+  const gm = ctx.createRadialGradient(mx, my, mr * 0.5, mx, my, mr * 3);
+  gm.addColorStop(0, 'rgba(255,248,160,0.22)'); gm.addColorStop(1, 'transparent');
+  ctx.fillStyle = gm; ctx.beginPath(); ctx.arc(mx, my, mr * 3, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#fffde0'; ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#04040e'; ctx.beginPath(); ctx.arc(mx - 14, my, mr * 0.78, 0, Math.PI * 2); ctx.fill();
+
+  if (state === S.START) { drawStart(W, H); return; }
+
+  // Particles
+  for (const p of particles) {
+    ctx.save(); ctx.globalAlpha = Math.max(0, p.life);
+    if (p.type === 'txt') {
+      ctx.fillStyle = '#ffd700';
+      ctx.font = 'bold 20px system-ui, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('+1', p.x, p.y);
+    } else {
+      ctx.fillStyle = p.c;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Branches
+  ctx.save();
+  for (const b of branches) drawEmoji(b.e, b.x, b.y + Math.sin(b.w) * 5, b.size);
+  ctx.restore();
+
+  // Bears
+  ctx.save();
+  for (const b of bears) drawEmoji('🐻', b.x, b.y + Math.sin(b.bob) * 3, b.size);
+  ctx.restore();
+
+  // Owl with glow
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,200,80,0.65)';
+  ctx.shadowBlur  = 28;
+  drawEmoji('🦉', owl.x, owl.y + Math.sin(owl.bob) * 5, owl.size);
+  ctx.restore();
+
+  drawHUD();
+  if (state === S.OVER) drawOver(W, H);
+}
+
+function drawHUD() {
+  ctx.save();
+  rrect(12, 12, 214, 70, 14, 'rgba(8,8,35,0.82)', 'rgba(100,90,220,0.4)');
+  ctx.fillStyle = '#dde';
+  ctx.font = 'bold 14px system-ui, sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText('🌿  Branches : ' + score, 24, 32);
+  rrect(22, 46, 180, 20, 10, 'rgba(255,255,255,0.1)');
+  if (nest > 0) {
+    const bw = Math.max(20, 180 * nest / 100);
+    const bar = ctx.createLinearGradient(22, 0, 202, 0);
+    bar.addColorStop(0, '#5cc83a'); bar.addColorStop(1, '#d4a800');
+    rrect(22, 46, bw, 20, 10, bar);
+  }
+  ctx.fillStyle = '#fff'; ctx.font = '10px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('🫺 Nid ' + nest + '%', 112, 56);
+  ctx.restore();
+}
+
+function drawStart(W, H) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(4,4,18,0.72)'; ctx.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2;
+  rrect(cx - 240, cy - 215, 480, 430, 28, 'rgba(12,12,48,0.96)', 'rgba(110,90,255,0.45)');
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  drawEmoji('🦉', cx, cy - 128, 84);
+  ctx.fillStyle = '#cbc3ff'; ctx.font = 'bold 36px system-ui, sans-serif';
+  ctx.fillText('Hibou & Nid', cx, cy - 57);
+  ctx.fillStyle = 'rgba(200,195,255,0.88)'; ctx.font = '16px system-ui, sans-serif';
+  ctx.fillText('Ramasse les branches 🌿', cx, cy - 10);
+  ctx.fillText('Évite les ours 🐻', cx, cy + 17);
+  ctx.fillStyle = 'rgba(160,150,220,0.72)'; ctx.font = '13px system-ui, sans-serif';
+  ctx.fillText('Flèches / WASD  ou  Souris', cx, cy + 50);
+  const btnG = ctx.createLinearGradient(cx - 120, cy + 90, cx + 120, cy + 148);
+  btnG.addColorStop(0, '#5544dd'); btnG.addColorStop(1, '#9944ee');
+  rrect(cx - 120, cy + 90, 240, 58, 29, btnG);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 20px system-ui, sans-serif';
+  ctx.fillText('▶  Commencer', cx, cy + 119);
+  ctx.restore();
+}
+
+function drawOver(W, H) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(4,4,18,0.82)'; ctx.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2;
+  rrect(cx - 220, cy - 195, 440, 390, 28, 'rgba(22,8,30,0.97)', 'rgba(255,70,70,0.4)');
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  drawEmoji('😢', cx, cy - 112, 72);
+  ctx.fillStyle = '#ffaaaa'; ctx.font = 'bold 30px system-ui, sans-serif';
+  ctx.fillText('Game Over !', cx, cy - 42);
+  ctx.fillStyle = '#e8e5ff'; ctx.font = '17px system-ui, sans-serif';
+  ctx.fillText('Branches récoltées : ' + score, cx, cy + 2);
+  if (best > 0) {
+    ctx.fillStyle = '#c0b0ff'; ctx.font = '13px system-ui, sans-serif';
+    ctx.fillText('Meilleur : ' + best, cx, cy + 27);
+  }
+  const medal = score >= 20 ? '🥇' : score >= 10 ? '🥈' : score >= 5 ? '🥉' : '🪺';
+  drawEmoji(medal, cx, cy + 65, 32);
+  const btnG = ctx.createLinearGradient(cx - 120, cy + 98, cx + 120, cy + 156);
+  btnG.addColorStop(0, '#cc2222'); btnG.addColorStop(1, '#cc22aa');
+  rrect(cx - 120, cy + 98, 240, 58, 29, btnG);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 20px system-ui, sans-serif';
+  ctx.fillText('↺  Rejouer', cx, cy + 127);
+  ctx.restore();
+}
+
+// ── Loop ────────────────────────────────────────
+(function loop() { update(); draw(); requestAnimationFrame(loop); })();
+</script>
+</body>
+</html>
