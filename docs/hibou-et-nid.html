@@ -1,9 +1,8 @@
-<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>🦉 Hibou & Nid - V3</title>
+<title>🦉 Hibou 2D</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
 body { background: #04040e; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
@@ -16,34 +15,72 @@ canvas { display: block; }
 const canvas = document.getElementById('c');
 const ctx    = canvas.getContext('2d');
 
+// États du jeu
 const S = { START: 0, PLAY: 1, OVER: 2, LOOT: 3 };
 let state = S.START;
 
-let screenShake = 0;
-let combo = 1;
-let comboTimer = 0;
-const MAX_COMBO_TIME = 120;
+// ── Globales de gameplay ────────────────────────
+let screenShake  = 0;
+let combo        = 1;
+let comboTimer   = 0;
+const MAX_COMBO_TIME = 120; // 2 secondes à 60fps
 
-let lives = 1;
-let fullMoon = { active: false, timer: 0, next: 900, fillAnim: 0 };
-// fillAnim: 0 = croissant normal, 1 = pleine lune, animation entre les deux
-let moonFillProgress = 0; // 0 = croissant, 1 = pleine lune
+let lives       = 1;
+let score       = 0;
+let nest        = 0; // Pourcentage de remplissage du nid (0-100)
+let best        = 0; // Meilleur score toutes parties confondues
 
+// ── Lune ────────────────────────────────────────
+// La lune peut être dans 3 états :
+//   'none'  → croissant, phase normale
+//   'full'  → pleine lune blanche, horde d'ours modérée pendant 10s
+//   'blood' → lune de sang (rare), horde féroce pendant 15s
+// moonFillProgress : 0 = croissant, 1 = pleine lune (contrôle l'animation de remplissage)
+let moon = {
+  state:        'none',  // 'none' | 'full' | 'blood'
+  timer:        0,       // frames restantes de la phase active
+  next:         900,     // frames avant la prochaine pleine lune (~15s au démarrage)
+  fillProgress: 0        // 0→1 : anime le croissant → pleine lune
+};
+
+// ── Buffs (cadeaux) ─────────────────────────────
 let buffs = { speed: 0, multi: 0, slow: 0 };
-let specialItem = null;
+let specialItem = null; // Le cadeau qui flotte sur la map
 
+// Taux de drop : speed 35%, slow 25%, multi 20%, life 15%, invincible 5%
 const LOOT_TYPES = [
-  { id: 'life',  e: '❤️', txt: '+1 Vie !'        },
-  { id: 'speed', e: '⚡', txt: 'Vitesse Éclair !' },
-  { id: 'multi', e: '✨', txt: 'Score x5 !'       },
-  { id: 'slow',  e: '❄️', txt: 'Ours Gelés !'     }
+  { id: 'speed',      e: '⚡', txt: 'Vitesse Éclair !',   weight: 0.35 },
+  { id: 'slow',       e: '❄️', txt: 'Ours Gelés !',       weight: 0.25 },
+  { id: 'multi',      e: '✨', txt: 'Score x5 !',         weight: 0.20 },
+  { id: 'life',       e: '❤️', txt: '+1 Vie !',           weight: 0.15 },
+  { id: 'invincible', e: '🦉', txt: 'HIBOU INVINCIBLE !', weight: 0.05 }
 ];
-let lootbox = { timer: 0, roll: '', result: null };
 
-// ── Resize ──────────────────────────────────────
-function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-window.addEventListener('resize', () => { resize(); initStars(); });
-resize();
+// Tire un loot selon les poids — retourne l'objet LOOT_TYPES correspondant
+function rollLoot() {
+  let r = Math.random(), cumul = 0;
+  for (const loot of LOOT_TYPES) {
+    cumul += loot.weight;
+    if (r < cumul) return loot;
+  }
+  return LOOT_TYPES[0];
+}
+
+// Structure de la lootbox CS:GO-style :
+//   items  → tableau des emojis affichés dans la barre
+//   scroll → décalage horizontal courant du défilement en px
+//   speed  → vitesse de défilement (décélère progressivement)
+//   phase  → 'scroll' pendant le défilement, 'land' quand la case atterrit au centre
+//   result → le loot tiré, positionné dans items à la position cible
+let lootbox = { items: [], scroll: 0, speed: 0, phase: 'scroll', result: null };
+
+// ── Entités ─────────────────────────────────────
+const owl = { x: 0, y: 0, size: 34, speed: 6, bob: 0, invul: 0 };
+let branches  = [];
+let bears     = [];
+let particles = [];
+
+const BRANCH_E = ['🪵', '🌿', '🍃', '🍂'];
 
 // ── Helpers ─────────────────────────────────────
 const rnd  = (a, b) => a + Math.random() * (b - a);
@@ -54,22 +91,24 @@ function rrect(x, y, w, h, r, fill, stroke, lw) {
   if (fill)   { ctx.fillStyle = fill; ctx.fill(); }
   if (stroke) { ctx.lineWidth = lw || 1.5; ctx.strokeStyle = stroke; ctx.stroke(); }
 }
-
 function drawEmoji(e, x, y, size) {
   ctx.font = size + 'px serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(e, x, y);
 }
 
-// ── Stars ───────────────────────────────────────
+// ── Resize & Étoiles ────────────────────────────
 let stars = [];
+function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 function initStars() {
   stars = Array.from({ length: 180 }, () => ({
     x: rnd(0, canvas.width), y: rnd(0, canvas.height * 0.8),
-    r: rnd(0.3, 2), a: Math.random(), da: rnd(0.005, 0.02) * (Math.random() < 0.5 ? 1 : -1)
+    r: rnd(0.3, 2), a: Math.random(),
+    da: rnd(0.005, 0.02) * (Math.random() < 0.5 ? 1 : -1)
   }));
 }
-initStars();
+window.addEventListener('resize', () => { resize(); initStars(); });
+resize(); initStars();
 
 // ── Input ───────────────────────────────────────
 const keys  = {};
@@ -79,51 +118,98 @@ document.addEventListener('keydown', e => {
   keys[e.key] = true; mouse.on = false;
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
   if (state === S.START || state === S.OVER) beginGame();
+
+  // FIX FREEZE LOOTBOX : toute touche skip l'attente quand la case a atterri
+  if (state === S.LOOT && lootbox.phase === 'land' && lootbox.landTimer >= 30) {
+    applyLoot(lootbox.result.id);
+    state     = S.PLAY;
+    owl.invul = 60;
+  }
 });
 document.addEventListener('keyup', e => { keys[e.key] = false; });
 document.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true; });
 canvas.addEventListener('pointerdown', e => {
   mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true;
   if (state === S.START || state === S.OVER) beginGame();
+
+  // FIX FREEZE LOOTBOX : clic/tap skip l'attente quand la case a atterri
+  if (state === S.LOOT && lootbox.phase === 'land' && lootbox.landTimer >= 30) {
+    applyLoot(lootbox.result.id);
+    state     = S.PLAY;
+    owl.invul = 60;
+  }
 });
 canvas.addEventListener('pointermove', e => { if (mouse.on) { mouse.x = e.clientX; mouse.y = e.clientY; } });
 
-// ── Entities ────────────────────────────────────
-const owl = { x: 0, y: 0, size: 34, speed: 6, bob: 0, invul: 0 };
-let branches = [], bears = [], particles = [];
-let score = 0, nest = 0, best = 0;
+// ══════════════════════════════════════════════════
+//  LOGIQUE OURS — IA avec délai et incertitude
+// ══════════════════════════════════════════════════
+function newBear() {
+  const side = Math.floor(Math.random() * 4);
+  const x    = side === 0 ? -50 : side === 1 ? canvas.width  + 50 : rnd(0, canvas.width);
+  const y    = side === 2 ? -50 : side === 3 ? canvas.height + 50 : rnd(0, canvas.height);
 
-const BRANCH_E = ['🪵','🌿','🍃','🍂'];
+  let life;
+  if      (moon.state === 'blood') life = rnd(720,  1500);
+  else if (moon.state === 'full')  life = rnd(360,  720);
+  else                             life = rnd(480,  1200);
 
-function getBearSpeed(base) { return base * (buffs.slow > 0 ? 0.3 : 1); }
-function bearTarget()       { return fullMoon.active ? 20 : Math.min(2 + Math.floor(score / 15), 10); }
+  let spdBase;
+  if      (moon.state === 'blood') spdBase = rnd(3.8, 7.0);
+  else if (moon.state === 'full')  spdBase = rnd(2.2, 3.8);
+  else                             spdBase = 1.8 + Math.min(score * 0.05, 4.5);
 
-function newBranch() {
-  const m = 40;
+  const updateDelay = moon.state === 'blood' ? rnd(15, 40) : rnd(20, 80);
+  const driftAngle  = rnd(0, Math.PI * 2);
+  const driftMag    = rnd(0.4, 1.2);
+
   return {
-    x: rnd(m, canvas.width - m), y: rnd(m, canvas.height - m),
-    e: BRANCH_E[Math.floor(Math.random() * 4)],
-    size: 24, w: rnd(0, Math.PI * 2), ws: rnd(0.03, 0.07)
+    x, y,
+    size:    28,
+    spdBase,
+    life,
+    targetX: owl.x,
+    targetY: owl.y,
+    updateDelay,
+    updateTimer: Math.floor(rnd(0, updateDelay)),
+    driftX: Math.cos(driftAngle) * driftMag,
+    driftY: Math.sin(driftAngle) * driftMag,
+    bob: rnd(0, Math.PI * 2)
   };
 }
 
-function newBear() {
-  const side = Math.floor(Math.random() * 4);
-  const x = side === 0 ? -50 : side === 1 ? canvas.width  + 50 : rnd(0, canvas.width);
-  const y = side === 2 ? -50 : side === 3 ? canvas.height + 50 : rnd(0, canvas.height);
-  const life    = fullMoon.active ? rnd(120, 240) : rnd(480, 900);
-  const spdBase = fullMoon.active ? rnd(3.5, 6.5) : 1.8 + Math.min(score * 0.05, 4.5);
-  const chases  = fullMoon.active ? true : Math.random() > 0.4;
-  let vx = rnd(-1, 1) || 0.5, vy = rnd(-1, 1) || 0.5;
-  const mag = Math.hypot(vx, vy) || 1;
-  return { x, y, size: 28, spdBase, chases, vx: vx/mag, vy: vy/mag, bob: rnd(0, Math.PI * 2), life };
+function bearTarget() {
+  if (moon.state === 'blood') return 18;
+  if (moon.state === 'full')  return 12;
+  return Math.min(2 + Math.floor(score / 15), 10);
 }
 
+// ══════════════════════════════════════════════════
+//  LOGIQUE BRANCHES & CADEAUX
+// ══════════════════════════════════════════════════
+function newBranch() {
+  const m = 40;
+  return {
+    x:  rnd(m, canvas.width  - m),
+    y:  rnd(m, canvas.height - m),
+    e:  BRANCH_E[Math.floor(Math.random() * 4)],
+    size: 24,
+    w:  rnd(0, Math.PI * 2),
+    ws: rnd(0.03, 0.07)
+  };
+}
+
+// ══════════════════════════════════════════════════
+//  PARTICULES
+// ══════════════════════════════════════════════════
 function spawnFX(x, y, amount, type = 'collect', txt = '') {
   for (let i = 0; i < amount; i++) {
-    const a = (i / amount) * Math.PI * 2, spd = rnd(2, 8);
+    const a = (i / amount) * Math.PI * 2;
+    const spd = rnd(2, 8);
     particles.push({
-      type: 'dot', x, y, vx: Math.cos(a)*spd, vy: Math.sin(a)*spd, life: 1,
+      type: 'dot', x, y,
+      vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+      life: 1,
       c: type === 'collect'
         ? ['#ffd700','#7ec850','#a8ff80','#ffffff'][Math.floor(Math.random() * 4)]
         : ['#ff4444','#ffaa00','#ffffff'][Math.floor(Math.random() * 3)]
@@ -132,61 +218,44 @@ function spawnFX(x, y, amount, type = 'collect', txt = '') {
   if (txt) particles.push({ type: 'txt', x, y, vx: 0, vy: -3, life: 1.5, txt, tType: type });
 }
 
+// ══════════════════════════════════════════════════
+//  INIT / RESET
+// ══════════════════════════════════════════════════
 function beginGame() {
   state = S.PLAY; canvas.style.cursor = 'none';
   owl.x = canvas.width / 2; owl.y = canvas.height / 2; owl.invul = 60;
   score = 0; nest = 0; combo = 1; comboTimer = 0; screenShake = 0; lives = 1;
-  fullMoon = { active: false, timer: 0, next: 900, fillAnim: 0 };
-  moonFillProgress = 0;
-  buffs = { speed: 0, multi: 0, slow: 0 };
+  moon = { state: 'none', timer: 0, next: 900, fillProgress: 0 };
+  buffs = { speed: 0, multi: 0, slow: 0, invincible: 0 };
+  lootbox = { items: [], scroll: 0, speed: 0, phase: 'scroll', result: null };
   specialItem = null;
   branches  = Array.from({ length: 5 }, newBranch);
   bears     = [newBear(), newBear()];
   particles = [];
 }
 
-// ── Update ──────────────────────────────────────
+// ══════════════════════════════════════════════════
+//  UPDATE
+// ══════════════════════════════════════════════════
 function update() {
   if (screenShake > 0) { screenShake *= 0.9; if (screenShake < 0.5) screenShake = 0; }
 
+  // Pendant la lootbox, le jeu est mis en pause mais les particules continuent
   if (state === S.LOOT) { updateLootbox(); updateParticles(); return; }
   if (state !== S.PLAY) { updateParticles(); return; }
 
+  // ── Timers globaux ──
   owl.bob += 0.1;
-  if (owl.invul  > 0) owl.invul--;
-  if (buffs.speed > 0) buffs.speed--;
-  if (buffs.multi > 0) buffs.multi--;
-  if (buffs.slow  > 0) buffs.slow--;
+  if (owl.invul        > 0) owl.invul--;
+  if (buffs.speed      > 0) buffs.speed--;
+  if (buffs.multi      > 0) buffs.multi--;
+  if (buffs.slow       > 0) buffs.slow--;
+  if (buffs.invincible > 0) buffs.invincible--;
   owl.speed = buffs.speed > 0 ? 11 : 6;
 
-  // ── Lune : animation de remplissage ──
-  if (!fullMoon.active) {
-    fullMoon.next--;
-    // Début de l'animation de remplissage 120 frames avant l'activation
-    if (fullMoon.next <= 120 && moonFillProgress < 1) {
-      moonFillProgress = Math.min(1, moonFillProgress + 1/120);
-    }
-    if (comboTimer > 0) comboTimer--; else combo = 1;
-    if (fullMoon.next <= 0) {
-      fullMoon.active = true;
-      moonFillProgress = 1;
-      fullMoon.timer = 600;
-      screenShake = 20;
-      spawnFX(canvas.width/2, 60, 0, 'death', '🩸 LUNE DE SANG !');
-      while (bears.length < bearTarget()) bears.push(newBear());
-    }
-  } else {
-    fullMoon.timer--;
-    if (fullMoon.timer <= 0) {
-      fullMoon.active = false;
-      fullMoon.next = rnd(1200, 1800);
-      moonFillProgress = 0; // Redevient croissant instantanément
-      bears = [];
-      screenShake = 10;
-    }
-  }
+  updateMoon();
 
-  // ── Contrôles ──
+  // ── Mouvements du hibou ──
   if (mouse.on) {
     const lerpF = buffs.speed > 0 ? 0.25 : 0.15;
     owl.x += (mouse.x - owl.x) * lerpF;
@@ -201,38 +270,45 @@ function update() {
   owl.x = Math.max(r, Math.min(canvas.width  - r, owl.x));
   owl.y = Math.max(r, Math.min(canvas.height - r, owl.y));
 
+  // Scintillement des étoiles
   for (const s of stars) { s.a += s.da; if (s.a > 1 || s.a < 0.05) s.da *= -1; }
 
-  // ── Cadeau ──
-  if (!specialItem && !fullMoon.active && Math.random() < 0.0015) {
-    specialItem = { x: rnd(50, canvas.width-50), y: rnd(50, canvas.height-50), bob: 0 };
+  // ── Cadeau spécial ──
+  if (!specialItem && moon.state === 'none' && Math.random() < 0.0005) {
+    specialItem = { x: rnd(60, canvas.width - 60), y: rnd(60, canvas.height - 60), bob: 0 };
   }
   if (specialItem) {
     specialItem.bob += 0.05;
     if (dist(owl, specialItem) < r + 25) {
-      state = S.LOOT;
-      lootbox.timer = 120;
-      lootbox.result = LOOT_TYPES[Math.floor(Math.random() * LOOT_TYPES.length)];
-      lootbox.roll = lootbox.result.e;
+      const result = rollLoot();
+      initLootboxScroll(result);
+      state       = S.LOOT;
       specialItem = null;
       screenShake = 15;
     }
   }
 
-  // ── Branches ──
-  if (!fullMoon.active) {
+  // ── Collecte des branches ──
+  if (moon.state === 'none') {
     for (let i = branches.length - 1; i >= 0; i--) {
       branches[i].w += branches[i].ws;
       if (dist(owl, branches[i]) < r + branches[i].size * 0.4) {
         const multi = buffs.multi > 0 ? 5 : 1;
         const gain  = combo * multi;
         score += gain;
-        nest  += 5 * combo;
+
+        // FIX DIFFICULTÉ : progression du nid réduite — gain fixe de 1%, sans multiplicateur combo.
+        // Avant : nest += 2 * combo → avec combo x5 ça donnait +10% par branche = vie toutes les 10 branches.
+        // Maintenant : 1% fixe = il faut 100 branches pour une vie, ce qui est bien plus exigeant.
+        nest += 1;
+
         if (nest >= 100) {
-          nest %= 100; lives++;
+          nest %= 100;
+          lives++;
           spawnFX(owl.x, owl.y, 30, 'collect', '+1 VIE ! ❤️');
           screenShake = 15;
         }
+
         screenShake = Math.min(4 + combo * 0.5, 15);
         spawnFX(branches[i].x, branches[i].y, 12, 'collect', `+${gain}`);
         combo++; comboTimer = MAX_COMBO_TIME;
@@ -240,33 +316,80 @@ function update() {
         while (bears.length < bearTarget()) bears.push(newBear());
       }
     }
+    if (comboTimer > 0) comboTimer--; else combo = 1;
   }
 
-  // ── Ours ──
+  updateBears(r);
+  updateParticles();
+}
+
+// ══════════════════════════════════════════════════
+//  UPDATE LUNE
+// ══════════════════════════════════════════════════
+function updateMoon() {
+  if (moon.state === 'none') {
+    moon.next--;
+    if (moon.next <= 120 && moon.fillProgress < 1) {
+      moon.fillProgress = Math.min(1, moon.fillProgress + 1 / 120);
+    }
+    if (moon.next <= 0) {
+      const isBlood = Math.random() < 0.1;
+      moon.state        = isBlood ? 'blood' : 'full';
+      moon.fillProgress = 1;
+      moon.timer        = isBlood ? 900 : 600;
+      screenShake = isBlood ? 30 : 20;
+      const msg = isBlood ? '🩸 LUNE DE SANG !' : '🌕 PLEINE LUNE !';
+      spawnFX(canvas.width / 2, 60, 0, isBlood ? 'death' : 'collect', msg);
+      while (bears.length < bearTarget()) bears.push(newBear());
+    }
+  } else {
+    moon.timer--;
+    if (moon.timer <= 0) {
+      moon.state        = 'none';
+      moon.fillProgress = 0;
+      moon.next         = rnd(1200, 1800);
+      bears             = [];
+      screenShake       = 10;
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  UPDATE OURS — IA avec délai et dérive
+// ══════════════════════════════════════════════════
+function updateBears(owlRadius) {
   for (let i = bears.length - 1; i >= 0; i--) {
     const b = bears[i];
     b.life--;
     if (b.life <= 0) {
-      spawnFX(b.x, b.y, 8, 'death');
+      spawnFX(b.x, b.y, 6, 'death');
       bears.splice(i, 1);
-      if (!fullMoon.active && bears.length < bearTarget()) bears.push(newBear());
+      if (moon.state === 'none' && bears.length < bearTarget()) bears.push(newBear());
       continue;
     }
     b.bob += 0.12;
-    const spd = getBearSpeed(b.spdBase);
-    if (b.chases) {
-      const dx = owl.x - b.x, dy = owl.y - b.y, d = Math.hypot(dx, dy) || 1;
-      b.x += (dx/d) * spd; b.y += (dy/d) * spd;
-    } else {
-      b.x += b.vx * spd; b.y += b.vy * spd;
-      if (b.x < 15 || b.x > canvas.width  - 15) b.vx *= -1;
-      if (b.y < 15 || b.y > canvas.height - 15) b.vy *= -1;
+    b.updateTimer--;
+    if (b.updateTimer <= 0) {
+      b.updateTimer = b.updateDelay;
+      const newDriftAngle = rnd(0, Math.PI * 2);
+      const newDriftMag   = rnd(0.3, 1.4);
+      b.driftX = Math.cos(newDriftAngle) * newDriftMag;
+      b.driftY = Math.sin(newDriftAngle) * newDriftMag;
+      b.targetX = owl.x;
+      b.targetY = owl.y;
     }
-    if (owl.invul <= 0 && dist(owl, b) < r * 0.8 + b.size * 0.3) {
+    const dx  = (b.targetX - b.x) + b.driftX * 30;
+    const dy  = (b.targetY - b.y) + b.driftY * 30;
+    const d   = Math.hypot(dx, dy) || 1;
+    const spd = b.spdBase * (buffs.slow > 0 ? 0.3 : 1);
+    b.x += (dx / d) * spd;
+    b.y += (dy / d) * spd;
+
+    if (owl.invul <= 0 && buffs.invincible <= 0 && dist(owl, b) < owlRadius * 0.8 + b.size * 0.3) {
       lives--;
       screenShake = 25;
       if (lives <= 0) {
-        best = Math.max(best, score);
+        best  = Math.max(best, score);
         state = S.OVER;
         spawnFX(owl.x, owl.y, 50, 'death');
         canvas.style.cursor = 'default';
@@ -276,34 +399,82 @@ function update() {
       }
     }
   }
-
-  updateParticles();
+  if (moon.state !== 'none' && bears.length < bearTarget() && Math.random() < 0.15) {
+    bears.push(newBear());
+  }
 }
 
+// ══════════════════════════════════════════════════
+//  LOOTBOX — INITIALISATION DU DÉFILEMENT
+// ══════════════════════════════════════════════════
+const ITEM_COUNT  = 28;
+const TARGET_IDX  = ITEM_COUNT - 4;
+const CASE_W      = 90;
+const CASE_GAP    = 8;
+const CASE_STRIDE = CASE_W + CASE_GAP;
+
+function initLootboxScroll(result) {
+  const items = [];
+  for (let i = 0; i < ITEM_COUNT; i++) {
+    items.push(i === TARGET_IDX ? result : rollLoot());
+  }
+  const finalScroll = -(TARGET_IDX * CASE_STRIDE);
+  const startScroll = finalScroll + CASE_STRIDE * (ITEM_COUNT * 0.7);
+
+  lootbox = {
+    items,
+    result,
+    scroll:      startScroll,
+    finalScroll,
+    speed:       -28,
+    phase:       'scroll',
+    landTimer:   0
+  };
+}
+
+// ══════════════════════════════════════════════════
+//  UPDATE LOOTBOX
+// ══════════════════════════════════════════════════
 function updateLootbox() {
-  lootbox.timer--;
-  if (lootbox.timer > 30) {
-    if (lootbox.timer % 5 === 0) {
-      lootbox.roll = LOOT_TYPES[Math.floor(Math.random() * LOOT_TYPES.length)].e;
-      screenShake = 3;
+  if (lootbox.phase === 'scroll') {
+    lootbox.scroll += lootbox.speed;
+    const distLeft = lootbox.scroll - lootbox.finalScroll;
+    if (distLeft > 0) {
+      lootbox.speed = Math.max(lootbox.speed * 0.97, -0.5);
+    }
+    // Snap final quand on est très proche de la cible
+    if (Math.abs(distLeft) < 1.5 && Math.abs(lootbox.speed) < 1) {
+      lootbox.scroll = lootbox.finalScroll;
+      lootbox.speed  = 0;
+      lootbox.phase  = 'land';
+      screenShake    = 8;
     }
   } else {
-    lootbox.roll = lootbox.result.e;
-  }
-  if (lootbox.timer <= 0) {
-    const id = lootbox.result.id;
-    if (id === 'life')  lives++;
-    if (id === 'speed') buffs.speed = 420;
-    if (id === 'multi') buffs.multi = 420;
-    if (id === 'slow')  buffs.slow  = 420;
-    state = S.PLAY;
-    owl.invul = 60;
+    // Phase 'land' : compteur avant application automatique (120 frames = 2s)
+    // Le joueur peut aussi skip en appuyant (géré dans les listeners input)
+    lootbox.landTimer++;
+    if (lootbox.landTimer >= 120) {
+      applyLoot(lootbox.result.id);
+      state     = S.PLAY;
+      owl.invul = 60;
+    }
   }
 }
 
+function applyLoot(id) {
+  if (id === 'life')       lives++;
+  if (id === 'speed')      buffs.speed      = 420;
+  if (id === 'multi')      buffs.multi      = 420;
+  if (id === 'slow')       buffs.slow       = 420;
+  if (id === 'invincible') buffs.invincible = 600;
+}
+
+// ══════════════════════════════════════════════════
+//  UPDATE PARTICULES
+// ══════════════════════════════════════════════════
 function updateParticles() {
   for (const p of particles) {
-    p.x += p.vx; p.y += p.vy;
+    p.x  += p.vx; p.y += p.vy;
     if (p.vx) p.vx *= 0.92;
     p.vy  *= (p.type === 'txt' ? 0.95 : 0.92);
     p.life -= (p.type === 'txt' ? 0.02 : 0.03);
@@ -311,73 +482,74 @@ function updateParticles() {
   particles = particles.filter(p => p.life > 0);
 }
 
-// ── Draw ────────────────────────────────────────
+// ══════════════════════════════════════════════════
+//  DRAW PRINCIPAL
+// ══════════════════════════════════════════════════
 function draw() {
   const W = canvas.width, H = canvas.height;
   ctx.save();
   if (screenShake > 0) ctx.translate(rnd(-screenShake, screenShake), rnd(-screenShake, screenShake));
 
-  // Ciel
-  const t = moonFillProgress; // 0→1
-  const sky = ctx.createLinearGradient(0, 0, 0, H);
-  sky.addColorStop(0, `rgb(${Math.round(4 + t*22)},${Math.round(4 - t*0)},${Math.round(14 - t*9)})`);
-  sky.addColorStop(1, `rgb(${Math.round(12 + t*49)},${Math.round(16 - t*8)},${Math.round(48 - t*40)})`);
-  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+  drawSky(W, H);
 
-  // Étoiles (teintées rouge pendant la lune)
+  const t = moon.fillProgress;
   for (const s of stars) {
     ctx.save(); ctx.globalAlpha = s.a;
-    ctx.fillStyle = t > 0.5 ? `rgba(255,${Math.round(200 - t*160)},${Math.round(200 - t*160)},1)` : '#fff';
+    if (moon.state === 'blood' && t > 0.5)      ctx.fillStyle = `rgba(255,${Math.round(200 - t*160)},${Math.round(180 - t*160)},1)`;
+    else if (moon.state === 'full' && t > 0.5)  ctx.fillStyle = '#fffaee';
+    else                                          ctx.fillStyle = '#ffffff';
     ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
 
-  // ── Lune avec animation de remplissage ──
   drawMoon(W, H);
 
+  // Écran de démarrage simplifié — titre + bouton uniquement
   if (state === S.START) { drawStart(W, H); ctx.restore(); return; }
 
-  // Cadeau
   if (specialItem) {
     ctx.save();
-    ctx.shadowColor = '#00ffff'; ctx.shadowBlur = 20 + Math.sin(specialItem.bob) * 10;
+    ctx.shadowColor = '#00ffff';
+    ctx.shadowBlur  = 20 + Math.sin(specialItem.bob) * 10;
     drawEmoji('🎁', specialItem.x, specialItem.y + Math.sin(specialItem.bob) * 5, 34);
     ctx.restore();
   }
 
-  // Branches
-  if (!fullMoon.active) {
+  if (moon.state === 'none') {
     for (const b of branches) drawEmoji(b.e, b.x, b.y + Math.sin(b.w) * 4, b.size);
   }
 
-  // Ours (clignotent avant de mourir)
   for (const b of bears) {
     if (b.life < 60 && Math.floor(Date.now() / 100) % 2 === 0) continue;
     drawEmoji('🐻', b.x, b.y + Math.sin(b.bob) * 3, b.size);
   }
 
-  // Hibou (clignote si invulnérable)
   if (state === S.PLAY || state === S.LOOT) {
     if (owl.invul <= 0 || Math.floor(Date.now() / 80) % 2 === 0) {
       ctx.save();
-      ctx.shadowColor = buffs.speed > 0 ? '#00ffff' : (combo > 2 ? '#ff4400' : 'rgba(255,200,80,0.65)');
-      ctx.shadowBlur  = buffs.speed > 0 || combo > 2 ? 30 : 20;
+      if (buffs.invincible > 0) {
+        ctx.shadowColor = '#ffd700';
+        ctx.shadowBlur  = 25 + Math.sin(Date.now() / 80) * 12;
+      } else {
+        ctx.shadowColor = buffs.speed > 0 ? '#00ffff' : (combo > 2 ? '#ff4400' : 'rgba(255,200,80,0.65)');
+        ctx.shadowBlur  = buffs.speed > 0 || combo > 2 ? 30 : 20;
+      }
       drawEmoji('🦉', owl.x, owl.y + Math.sin(owl.bob) * 4, owl.size);
       ctx.restore();
     }
   }
 
-  // Particules
   for (const p of particles) {
     ctx.save(); ctx.globalAlpha = Math.max(0, p.life);
     if (p.type === 'txt') {
-      ctx.fillStyle = p.tType === 'death' ? '#ff3333' : '#ffd700';
-      ctx.font = '900 24px system-ui, sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.shadowColor = '#000'; ctx.shadowBlur = 8;
+      ctx.fillStyle    = p.tType === 'death' ? '#ff3333' : '#ffd700';
+      ctx.font         = '900 24px system-ui, sans-serif';
+      ctx.textAlign    = 'center'; ctx.textBaseline = 'middle';
+      ctx.shadowColor  = '#000'; ctx.shadowBlur = 8;
       ctx.fillText(p.txt, p.x, p.y);
     } else {
-      ctx.fillStyle = p.c; ctx.beginPath(); ctx.arc(p.x, p.y, rnd(2, 6), 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = p.c;
+      ctx.beginPath(); ctx.arc(p.x, p.y, rnd(2, 6), 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
   }
@@ -389,68 +561,98 @@ function draw() {
   ctx.restore();
 }
 
-// ── Lune avec animation croissant → pleine ──────
+// ══════════════════════════════════════════════════
+//  DRAW — CIEL
+// ══════════════════════════════════════════════════
+function drawSky(W, H) {
+  const t   = moon.fillProgress;
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  if (moon.state === 'blood') {
+    sky.addColorStop(0, `rgb(${Math.round(4 + t*22)},4,${Math.round(14 - t*9)})`);
+    sky.addColorStop(1, `rgb(${Math.round(12 + t*49)},${Math.round(16 - t*8)},${Math.round(48 - t*40)})`);
+  } else if (moon.state === 'full') {
+    sky.addColorStop(0, `rgb(6,8,${Math.round(14 + t*18)})`);
+    sky.addColorStop(1, `rgb(10,14,${Math.round(30 + t*22)})`);
+  } else {
+    sky.addColorStop(0, '#04040e');
+    sky.addColorStop(1, '#0c1030');
+  }
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+}
+
+// ══════════════════════════════════════════════════
+//  DRAW — LUNE
+// ══════════════════════════════════════════════════
 function drawMoon(W, H) {
   const mx = W * 0.82, my = H * 0.11, mr = 44;
-  const t  = moonFillProgress; // 0 = croissant, 1 = pleine lune de sang
+  const t  = moon.fillProgress;
 
-  // Halo
-  const haloColor = t > 0 ? `rgba(255,${Math.round(50 - t*50)},${Math.round(50 - t*50)},${0.15 + t*0.25})` : 'rgba(255,248,160,0.15)';
+  let haloColor;
+  if (moon.state === 'blood')       haloColor = `rgba(255,${Math.round(50 - t*50)},${Math.round(50 - t*50)},${0.15 + t*0.25})`;
+  else if (moon.state === 'full')   haloColor = `rgba(220,230,255,${0.1 + t*0.15})`;
+  else                              haloColor = 'rgba(255,248,160,0.12)';
+
   const gm = ctx.createRadialGradient(mx, my, mr * 0.5, mx, my, mr * (3 + t));
   gm.addColorStop(0, haloColor); gm.addColorStop(1, 'transparent');
-  ctx.fillStyle = gm; ctx.beginPath(); ctx.arc(mx, my, mr * (4 + t), 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = gm;
+  ctx.beginPath(); ctx.arc(mx, my, mr * (4 + t), 0, Math.PI * 2); ctx.fill();
 
-  // Corps de la lune
-  // Interpolation couleur : ivoire → rouge sang
-  const rC = Math.round(255);
-  const gC = Math.round(253 - t * 220);
-  const bC = Math.round(224 - t * 210);
+  let rC, gC, bC;
+  if (moon.state === 'blood') {
+    rC = 255; gC = Math.round(253 - t * 220); bC = Math.round(224 - t * 210);
+  } else {
+    rC = 255; gC = Math.round(253 - t * 3); bC = Math.round(224 + t * 16);
+  }
   ctx.fillStyle = `rgb(${rC},${gC},${bC})`;
   ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.fill();
 
-  // Masque d'ombre : disparaît progressivement au fil de l'animation
-  // t=0 → masque plein (croissant), t=1 → masque invisible (pleine lune)
   if (t < 1) {
-    // L'ombre recule de -14px à +mr (complètement hors du disque)
-    const shadowOffset = -14 + t * (mr + 18); // -14 → +62 ≈ complètement sorti
-    ctx.fillStyle = `rgb(${Math.round(4 + t*22)},${Math.round(4)},${Math.round(14 - t*9)})`; // couleur ciel
+    const shadowOffset = -14 + t * (mr + 18);
+    ctx.fillStyle = moon.state === 'blood'
+      ? `rgb(${Math.round(4 + t*22)},4,${Math.round(14 - t*9)})`
+      : `rgb(6,8,${Math.round(14 + t*18)})`;
     ctx.beginPath(); ctx.arc(mx - shadowOffset, my, mr * 0.78, 0, Math.PI * 2); ctx.fill();
   }
 
-  // Pendant la pleine lune : cratères rougeoyants pour l'ambiance
   if (t > 0.8) {
     const alpha = (t - 0.8) / 0.2;
-    ctx.save(); ctx.globalAlpha = alpha * 0.35;
-    ctx.fillStyle = '#660000';
+    ctx.save(); ctx.globalAlpha = alpha * 0.3;
+    ctx.fillStyle = moon.state === 'blood' ? '#660000' : '#8899bb';
     [[0.3, -0.2, 0.18], [-0.25, 0.3, 0.12], [0.1, 0.35, 0.08]].forEach(([dx, dy, rs]) => {
-      ctx.beginPath(); ctx.arc(mx + dx*mr, my + dy*mr, rs*mr, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(mx + dx * mr, my + dy * mr, rs * mr, 0, Math.PI * 2); ctx.fill();
     });
     ctx.restore();
   }
 }
 
-// ── HUD ─────────────────────────────────────────
+// ══════════════════════════════════════════════════
+//  DRAW — HUD
+// ══════════════════════════════════════════════════
 function drawHUD() {
-  const hudH = fullMoon.active ? 100 : 80;
+  const isLunaire = moon.state !== 'none';
+  const hudH      = isLunaire ? 100 : 80;
+  const border    = moon.state === 'blood' ? 'rgba(255,50,50,0.8)'
+                  : moon.state === 'full'  ? 'rgba(200,220,255,0.5)'
+                  : 'rgba(100,90,220,0.4)';
+
   ctx.save();
-  rrect(12, 12, 230, hudH, 14, 'rgba(8,8,35,0.82)',
-    fullMoon.active ? 'rgba(255,50,50,0.7)' : 'rgba(100,90,220,0.4)');
+  rrect(12, 12, 230, hudH, 14, 'rgba(8,8,35,0.82)', border);
 
   ctx.fillStyle = '#dde'; ctx.font = 'bold 16px system-ui';
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillText('Score : ' + score, 24, 32);
 
-  // Vies
-  let livesStr = ''; for (let i = 0; i < lives; i++) livesStr += '❤️';
+  let livesStr = '';
+  for (let i = 0; i < lives; i++) livesStr += '❤️';
   ctx.font = '12px system-ui'; ctx.fillText(livesStr, 140, 32);
 
-  // Buffs actifs
   let yTxt = 50;
-  if (buffs.multi > 0) { ctx.fillStyle = '#00ffff'; ctx.fillText('✨ SCORE x5', 24, yTxt); yTxt += 16; }
-  if (buffs.speed > 0) { ctx.fillStyle = '#00ffff'; ctx.fillText('⚡ VITESSE',  24, yTxt); yTxt += 16; }
-  if (buffs.slow  > 0) { ctx.fillStyle = '#00ffff'; ctx.fillText('❄️ GELÉS',   24, yTxt); yTxt += 16; }
+  if (buffs.multi      > 0) { ctx.fillStyle = '#00ffff'; ctx.fillText('✨ SCORE x5',     24, yTxt); yTxt += 16; }
+  if (buffs.speed      > 0) { ctx.fillStyle = '#00ffff'; ctx.fillText('⚡ VITESSE',       24, yTxt); yTxt += 16; }
+  if (buffs.slow       > 0) { ctx.fillStyle = '#00ffff'; ctx.fillText('❄️ GELÉS',        24, yTxt); yTxt += 16; }
+  if (buffs.invincible > 0) { ctx.fillStyle = '#ffd700'; ctx.fillText('🦉 INVINCIBLE !', 24, yTxt); yTxt += 16; }
 
-  if (!fullMoon.active && combo > 1 && buffs.multi === 0) {
+  if (moon.state === 'none' && combo > 1 && buffs.multi === 0) {
     ctx.fillStyle = '#ffaa00'; ctx.font = 'bold 13px system-ui';
     ctx.fillText('🔥 Combo x' + combo, 24, 50);
     const cbW = 80 * (comboTimer / MAX_COMBO_TIME);
@@ -458,85 +660,134 @@ function drawHUD() {
     rrect(120, 46, Math.max(0, cbW), 6, 3, '#ffaa00');
   }
 
-  if (fullMoon.active) {
-    ctx.fillStyle = '#ff3333'; ctx.font = '900 14px system-ui';
-    ctx.fillText('🌕 SURVIE : ' + Math.ceil(fullMoon.timer / 60) + 's', 24, 50);
+  if (isLunaire) {
+    const col = moon.state === 'blood' ? '#ff3333' : '#ccddff';
+    const ico = moon.state === 'blood' ? '🩸' : '🌕';
+    ctx.fillStyle = col; ctx.font = '900 14px system-ui';
+    ctx.fillText(`${ico} SURVIE : ${Math.ceil(moon.timer / 60)}s`, 24, 50);
   }
 
-  // Barre de nid
-  const barY = fullMoon.active ? 70 : 62;
+  const barY = isLunaire ? 70 : 62;
   rrect(22, barY, 190, 10, 5, 'rgba(255,255,255,0.1)');
-  const bw  = Math.max(10, 190 * nest / 100);
-  const bar = ctx.createLinearGradient(22, 0, 212, 0);
+  const bw    = Math.max(10, 190 * nest / 100);
+  const bar   = ctx.createLinearGradient(22, 0, 212, 0);
   bar.addColorStop(0, '#5cc83a'); bar.addColorStop(1, '#d4a800');
-  const blinkOn = nest > 90 && Math.floor(Date.now() / 100) % 2 === 0;
-  rrect(22, barY, bw, 10, 5, blinkOn ? '#fff' : bar);
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 9px system-ui';
-  ctx.textAlign = 'center';
+  const blink = nest > 90 && Math.floor(Date.now() / 100) % 2 === 0;
+  rrect(22, barY, bw, 10, 5, blink ? '#fff' : bar);
+  ctx.fillStyle    = '#fff'; ctx.font = 'bold 9px system-ui';
+  ctx.textAlign    = 'center';
   ctx.fillText('NID ' + nest + '% ➔ +1 ❤️', 117, barY + 5);
 
   ctx.restore();
 }
 
-// ── Lootbox screen ──────────────────────────────
+// ══════════════════════════════════════════════════
+//  DRAW — LOOTBOX CS:GO STYLE
+// ══════════════════════════════════════════════════
 function drawLootbox(W, H) {
   ctx.save();
-  ctx.fillStyle = 'rgba(0,0,0,0.82)'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(0,0,0,0.88)'; ctx.fillRect(0, 0, W, H);
 
   const cx = W / 2, cy = H / 2;
+
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffffff'; ctx.font = '900 20px system-ui';
+  ctx.fillText('CADEAU !', cx, cy - 120);
+
+  const barW    = CASE_STRIDE * 5 - CASE_GAP;
+  const barH    = CASE_W;
+  const barLeft = cx - barW / 2;
+  const barTop  = cy - barH / 2 - 10;
+
+  rrect(barLeft - 4, barTop - 4, barW + 8, barH + 8, 10, '#0a0a2a', '#444466', 2);
+
   ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(Date.now() / 300);
-  ctx.fillStyle = 'rgba(255,255,100,0.12)';
-  for (let i = 0; i < 12; i++) {
-    ctx.rotate(Math.PI / 6);
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(500, -60); ctx.lineTo(500, 60); ctx.fill();
+  ctx.beginPath(); ctx.rect(barLeft, barTop, barW, barH); ctx.clip();
+
+  for (let i = 0; i < lootbox.items.length; i++) {
+    const item  = lootbox.items[i];
+    const caseX = barLeft + lootbox.scroll + i * CASE_STRIDE;
+    const caseY = barTop;
+    if (caseX + CASE_W < barLeft || caseX > barLeft + barW) continue;
+    const isWinner = (i === TARGET_IDX && lootbox.phase === 'land');
+    const bgColor  = isWinner ? '#2a1f00' : '#111128';
+    const border   = isWinner ? '#ffd700' : '#2a2a55';
+    rrect(caseX, caseY, CASE_W, barH, 8, bgColor, border, isWinner ? 3 : 1);
+    if (item.id === 'invincible') {
+      ctx.save();
+      ctx.shadowColor = '#ffd700';
+      ctx.shadowBlur  = isWinner ? 30 : 12;
+      drawEmoji('🦉', caseX + CASE_W / 2, caseY + barH / 2, 38);
+      ctx.restore();
+    } else {
+      drawEmoji(item.e, caseX + CASE_W / 2, caseY + barH / 2, 36);
+    }
   }
+
   ctx.restore();
 
   ctx.save();
-  ctx.translate(cx, cy);
-  rrect(-120, -100, 240, 200, 20, '#111133', '#00ffff', 4);
-  ctx.shadowColor = '#fff'; ctx.shadowBlur = 20;
-  drawEmoji(lootbox.roll, 0, -20, 80);
-  ctx.shadowBlur = 0;
-  if (lootbox.timer <= 30) {
-    ctx.fillStyle = '#00ffff'; ctx.font = '900 22px system-ui';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(lootbox.result.txt, 0, 65);
-  } else {
-    ctx.fillStyle = '#fff'; ctx.font = '16px system-ui';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('CADEAU !', 0, 65);
-  }
+  ctx.fillStyle   = '#ff4444';
+  ctx.strokeStyle = '#ff4444';
+  ctx.lineWidth   = 2;
+  ctx.beginPath(); ctx.moveTo(cx, barTop - 12); ctx.lineTo(cx, barTop + barH + 12); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx - 8, barTop - 14); ctx.lineTo(cx + 8, barTop - 14); ctx.lineTo(cx, barTop - 2); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx - 8, barTop + barH + 14); ctx.lineTo(cx + 8, barTop + barH + 14); ctx.lineTo(cx, barTop + barH + 2); ctx.closePath(); ctx.fill();
   ctx.restore();
+
+  if (lootbox.phase === 'land') {
+    const alpha = Math.min(1, lootbox.landTimer / 20);
+    ctx.save(); ctx.globalAlpha = alpha;
+    const isInvincible = lootbox.result.id === 'invincible';
+    ctx.fillStyle  = isInvincible ? '#ffd700' : '#00ffff';
+    ctx.font       = '900 26px system-ui';
+    ctx.textAlign  = 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowColor = isInvincible ? '#ffa500' : '#0088ff';
+    ctx.shadowBlur  = 20;
+    ctx.fillText(lootbox.result.txt, cx, cy + 80);
+    ctx.font      = '14px system-ui';
+    ctx.fillStyle = 'rgba(200,200,255,0.7)';
+    ctx.shadowBlur = 0;
+    ctx.fillText('Appuie ou clique pour continuer...', cx, cy + 110);
+    ctx.restore();
+  }
 
   ctx.restore();
 }
 
-// ── Écran Start ─────────────────────────────────
+// ══════════════════════════════════════════════════
+//  DRAW — ÉCRAN TITRE
+//  FIX UI : on affiche juste le titre + bouton, sans description
+// ══════════════════════════════════════════════════
 function drawStart(W, H) {
   ctx.save();
   ctx.fillStyle = 'rgba(4,4,18,0.75)'; ctx.fillRect(0, 0, W, H);
   const cx = W / 2, cy = H / 2;
-  rrect(cx - 160, cy - 220, 320, 440, 28, 'rgba(12,12,48,0.96)', 'rgba(110,90,255,0.45)');
+
+  // Panneau centré, plus compact sans le texte descriptif
+  rrect(cx - 140, cy - 160, 280, 320, 28, 'rgba(12,12,48,0.96)', 'rgba(110,90,255,0.45)');
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  drawEmoji('🦉', cx, cy - 140, 70);
-  ctx.fillStyle = '#cbc3ff'; ctx.font = '900 28px system-ui';
-  ctx.fillText('Hibou & Nid', cx, cy - 70);
-  ctx.fillStyle = 'rgba(200,195,255,0.88)'; ctx.font = '14px system-ui';
-  ctx.fillText('Remplis le nid pour +1 ❤️', cx, cy - 15);
-  ctx.fillText('Fuis la Lune de Sang 🌕',   cx, cy + 15);
-  ctx.fillText('Attrape les cadeaux 🎁',     cx, cy + 45);
-  const g = ctx.createLinearGradient(cx - 100, cy + 90, cx + 100, cy + 140);
+
+  // Hibou animé (bob sur la lune en fond)
+  drawEmoji('🦉', cx, cy - 95, 72);
+
+  // Titre principal
+  ctx.fillStyle = '#cbc3ff'; ctx.font = '900 32px system-ui';
+  ctx.fillText('HIBOU 2D', cx, cy - 20);
+
+  // Bouton JOUER
+  const g = ctx.createLinearGradient(cx - 100, cy + 55, cx + 100, cy + 105);
   g.addColorStop(0, '#5544dd'); g.addColorStop(1, '#9944ee');
-  rrect(cx - 100, cy + 90, 200, 50, 25, g);
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 18px system-ui';
-  ctx.fillText('▶ Jouer', cx, cy + 115);
+  rrect(cx - 100, cy + 55, 200, 50, 25, g);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 20px system-ui';
+  ctx.fillText('JOUER', cx, cy + 80);
+
   ctx.restore();
 }
 
-// ── Écran Game Over ─────────────────────────────
+// ══════════════════════════════════════════════════
+//  DRAW — GAME OVER
+// ══════════════════════════════════════════════════
 function drawOver(W, H) {
   ctx.save();
   ctx.fillStyle = 'rgba(255,0,0,0.28)'; ctx.fillRect(0, 0, W, H);
@@ -557,13 +808,15 @@ function drawOver(W, H) {
   const pulse = Math.sin(Date.now() / 150) * 5;
   const g = ctx.createLinearGradient(cx - 100, cy + 110, cx + 100, cy + 160);
   g.addColorStop(0, '#cc2222'); g.addColorStop(1, '#cc22aa');
-  rrect(cx - 100 - pulse/2, cy + 110 - pulse/2, 200 + pulse, 50 + pulse, 25, g);
+  rrect(cx - 100 - pulse / 2, cy + 110 - pulse / 2, 200 + pulse, 50 + pulse, 25, g);
   ctx.fillStyle = '#fff'; ctx.font = 'bold 18px system-ui';
   ctx.fillText('↺ Rejouer', cx, cy + 135);
   ctx.restore();
 }
 
-// ── Loop ────────────────────────────────────────
+// ══════════════════════════════════════════════════
+//  BOUCLE PRINCIPALE
+// ══════════════════════════════════════════════════
 (function loop() { update(); draw(); requestAnimationFrame(loop); })();
 </script>
 </body>
