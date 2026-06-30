@@ -2,10 +2,10 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🦉 Hibou &amp; Nid</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>🦉 Hibou & Nid - V3</title>
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
 body { background: #04040e; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
 canvas { display: block; }
 </style>
@@ -16,8 +16,29 @@ canvas { display: block; }
 const canvas = document.getElementById('c');
 const ctx    = canvas.getContext('2d');
 
-const S = { START: 0, PLAY: 1, OVER: 2 };
+const S = { START: 0, PLAY: 1, OVER: 2, LOOT: 3 };
 let state = S.START;
+
+let screenShake = 0;
+let combo = 1;
+let comboTimer = 0;
+const MAX_COMBO_TIME = 120;
+
+let lives = 1;
+let fullMoon = { active: false, timer: 0, next: 900, fillAnim: 0 };
+// fillAnim: 0 = croissant normal, 1 = pleine lune, animation entre les deux
+let moonFillProgress = 0; // 0 = croissant, 1 = pleine lune
+
+let buffs = { speed: 0, multi: 0, slow: 0 };
+let specialItem = null;
+
+const LOOT_TYPES = [
+  { id: 'life',  e: '❤️', txt: '+1 Vie !'        },
+  { id: 'speed', e: '⚡', txt: 'Vitesse Éclair !' },
+  { id: 'multi', e: '✨', txt: 'Score x5 !'       },
+  { id: 'slow',  e: '❄️', txt: 'Ours Gelés !'     }
+];
+let lootbox = { timer: 0, roll: '', result: null };
 
 // ── Resize ──────────────────────────────────────
 function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
@@ -29,21 +50,14 @@ const rnd  = (a, b) => a + Math.random() * (b - a);
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 function rrect(x, y, w, h, r, fill, stroke, lw) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y,     x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x,     y + h, r);
-  ctx.arcTo(x,     y + h, x,     y,     r);
-  ctx.arcTo(x,     y,     x + w, y,     r);
-  ctx.closePath();
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, r);
   if (fill)   { ctx.fillStyle = fill; ctx.fill(); }
   if (stroke) { ctx.lineWidth = lw || 1.5; ctx.strokeStyle = stroke; ctx.stroke(); }
 }
 
 function drawEmoji(e, x, y, size) {
   ctx.font = size + 'px serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(e, x, y);
 }
 
@@ -51,11 +65,8 @@ function drawEmoji(e, x, y, size) {
 let stars = [];
 function initStars() {
   stars = Array.from({ length: 180 }, () => ({
-    x: rnd(0, canvas.width),
-    y: rnd(0, canvas.height * 0.8),
-    r: rnd(0.3, 2),
-    a: Math.random(),
-    da: rnd(0.005, 0.02) * (Math.random() < 0.5 ? 1 : -1)
+    x: rnd(0, canvas.width), y: rnd(0, canvas.height * 0.8),
+    r: rnd(0.3, 2), a: Math.random(), da: rnd(0.005, 0.02) * (Math.random() < 0.5 ? 1 : -1)
   }));
 }
 initStars();
@@ -65,41 +76,34 @@ const keys  = {};
 const mouse = { x: -999, y: -999, on: false };
 
 document.addEventListener('keydown', e => {
-  keys[e.key] = true;
-  mouse.on = false;
+  keys[e.key] = true; mouse.on = false;
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
-  if (state !== S.PLAY) beginGame();
+  if (state === S.START || state === S.OVER) beginGame();
 });
 document.addEventListener('keyup', e => { keys[e.key] = false; });
 document.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true; });
-canvas.addEventListener('click', () => { if (state !== S.PLAY) beginGame(); });
-canvas.addEventListener('touchmove', e => {
-  e.preventDefault();
-  mouse.x = e.touches[0].clientX; mouse.y = e.touches[0].clientY; mouse.on = true;
-}, { passive: false });
-canvas.addEventListener('touchstart', e => {
-  e.preventDefault();
-  mouse.x = e.touches[0].clientX; mouse.y = e.touches[0].clientY; mouse.on = true;
-  if (state !== S.PLAY) beginGame();
-}, { passive: false });
+canvas.addEventListener('pointerdown', e => {
+  mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true;
+  if (state === S.START || state === S.OVER) beginGame();
+});
+canvas.addEventListener('pointermove', e => { if (mouse.on) { mouse.x = e.clientX; mouse.y = e.clientY; } });
 
 // ── Entities ────────────────────────────────────
-const owl = { x: 0, y: 0, size: 50, speed: 5, bob: 0 };
+const owl = { x: 0, y: 0, size: 34, speed: 6, bob: 0, invul: 0 };
 let branches = [], bears = [], particles = [];
 let score = 0, nest = 0, best = 0;
 
 const BRANCH_E = ['🪵','🌿','🍃','🍂'];
 
-function bearSpeed()  { return 1.3 + Math.min(score * 0.09, 4); }
-function bearTarget() { return Math.min(1 + Math.floor(score / 5), 9); }
+function getBearSpeed(base) { return base * (buffs.slow > 0 ? 0.3 : 1); }
+function bearTarget()       { return fullMoon.active ? 20 : Math.min(2 + Math.floor(score / 15), 10); }
 
 function newBranch() {
-  const m = 80;
+  const m = 40;
   return {
-    x: rnd(m, canvas.width - m),
-    y: rnd(m, canvas.height - m),
+    x: rnd(m, canvas.width - m), y: rnd(m, canvas.height - m),
     e: BRANCH_E[Math.floor(Math.random() * 4)],
-    size: 36, w: rnd(0, Math.PI * 2), ws: rnd(0.025, 0.05)
+    size: 24, w: rnd(0, Math.PI * 2), ws: rnd(0.03, 0.07)
   };
 }
 
@@ -107,100 +111,202 @@ function newBear() {
   const side = Math.floor(Math.random() * 4);
   const x = side === 0 ? -50 : side === 1 ? canvas.width  + 50 : rnd(0, canvas.width);
   const y = side === 2 ? -50 : side === 3 ? canvas.height + 50 : rnd(0, canvas.height);
-  const chases = Math.random() > 0.35;
+  const life    = fullMoon.active ? rnd(120, 240) : rnd(480, 900);
+  const spdBase = fullMoon.active ? rnd(3.5, 6.5) : 1.8 + Math.min(score * 0.05, 4.5);
+  const chases  = fullMoon.active ? true : Math.random() > 0.4;
   let vx = rnd(-1, 1) || 0.5, vy = rnd(-1, 1) || 0.5;
   const mag = Math.hypot(vx, vy) || 1;
-  return { x, y, size: 44, speed: bearSpeed(), chases, vx: vx/mag, vy: vy/mag, bob: rnd(0, Math.PI * 2) };
+  return { x, y, size: 28, spdBase, chases, vx: vx/mag, vy: vy/mag, bob: rnd(0, Math.PI * 2), life };
 }
 
-function spawnFX(x, y) {
-  for (let i = 0; i < 10; i++) {
-    const a = (i / 10) * Math.PI * 2, spd = rnd(2.5, 6);
+function spawnFX(x, y, amount, type = 'collect', txt = '') {
+  for (let i = 0; i < amount; i++) {
+    const a = (i / amount) * Math.PI * 2, spd = rnd(2, 8);
     particles.push({
-      type: 'dot', x, y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd, life: 1,
-      c: ['#ffd700','#7ec850','#a8ff80','#ffe999','#ffffff'][Math.floor(Math.random() * 5)]
+      type: 'dot', x, y, vx: Math.cos(a)*spd, vy: Math.sin(a)*spd, life: 1,
+      c: type === 'collect'
+        ? ['#ffd700','#7ec850','#a8ff80','#ffffff'][Math.floor(Math.random() * 4)]
+        : ['#ff4444','#ffaa00','#ffffff'][Math.floor(Math.random() * 3)]
     });
   }
-  particles.push({ type: 'txt', x, y, vx: 0, vy: -2.5, life: 1.3 });
+  if (txt) particles.push({ type: 'txt', x, y, vx: 0, vy: -3, life: 1.5, txt, tType: type });
 }
 
 function beginGame() {
-  state = S.PLAY;
-  canvas.style.cursor = 'none';
-  owl.x = canvas.width / 2;
-  owl.y = canvas.height / 2;
-  owl.bob = 0;
-  score = 0; nest = 0;
-  branches  = Array.from({ length: 4 }, newBranch);
-  bears     = [newBear()];
+  state = S.PLAY; canvas.style.cursor = 'none';
+  owl.x = canvas.width / 2; owl.y = canvas.height / 2; owl.invul = 60;
+  score = 0; nest = 0; combo = 1; comboTimer = 0; screenShake = 0; lives = 1;
+  fullMoon = { active: false, timer: 0, next: 900, fillAnim: 0 };
+  moonFillProgress = 0;
+  buffs = { speed: 0, multi: 0, slow: 0 };
+  specialItem = null;
+  branches  = Array.from({ length: 5 }, newBranch);
+  bears     = [newBear(), newBear()];
   particles = [];
-  mouse.on  = false;
 }
 
 // ── Update ──────────────────────────────────────
 function update() {
-  if (state !== S.PLAY) return;
+  if (screenShake > 0) { screenShake *= 0.9; if (screenShake < 0.5) screenShake = 0; }
 
-  owl.bob += 0.065;
+  if (state === S.LOOT) { updateLootbox(); updateParticles(); return; }
+  if (state !== S.PLAY) { updateParticles(); return; }
 
+  owl.bob += 0.1;
+  if (owl.invul  > 0) owl.invul--;
+  if (buffs.speed > 0) buffs.speed--;
+  if (buffs.multi > 0) buffs.multi--;
+  if (buffs.slow  > 0) buffs.slow--;
+  owl.speed = buffs.speed > 0 ? 11 : 6;
+
+  // ── Lune : animation de remplissage ──
+  if (!fullMoon.active) {
+    fullMoon.next--;
+    // Début de l'animation de remplissage 120 frames avant l'activation
+    if (fullMoon.next <= 120 && moonFillProgress < 1) {
+      moonFillProgress = Math.min(1, moonFillProgress + 1/120);
+    }
+    if (comboTimer > 0) comboTimer--; else combo = 1;
+    if (fullMoon.next <= 0) {
+      fullMoon.active = true;
+      moonFillProgress = 1;
+      fullMoon.timer = 600;
+      screenShake = 20;
+      spawnFX(canvas.width/2, 60, 0, 'death', '🩸 LUNE DE SANG !');
+      while (bears.length < bearTarget()) bears.push(newBear());
+    }
+  } else {
+    fullMoon.timer--;
+    if (fullMoon.timer <= 0) {
+      fullMoon.active = false;
+      fullMoon.next = rnd(1200, 1800);
+      moonFillProgress = 0; // Redevient croissant instantanément
+      bears = [];
+      screenShake = 10;
+    }
+  }
+
+  // ── Contrôles ──
   if (mouse.on) {
-    owl.x += (mouse.x - owl.x) * 0.13;
-    owl.y += (mouse.y - owl.y) * 0.13;
+    const lerpF = buffs.speed > 0 ? 0.25 : 0.15;
+    owl.x += (mouse.x - owl.x) * lerpF;
+    owl.y += (mouse.y - owl.y) * lerpF;
   } else {
     if (keys['ArrowLeft']  || keys['a']) owl.x -= owl.speed;
     if (keys['ArrowRight'] || keys['d']) owl.x += owl.speed;
     if (keys['ArrowUp']    || keys['w']) owl.y -= owl.speed;
     if (keys['ArrowDown']  || keys['s']) owl.y += owl.speed;
   }
-  const r = owl.size * 0.42;
+  const r = owl.size * 0.4;
   owl.x = Math.max(r, Math.min(canvas.width  - r, owl.x));
   owl.y = Math.max(r, Math.min(canvas.height - r, owl.y));
 
-  for (const s of stars) {
-    s.a += s.da;
-    if (s.a > 1 || s.a < 0.05) s.da *= -1;
-  }
+  for (const s of stars) { s.a += s.da; if (s.a > 1 || s.a < 0.05) s.da *= -1; }
 
-  // Branch collection
-  for (let i = branches.length - 1; i >= 0; i--) {
-    branches[i].w += branches[i].ws;
-    if (dist(owl, branches[i]) < r + branches[i].size * 0.38) {
-      spawnFX(branches[i].x, branches[i].y);
-      branches.splice(i, 1);
-      branches.push(newBranch());
-      score++;
-      nest = Math.min(100, nest + 10);
-      bears.forEach(b => b.speed = bearSpeed());
-      while (bears.length < bearTarget()) bears.push(newBear());
+  // ── Cadeau ──
+  if (!specialItem && !fullMoon.active && Math.random() < 0.0015) {
+    specialItem = { x: rnd(50, canvas.width-50), y: rnd(50, canvas.height-50), bob: 0 };
+  }
+  if (specialItem) {
+    specialItem.bob += 0.05;
+    if (dist(owl, specialItem) < r + 25) {
+      state = S.LOOT;
+      lootbox.timer = 120;
+      lootbox.result = LOOT_TYPES[Math.floor(Math.random() * LOOT_TYPES.length)];
+      lootbox.roll = lootbox.result.e;
+      specialItem = null;
+      screenShake = 15;
     }
   }
 
-  // Bears
-  for (const b of bears) {
-    b.bob += 0.09;
+  // ── Branches ──
+  if (!fullMoon.active) {
+    for (let i = branches.length - 1; i >= 0; i--) {
+      branches[i].w += branches[i].ws;
+      if (dist(owl, branches[i]) < r + branches[i].size * 0.4) {
+        const multi = buffs.multi > 0 ? 5 : 1;
+        const gain  = combo * multi;
+        score += gain;
+        nest  += 5 * combo;
+        if (nest >= 100) {
+          nest %= 100; lives++;
+          spawnFX(owl.x, owl.y, 30, 'collect', '+1 VIE ! ❤️');
+          screenShake = 15;
+        }
+        screenShake = Math.min(4 + combo * 0.5, 15);
+        spawnFX(branches[i].x, branches[i].y, 12, 'collect', `+${gain}`);
+        combo++; comboTimer = MAX_COMBO_TIME;
+        branches.splice(i, 1); branches.push(newBranch());
+        while (bears.length < bearTarget()) bears.push(newBear());
+      }
+    }
+  }
+
+  // ── Ours ──
+  for (let i = bears.length - 1; i >= 0; i--) {
+    const b = bears[i];
+    b.life--;
+    if (b.life <= 0) {
+      spawnFX(b.x, b.y, 8, 'death');
+      bears.splice(i, 1);
+      if (!fullMoon.active && bears.length < bearTarget()) bears.push(newBear());
+      continue;
+    }
+    b.bob += 0.12;
+    const spd = getBearSpeed(b.spdBase);
     if (b.chases) {
       const dx = owl.x - b.x, dy = owl.y - b.y, d = Math.hypot(dx, dy) || 1;
-      b.x += (dx / d) * b.speed;
-      b.y += (dy / d) * b.speed;
+      b.x += (dx/d) * spd; b.y += (dy/d) * spd;
     } else {
-      b.x += b.vx * b.speed;
-      b.y += b.vy * b.speed;
-      if (b.x < 25 || b.x > canvas.width  - 25) b.vx *= -1;
-      if (b.y < 25 || b.y > canvas.height - 25) b.vy *= -1;
+      b.x += b.vx * spd; b.y += b.vy * spd;
+      if (b.x < 15 || b.x > canvas.width  - 15) b.vx *= -1;
+      if (b.y < 15 || b.y > canvas.height - 15) b.vy *= -1;
     }
-    if (dist(owl, b) < r + b.size * 0.35) {
-      best = Math.max(best, score);
-      state = S.OVER;
-      canvas.style.cursor = 'default';
+    if (owl.invul <= 0 && dist(owl, b) < r * 0.8 + b.size * 0.3) {
+      lives--;
+      screenShake = 25;
+      if (lives <= 0) {
+        best = Math.max(best, score);
+        state = S.OVER;
+        spawnFX(owl.x, owl.y, 50, 'death');
+        canvas.style.cursor = 'default';
+      } else {
+        owl.invul = 120;
+        spawnFX(owl.x, owl.y, 30, 'death', '-1 Vie !');
+      }
     }
   }
 
-  // Particles
+  updateParticles();
+}
+
+function updateLootbox() {
+  lootbox.timer--;
+  if (lootbox.timer > 30) {
+    if (lootbox.timer % 5 === 0) {
+      lootbox.roll = LOOT_TYPES[Math.floor(Math.random() * LOOT_TYPES.length)].e;
+      screenShake = 3;
+    }
+  } else {
+    lootbox.roll = lootbox.result.e;
+  }
+  if (lootbox.timer <= 0) {
+    const id = lootbox.result.id;
+    if (id === 'life')  lives++;
+    if (id === 'speed') buffs.speed = 420;
+    if (id === 'multi') buffs.multi = 420;
+    if (id === 'slow')  buffs.slow  = 420;
+    state = S.PLAY;
+    owl.invul = 60;
+  }
+}
+
+function updateParticles() {
   for (const p of particles) {
     p.x += p.vx; p.y += p.vy;
-    if (p.vx) p.vx *= 0.9;
-    p.vy *= (p.type === 'txt' ? 0.95 : 0.9);
-    p.life -= (p.type === 'txt' ? 0.025 : 0.04);
+    if (p.vx) p.vx *= 0.92;
+    p.vy  *= (p.type === 'txt' ? 0.95 : 0.92);
+    p.life -= (p.type === 'txt' ? 0.02 : 0.03);
   }
   particles = particles.filter(p => p.life > 0);
 }
@@ -208,132 +314,252 @@ function update() {
 // ── Draw ────────────────────────────────────────
 function draw() {
   const W = canvas.width, H = canvas.height;
+  ctx.save();
+  if (screenShake > 0) ctx.translate(rnd(-screenShake, screenShake), rnd(-screenShake, screenShake));
 
-  // Sky gradient
+  // Ciel
+  const t = moonFillProgress; // 0→1
   const sky = ctx.createLinearGradient(0, 0, 0, H);
-  sky.addColorStop(0, '#04040e');
-  sky.addColorStop(1, '#0c1030');
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, W, H);
+  sky.addColorStop(0, `rgb(${Math.round(4 + t*22)},${Math.round(4 - t*0)},${Math.round(14 - t*9)})`);
+  sky.addColorStop(1, `rgb(${Math.round(12 + t*49)},${Math.round(16 - t*8)},${Math.round(48 - t*40)})`);
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
 
-  // Stars
+  // Étoiles (teintées rouge pendant la lune)
   for (const s of stars) {
     ctx.save(); ctx.globalAlpha = s.a;
-    ctx.fillStyle = '#fff';
+    ctx.fillStyle = t > 0.5 ? `rgba(255,${Math.round(200 - t*160)},${Math.round(200 - t*160)},1)` : '#fff';
     ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
 
-  // Moon
-  const mx = W * 0.82, my = H * 0.11, mr = 44;
-  const gm = ctx.createRadialGradient(mx, my, mr * 0.5, mx, my, mr * 3);
-  gm.addColorStop(0, 'rgba(255,248,160,0.22)'); gm.addColorStop(1, 'transparent');
-  ctx.fillStyle = gm; ctx.beginPath(); ctx.arc(mx, my, mr * 3, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#fffde0'; ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#04040e'; ctx.beginPath(); ctx.arc(mx - 14, my, mr * 0.78, 0, Math.PI * 2); ctx.fill();
+  // ── Lune avec animation de remplissage ──
+  drawMoon(W, H);
 
-  if (state === S.START) { drawStart(W, H); return; }
+  if (state === S.START) { drawStart(W, H); ctx.restore(); return; }
 
-  // Particles
-  for (const p of particles) {
-    ctx.save(); ctx.globalAlpha = Math.max(0, p.life);
-    if (p.type === 'txt') {
-      ctx.fillStyle = '#ffd700';
-      ctx.font = 'bold 20px system-ui, sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('+1', p.x, p.y);
-    } else {
-      ctx.fillStyle = p.c;
-      ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill();
-    }
+  // Cadeau
+  if (specialItem) {
+    ctx.save();
+    ctx.shadowColor = '#00ffff'; ctx.shadowBlur = 20 + Math.sin(specialItem.bob) * 10;
+    drawEmoji('🎁', specialItem.x, specialItem.y + Math.sin(specialItem.bob) * 5, 34);
     ctx.restore();
   }
 
   // Branches
-  ctx.save();
-  for (const b of branches) drawEmoji(b.e, b.x, b.y + Math.sin(b.w) * 5, b.size);
-  ctx.restore();
+  if (!fullMoon.active) {
+    for (const b of branches) drawEmoji(b.e, b.x, b.y + Math.sin(b.w) * 4, b.size);
+  }
 
-  // Bears
-  ctx.save();
-  for (const b of bears) drawEmoji('🐻', b.x, b.y + Math.sin(b.bob) * 3, b.size);
-  ctx.restore();
+  // Ours (clignotent avant de mourir)
+  for (const b of bears) {
+    if (b.life < 60 && Math.floor(Date.now() / 100) % 2 === 0) continue;
+    drawEmoji('🐻', b.x, b.y + Math.sin(b.bob) * 3, b.size);
+  }
 
-  // Owl with glow
-  ctx.save();
-  ctx.shadowColor = 'rgba(255,200,80,0.65)';
-  ctx.shadowBlur  = 28;
-  drawEmoji('🦉', owl.x, owl.y + Math.sin(owl.bob) * 5, owl.size);
-  ctx.restore();
+  // Hibou (clignote si invulnérable)
+  if (state === S.PLAY || state === S.LOOT) {
+    if (owl.invul <= 0 || Math.floor(Date.now() / 80) % 2 === 0) {
+      ctx.save();
+      ctx.shadowColor = buffs.speed > 0 ? '#00ffff' : (combo > 2 ? '#ff4400' : 'rgba(255,200,80,0.65)');
+      ctx.shadowBlur  = buffs.speed > 0 || combo > 2 ? 30 : 20;
+      drawEmoji('🦉', owl.x, owl.y + Math.sin(owl.bob) * 4, owl.size);
+      ctx.restore();
+    }
+  }
+
+  // Particules
+  for (const p of particles) {
+    ctx.save(); ctx.globalAlpha = Math.max(0, p.life);
+    if (p.type === 'txt') {
+      ctx.fillStyle = p.tType === 'death' ? '#ff3333' : '#ffd700';
+      ctx.font = '900 24px system-ui, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.shadowColor = '#000'; ctx.shadowBlur = 8;
+      ctx.fillText(p.txt, p.x, p.y);
+    } else {
+      ctx.fillStyle = p.c; ctx.beginPath(); ctx.arc(p.x, p.y, rnd(2, 6), 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
 
   drawHUD();
   if (state === S.OVER) drawOver(W, H);
-}
+  if (state === S.LOOT) drawLootbox(W, H);
 
-function drawHUD() {
-  ctx.save();
-  rrect(12, 12, 214, 70, 14, 'rgba(8,8,35,0.82)', 'rgba(100,90,220,0.4)');
-  ctx.fillStyle = '#dde';
-  ctx.font = 'bold 14px system-ui, sans-serif';
-  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.fillText('🌿  Branches : ' + score, 24, 32);
-  rrect(22, 46, 180, 20, 10, 'rgba(255,255,255,0.1)');
-  if (nest > 0) {
-    const bw = Math.max(20, 180 * nest / 100);
-    const bar = ctx.createLinearGradient(22, 0, 202, 0);
-    bar.addColorStop(0, '#5cc83a'); bar.addColorStop(1, '#d4a800');
-    rrect(22, 46, bw, 20, 10, bar);
-  }
-  ctx.fillStyle = '#fff'; ctx.font = '10px system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('🫺 Nid ' + nest + '%', 112, 56);
   ctx.restore();
 }
 
+// ── Lune avec animation croissant → pleine ──────
+function drawMoon(W, H) {
+  const mx = W * 0.82, my = H * 0.11, mr = 44;
+  const t  = moonFillProgress; // 0 = croissant, 1 = pleine lune de sang
+
+  // Halo
+  const haloColor = t > 0 ? `rgba(255,${Math.round(50 - t*50)},${Math.round(50 - t*50)},${0.15 + t*0.25})` : 'rgba(255,248,160,0.15)';
+  const gm = ctx.createRadialGradient(mx, my, mr * 0.5, mx, my, mr * (3 + t));
+  gm.addColorStop(0, haloColor); gm.addColorStop(1, 'transparent');
+  ctx.fillStyle = gm; ctx.beginPath(); ctx.arc(mx, my, mr * (4 + t), 0, Math.PI * 2); ctx.fill();
+
+  // Corps de la lune
+  // Interpolation couleur : ivoire → rouge sang
+  const rC = Math.round(255);
+  const gC = Math.round(253 - t * 220);
+  const bC = Math.round(224 - t * 210);
+  ctx.fillStyle = `rgb(${rC},${gC},${bC})`;
+  ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.fill();
+
+  // Masque d'ombre : disparaît progressivement au fil de l'animation
+  // t=0 → masque plein (croissant), t=1 → masque invisible (pleine lune)
+  if (t < 1) {
+    // L'ombre recule de -14px à +mr (complètement hors du disque)
+    const shadowOffset = -14 + t * (mr + 18); // -14 → +62 ≈ complètement sorti
+    ctx.fillStyle = `rgb(${Math.round(4 + t*22)},${Math.round(4)},${Math.round(14 - t*9)})`; // couleur ciel
+    ctx.beginPath(); ctx.arc(mx - shadowOffset, my, mr * 0.78, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Pendant la pleine lune : cratères rougeoyants pour l'ambiance
+  if (t > 0.8) {
+    const alpha = (t - 0.8) / 0.2;
+    ctx.save(); ctx.globalAlpha = alpha * 0.35;
+    ctx.fillStyle = '#660000';
+    [[0.3, -0.2, 0.18], [-0.25, 0.3, 0.12], [0.1, 0.35, 0.08]].forEach(([dx, dy, rs]) => {
+      ctx.beginPath(); ctx.arc(mx + dx*mr, my + dy*mr, rs*mr, 0, Math.PI*2); ctx.fill();
+    });
+    ctx.restore();
+  }
+}
+
+// ── HUD ─────────────────────────────────────────
+function drawHUD() {
+  const hudH = fullMoon.active ? 100 : 80;
+  ctx.save();
+  rrect(12, 12, 230, hudH, 14, 'rgba(8,8,35,0.82)',
+    fullMoon.active ? 'rgba(255,50,50,0.7)' : 'rgba(100,90,220,0.4)');
+
+  ctx.fillStyle = '#dde'; ctx.font = 'bold 16px system-ui';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText('Score : ' + score, 24, 32);
+
+  // Vies
+  let livesStr = ''; for (let i = 0; i < lives; i++) livesStr += '❤️';
+  ctx.font = '12px system-ui'; ctx.fillText(livesStr, 140, 32);
+
+  // Buffs actifs
+  let yTxt = 50;
+  if (buffs.multi > 0) { ctx.fillStyle = '#00ffff'; ctx.fillText('✨ SCORE x5', 24, yTxt); yTxt += 16; }
+  if (buffs.speed > 0) { ctx.fillStyle = '#00ffff'; ctx.fillText('⚡ VITESSE',  24, yTxt); yTxt += 16; }
+  if (buffs.slow  > 0) { ctx.fillStyle = '#00ffff'; ctx.fillText('❄️ GELÉS',   24, yTxt); yTxt += 16; }
+
+  if (!fullMoon.active && combo > 1 && buffs.multi === 0) {
+    ctx.fillStyle = '#ffaa00'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText('🔥 Combo x' + combo, 24, 50);
+    const cbW = 80 * (comboTimer / MAX_COMBO_TIME);
+    rrect(120, 46, 80, 6, 3, 'rgba(255,255,255,0.1)');
+    rrect(120, 46, Math.max(0, cbW), 6, 3, '#ffaa00');
+  }
+
+  if (fullMoon.active) {
+    ctx.fillStyle = '#ff3333'; ctx.font = '900 14px system-ui';
+    ctx.fillText('🌕 SURVIE : ' + Math.ceil(fullMoon.timer / 60) + 's', 24, 50);
+  }
+
+  // Barre de nid
+  const barY = fullMoon.active ? 70 : 62;
+  rrect(22, barY, 190, 10, 5, 'rgba(255,255,255,0.1)');
+  const bw  = Math.max(10, 190 * nest / 100);
+  const bar = ctx.createLinearGradient(22, 0, 212, 0);
+  bar.addColorStop(0, '#5cc83a'); bar.addColorStop(1, '#d4a800');
+  const blinkOn = nest > 90 && Math.floor(Date.now() / 100) % 2 === 0;
+  rrect(22, barY, bw, 10, 5, blinkOn ? '#fff' : bar);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 9px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('NID ' + nest + '% ➔ +1 ❤️', 117, barY + 5);
+
+  ctx.restore();
+}
+
+// ── Lootbox screen ──────────────────────────────
+function drawLootbox(W, H) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.82)'; ctx.fillRect(0, 0, W, H);
+
+  const cx = W / 2, cy = H / 2;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(Date.now() / 300);
+  ctx.fillStyle = 'rgba(255,255,100,0.12)';
+  for (let i = 0; i < 12; i++) {
+    ctx.rotate(Math.PI / 6);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(500, -60); ctx.lineTo(500, 60); ctx.fill();
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  rrect(-120, -100, 240, 200, 20, '#111133', '#00ffff', 4);
+  ctx.shadowColor = '#fff'; ctx.shadowBlur = 20;
+  drawEmoji(lootbox.roll, 0, -20, 80);
+  ctx.shadowBlur = 0;
+  if (lootbox.timer <= 30) {
+    ctx.fillStyle = '#00ffff'; ctx.font = '900 22px system-ui';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(lootbox.result.txt, 0, 65);
+  } else {
+    ctx.fillStyle = '#fff'; ctx.font = '16px system-ui';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('CADEAU !', 0, 65);
+  }
+  ctx.restore();
+
+  ctx.restore();
+}
+
+// ── Écran Start ─────────────────────────────────
 function drawStart(W, H) {
   ctx.save();
-  ctx.fillStyle = 'rgba(4,4,18,0.72)'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(4,4,18,0.75)'; ctx.fillRect(0, 0, W, H);
   const cx = W / 2, cy = H / 2;
-  rrect(cx - 240, cy - 215, 480, 430, 28, 'rgba(12,12,48,0.96)', 'rgba(110,90,255,0.45)');
+  rrect(cx - 160, cy - 220, 320, 440, 28, 'rgba(12,12,48,0.96)', 'rgba(110,90,255,0.45)');
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  drawEmoji('🦉', cx, cy - 128, 84);
-  ctx.fillStyle = '#cbc3ff'; ctx.font = 'bold 36px system-ui, sans-serif';
-  ctx.fillText('Hibou & Nid', cx, cy - 57);
-  ctx.fillStyle = 'rgba(200,195,255,0.88)'; ctx.font = '16px system-ui, sans-serif';
-  ctx.fillText('Ramasse les branches 🌿', cx, cy - 10);
-  ctx.fillText('Évite les ours 🐻', cx, cy + 17);
-  ctx.fillStyle = 'rgba(160,150,220,0.72)'; ctx.font = '13px system-ui, sans-serif';
-  ctx.fillText('Flèches / WASD  ou  Souris', cx, cy + 50);
-  const btnG = ctx.createLinearGradient(cx - 120, cy + 90, cx + 120, cy + 148);
-  btnG.addColorStop(0, '#5544dd'); btnG.addColorStop(1, '#9944ee');
-  rrect(cx - 120, cy + 90, 240, 58, 29, btnG);
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 20px system-ui, sans-serif';
-  ctx.fillText('▶  Commencer', cx, cy + 119);
+  drawEmoji('🦉', cx, cy - 140, 70);
+  ctx.fillStyle = '#cbc3ff'; ctx.font = '900 28px system-ui';
+  ctx.fillText('Hibou & Nid', cx, cy - 70);
+  ctx.fillStyle = 'rgba(200,195,255,0.88)'; ctx.font = '14px system-ui';
+  ctx.fillText('Remplis le nid pour +1 ❤️', cx, cy - 15);
+  ctx.fillText('Fuis la Lune de Sang 🌕',   cx, cy + 15);
+  ctx.fillText('Attrape les cadeaux 🎁',     cx, cy + 45);
+  const g = ctx.createLinearGradient(cx - 100, cy + 90, cx + 100, cy + 140);
+  g.addColorStop(0, '#5544dd'); g.addColorStop(1, '#9944ee');
+  rrect(cx - 100, cy + 90, 200, 50, 25, g);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 18px system-ui';
+  ctx.fillText('▶ Jouer', cx, cy + 115);
   ctx.restore();
 }
 
+// ── Écran Game Over ─────────────────────────────
 function drawOver(W, H) {
   ctx.save();
-  ctx.fillStyle = 'rgba(4,4,18,0.82)'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(255,0,0,0.28)'; ctx.fillRect(0, 0, W, H);
   const cx = W / 2, cy = H / 2;
-  rrect(cx - 220, cy - 195, 440, 390, 28, 'rgba(22,8,30,0.97)', 'rgba(255,70,70,0.4)');
+  rrect(cx - 150, cy - 180, 300, 360, 28, 'rgba(22,8,30,0.97)', 'rgba(255,70,70,0.8)');
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  drawEmoji('😢', cx, cy - 112, 72);
-  ctx.fillStyle = '#ffaaaa'; ctx.font = 'bold 30px system-ui, sans-serif';
-  ctx.fillText('Game Over !', cx, cy - 42);
-  ctx.fillStyle = '#e8e5ff'; ctx.font = '17px system-ui, sans-serif';
-  ctx.fillText('Branches récoltées : ' + score, cx, cy + 2);
+  ctx.fillStyle = '#ffaaaa'; ctx.font = '900 32px system-ui';
+  ctx.fillText('MANGÉ !', cx, cy - 100);
+  ctx.fillStyle = '#e8e5ff'; ctx.font = '18px system-ui';
+  ctx.fillText('Score final : ' + score, cx, cy - 30);
   if (best > 0) {
-    ctx.fillStyle = '#c0b0ff'; ctx.font = '13px system-ui, sans-serif';
-    ctx.fillText('Meilleur : ' + best, cx, cy + 27);
+    ctx.fillStyle = (score >= best && score > 0) ? '#ffaa00' : '#c0b0ff';
+    ctx.font = 'bold 16px system-ui';
+    ctx.fillText('Record : ' + best, cx, cy);
   }
-  const medal = score >= 20 ? '🥇' : score >= 10 ? '🥈' : score >= 5 ? '🥉' : '🪺';
-  drawEmoji(medal, cx, cy + 65, 32);
-  const btnG = ctx.createLinearGradient(cx - 120, cy + 98, cx + 120, cy + 156);
-  btnG.addColorStop(0, '#cc2222'); btnG.addColorStop(1, '#cc22aa');
-  rrect(cx - 120, cy + 98, 240, 58, 29, btnG);
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 20px system-ui, sans-serif';
-  ctx.fillText('↺  Rejouer', cx, cy + 127);
+  const medal = score >= 100 ? '👑' : score >= 50 ? '🥇' : score >= 20 ? '🥈' : '🪺';
+  drawEmoji(medal, cx, cy + 50, 45);
+  const pulse = Math.sin(Date.now() / 150) * 5;
+  const g = ctx.createLinearGradient(cx - 100, cy + 110, cx + 100, cy + 160);
+  g.addColorStop(0, '#cc2222'); g.addColorStop(1, '#cc22aa');
+  rrect(cx - 100 - pulse/2, cy + 110 - pulse/2, 200 + pulse, 50 + pulse, 25, g);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 18px system-ui';
+  ctx.fillText('↺ Rejouer', cx, cy + 135);
   ctx.restore();
 }
 
