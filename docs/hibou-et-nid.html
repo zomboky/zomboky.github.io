@@ -19,35 +19,39 @@ const ctx    = canvas.getContext('2d');
 const S = { START: 0, PLAY: 1, OVER: 2, LOOT: 3 };
 let state = S.START;
 
+// ── Détection mobile ──────────────────────────────
+const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+// ── Sensibilité souris (desktop uniquement) ───────
+// Valeur entre 0.05 (très lent) et 1.0 (direct)
+// Le lerp factor de base est 0.15 (normal) et 0.25 (speed buff)
+// mouseSensitivity scale ce facteur : 0.5 = défaut
+let mouseSensitivity = 0.5;
+let settingsOpen = false;
+
 // ── Globales de gameplay ────────────────────────
 let screenShake  = 0;
 let combo        = 1;
 let comboTimer   = 0;
-const MAX_COMBO_TIME = 120; // 2 secondes à 60fps
+const MAX_COMBO_TIME = 120;
 
 let lives       = 1;
 let score       = 0;
-let nest        = 0; // Pourcentage de remplissage du nid (0-100)
-let best        = 0; // Meilleur score toutes parties confondues
+let nest        = 0;
+let best        = 0;
 
 // ── Lune ────────────────────────────────────────
-// La lune peut être dans 3 états :
-//   'none'  → croissant, phase normale
-//   'full'  → pleine lune blanche, horde d'ours modérée pendant 10s
-//   'blood' → lune de sang (rare), horde féroce pendant 15s
-// moonFillProgress : 0 = croissant, 1 = pleine lune (contrôle l'animation de remplissage)
 let moon = {
-  state:        'none',  // 'none' | 'full' | 'blood'
-  timer:        0,       // frames restantes de la phase active
-  next:         900,     // frames avant la prochaine pleine lune (~15s au démarrage)
-  fillProgress: 0        // 0→1 : anime le croissant → pleine lune
+  state:        'none',
+  timer:        0,
+  next:         900,
+  fillProgress: 0
 };
 
-// ── Buffs (cadeaux) ─────────────────────────────
+// ── Buffs ────────────────────────────────────────
 let buffs = { speed: 0, multi: 0, slow: 0 };
-let specialItem = null; // Le cadeau qui flotte sur la map
+let specialItem = null;
 
-// Taux de drop : speed 35%, slow 25%, multi 20%, life 15%, invincible 5%
 const LOOT_TYPES = [
   { id: 'speed',      e: '⚡', txt: 'Vitesse Éclair !',   weight: 0.35 },
   { id: 'slow',       e: '❄️', txt: 'Ours Gelés !',       weight: 0.25 },
@@ -56,7 +60,6 @@ const LOOT_TYPES = [
   { id: 'invincible', e: '🦉', txt: 'HIBOU INVINCIBLE !', weight: 0.05 }
 ];
 
-// Tire un loot selon les poids — retourne l'objet LOOT_TYPES correspondant
 function rollLoot() {
   let r = Math.random(), cumul = 0;
   for (const loot of LOOT_TYPES) {
@@ -66,12 +69,6 @@ function rollLoot() {
   return LOOT_TYPES[0];
 }
 
-// Structure de la lootbox CS:GO-style :
-//   items  → tableau des emojis affichés dans la barre
-//   scroll → décalage horizontal courant du défilement en px
-//   speed  → vitesse de défilement (décélère progressivement)
-//   phase  → 'scroll' pendant le défilement, 'land' quand la case atterrit au centre
-//   result → le loot tiré, positionné dans items à la position cible
 let lootbox = { items: [], scroll: 0, speed: 0, phase: 'scroll', result: null };
 
 // ── Entités ─────────────────────────────────────
@@ -114,21 +111,88 @@ resize(); initStars();
 const keys  = {};
 const mouse = { x: -999, y: -999, on: false };
 
+// ── Slider settings (drag) ───────────────────────
+let sliderDrag = false;
+
 document.addEventListener('keydown', e => {
   keys[e.key] = true; mouse.on = false;
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+
+  // Touche O : ouvre/ferme le menu sensibilité (desktop uniquement)
+  if (e.key === 'o' || e.key === 'O') {
+    if (!isMobile) settingsOpen = !settingsOpen;
+    return;
+  }
+
+  // Ferme le menu si on appuie sur Escape
+  if (e.key === 'Escape') { settingsOpen = false; return; }
+
   if (state === S.START || state === S.OVER) beginGame();
 });
 document.addEventListener('keyup', e => { keys[e.key] = false; });
-document.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true; });
+document.addEventListener('mousemove', e => {
+  mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true;
+  if (sliderDrag) handleSliderDrag(e.clientX);
+});
+document.addEventListener('mouseup', () => { sliderDrag = false; });
+
 canvas.addEventListener('pointerdown', e => {
   mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true;
+
+  // Vérifie si on clique sur le slider du menu settings
+  if (settingsOpen && !isMobile) {
+    const hit = getSliderHitArea();
+    if (e.clientX >= hit.x && e.clientX <= hit.x + hit.w &&
+        e.clientY >= hit.y - 10 && e.clientY <= hit.y + hit.h + 10) {
+      sliderDrag = true;
+      handleSliderDrag(e.clientX);
+      return;
+    }
+    // Clic hors du panel ferme le menu
+    const panel = getSettingsPanelRect();
+    if (e.clientX < panel.x || e.clientX > panel.x + panel.w ||
+        e.clientY < panel.y || e.clientY > panel.y + panel.h) {
+      settingsOpen = false;
+      return;
+    }
+    return;
+  }
+
   if (state === S.START || state === S.OVER) beginGame();
 });
-canvas.addEventListener('pointermove', e => { if (mouse.on) { mouse.x = e.clientX; mouse.y = e.clientY; } });
+canvas.addEventListener('pointermove', e => {
+  if (mouse.on) { mouse.x = e.clientX; mouse.y = e.clientY; }
+  if (sliderDrag) handleSliderDrag(e.clientX);
+});
+canvas.addEventListener('pointerup', () => { sliderDrag = false; });
+
+// ── Calcul du lerp factor selon la sensibilité ───
+// sens 0.5 → lerp 0.15 (normal) / 0.25 (speed)
+// La sensibilité scale linéairement : sens * 0.30 → max lerp 0.30 à sens=1
+function getMouseLerp(speedBuff) {
+  const base = speedBuff ? 0.50 : 0.30;
+  return base * mouseSensitivity;
+}
+
+// ── Positions du panel settings ──────────────────
+function getSettingsPanelRect() {
+  const W = canvas.width, H = canvas.height;
+  const pw = 280, ph = 110;
+  return { x: W / 2 - pw / 2, y: H / 2 - ph / 2, w: pw, h: ph };
+}
+function getSliderHitArea() {
+  const p = getSettingsPanelRect();
+  return { x: p.x + 20, y: p.y + 62, w: p.w - 40, h: 16 };
+}
+function handleSliderDrag(clientX) {
+  const hit = getSliderHitArea();
+  const t   = Math.max(0, Math.min(1, (clientX - hit.x) / hit.w));
+  mouseSensitivity = Math.round(t * 19) / 19; // snap à 5% près (20 positions)
+  mouseSensitivity = Math.max(0.05, Math.min(1.0, 0.05 + t * 0.95));
+}
 
 // ══════════════════════════════════════════════════
-//  LOGIQUE OURS — IA avec délai et incertitude
+//  LOGIQUE OURS
 // ══════════════════════════════════════════════════
 function newBear() {
   const side = Math.floor(Math.random() * 4);
@@ -171,7 +235,7 @@ function bearTarget() {
 }
 
 // ══════════════════════════════════════════════════
-//  LOGIQUE BRANCHES & CADEAUX
+//  BRANCHES & CADEAUX
 // ══════════════════════════════════════════════════
 function newBranch() {
   const m = 40;
@@ -208,6 +272,7 @@ function spawnFX(x, y, amount, type = 'collect', txt = '') {
 //  INIT / RESET
 // ══════════════════════════════════════════════════
 function beginGame() {
+  settingsOpen = false;
   state = S.PLAY; canvas.style.cursor = 'none';
   owl.x = canvas.width / 2; owl.y = canvas.height / 2; owl.invul = 60;
   score = 0; nest = 0; combo = 1; comboTimer = 0; screenShake = 0; lives = 1;
@@ -226,7 +291,6 @@ function beginGame() {
 function update() {
   if (screenShake > 0) { screenShake *= 0.9; if (screenShake < 0.5) screenShake = 0; }
 
-  // Pendant la lootbox, le jeu est mis en pause mais les particules continuent
   if (state === S.LOOT) { updateLootbox(); updateParticles(); return; }
   if (state !== S.PLAY) { updateParticles(); return; }
 
@@ -243,7 +307,7 @@ function update() {
 
   // ── Mouvements du hibou ──
   if (mouse.on) {
-    const lerpF = buffs.speed > 0 ? 0.25 : 0.15;
+    const lerpF = getMouseLerp(buffs.speed > 0);
     owl.x += (mouse.x - owl.x) * lerpF;
     owl.y += (mouse.y - owl.y) * lerpF;
   } else {
@@ -256,7 +320,6 @@ function update() {
   owl.x = Math.max(r, Math.min(canvas.width  - r, owl.x));
   owl.y = Math.max(r, Math.min(canvas.height - r, owl.y));
 
-  // Scintillement des étoiles
   for (const s of stars) { s.a += s.da; if (s.a > 1 || s.a < 0.05) s.da *= -1; }
 
   // ── Cadeau spécial ──
@@ -282,10 +345,6 @@ function update() {
         const multi = buffs.multi > 0 ? 5 : 1;
         const gain  = combo * multi;
         score += gain;
-
-        // FIX DIFFICULTÉ : progression du nid réduite — gain fixe de 1%, sans multiplicateur combo.
-        // Avant : nest += 2 * combo → avec combo x5 ça donnait +10% par branche = vie toutes les 10 branches.
-        // Maintenant : 1% fixe = il faut 100 branches pour une vie, ce qui est bien plus exigeant.
         nest += 1;
 
         if (nest >= 100) {
@@ -341,7 +400,7 @@ function updateMoon() {
 }
 
 // ══════════════════════════════════════════════════
-//  UPDATE OURS — IA avec délai et dérive
+//  UPDATE OURS
 // ══════════════════════════════════════════════════
 function updateBears(owlRadius) {
   for (let i = bears.length - 1; i >= 0; i--) {
@@ -391,7 +450,7 @@ function updateBears(owlRadius) {
 }
 
 // ══════════════════════════════════════════════════
-//  LOOTBOX — INITIALISATION DU DÉFILEMENT
+//  LOOTBOX
 // ══════════════════════════════════════════════════
 const ITEM_COUNT  = 28;
 const TARGET_IDX  = ITEM_COUNT - 4;
@@ -404,49 +463,28 @@ function initLootboxScroll(result) {
   for (let i = 0; i < ITEM_COUNT; i++) {
     items.push(i === TARGET_IDX ? result : rollLoot());
   }
-
-  // scroll = décalage du bord gauche de la case 0 par rapport au bord gauche de la barre.
-  // La case i est dessinée à : barLeft + scroll + i * CASE_STRIDE
-  // On veut que la case TARGET_IDX soit centrée dans la barre (largeur = 5 cases).
-  // Centre de la barre = barLeft + (5 * CASE_STRIDE - CASE_GAP) / 2
-  // Centre de la case i = barLeft + scroll + i * CASE_STRIDE + CASE_W / 2
-  // → finalScroll tel que : scroll + TARGET_IDX * CASE_STRIDE + CASE_W/2 = barWidth/2
-  const barWidth   = CASE_STRIDE * 5 - CASE_GAP;
+  const barWidth    = CASE_STRIDE * 5 - CASE_GAP;
   const finalScroll = barWidth / 2 - CASE_W / 2 - TARGET_IDX * CASE_STRIDE;
-
-  // On démarre très à droite : la case 0 commence hors champ à droite
   const startScroll = barWidth + CASE_STRIDE * 4;
 
   lootbox = {
     items,
     result,
-    scroll:      startScroll,   // position courante (diminue vers finalScroll)
-    finalScroll,                // position cible
+    scroll:      startScroll,
+    finalScroll,
     phase:       'scroll',
     landTimer:   0,
-    pauseTimer:  0              // délai de 0.5s après applyLoot avant de rendre les contrôles
+    pauseTimer:  0
   };
 }
 
-// ══════════════════════════════════════════════════
-//  UPDATE LOOTBOX
-//  Easing : on interpole scroll → finalScroll avec un facteur décroissant.
-//  La roulette part vite puis freine naturellement sans bug de signe.
-// ══════════════════════════════════════════════════
 function updateLootbox() {
   if (lootbox.phase === 'scroll') {
-    const remaining = lootbox.finalScroll - lootbox.scroll; // toujours négatif (on va vers la gauche)
-
-    // On commence avec un easing rapide (facteur 0.04) puis on ralentit.
-    // Pour garder une vitesse de départ élevée, on clamp la vitesse minimale
-    // tant qu'on est loin de la cible.
-    const speed = remaining * 0.06; // proportionnel à la distance restante
-
-    // Vitesse minimale tant qu'on est loin (évite un démarrage trop mou)
+    const remaining = lootbox.finalScroll - lootbox.scroll;
+    const speed = remaining * 0.06;
     const minSpeed = Math.abs(remaining) > CASE_STRIDE * 2 ? -8 : 0;
     lootbox.scroll += Math.min(speed, minSpeed);
 
-    // Snap final : on verrouille quand on est à moins d'1px
     if (Math.abs(remaining) < 1) {
       lootbox.scroll = lootbox.finalScroll;
       lootbox.phase  = 'land';
@@ -454,20 +492,13 @@ function updateLootbox() {
     }
 
   } else if (lootbox.phase === 'land') {
-    // Affiche le résultat 2s, puis applique le buff et attend 0.5s avant de reprendre
     lootbox.landTimer++;
-
-    if (lootbox.landTimer === 120) {
-      // Application du buff dès que le timer atteint 120 frames (2s)
-      applyLoot(lootbox.result.id);
-    }
-
+    if (lootbox.landTimer === 120) applyLoot(lootbox.result.id);
     if (lootbox.landTimer >= 120) {
-      // 0.5s de pause supplémentaire (30 frames) pour laisser le joueur reprendre
       lootbox.pauseTimer++;
       if (lootbox.pauseTimer >= 30) {
         state           = S.PLAY;
-        owl.invul       = 90; // invulnérabilité étendue pour la reprise
+        owl.invul       = 90;
         canvas.style.cursor = 'none';
       }
     }
@@ -517,7 +548,6 @@ function draw() {
 
   drawMoon(W, H);
 
-  // Écran de démarrage simplifié — titre + bouton uniquement
   if (state === S.START) { drawStart(W, H); ctx.restore(); return; }
 
   if (specialItem) {
@@ -570,6 +600,9 @@ function draw() {
   drawHUD();
   if (state === S.OVER) drawOver(W, H);
   if (state === S.LOOT) drawLootbox(W, H);
+
+  // Menu settings (par-dessus tout, desktop uniquement)
+  if (settingsOpen && !isMobile) drawSettings(W, H);
 
   ctx.restore();
 }
@@ -691,11 +724,77 @@ function drawHUD() {
   ctx.textAlign    = 'center';
   ctx.fillText('NID ' + nest + '% ➔ +1 ❤️', 117, barY + 5);
 
+  // Hint touche O (desktop uniquement, hors lootbox)
+  if (!isMobile && state === S.PLAY) {
+    ctx.fillStyle = 'rgba(150,140,220,0.55)';
+    ctx.font = '10px system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText('[O] Sensibilité', canvas.width - 14, canvas.height - 14);
+  }
+
   ctx.restore();
 }
 
 // ══════════════════════════════════════════════════
-//  DRAW — LOOTBOX CS:GO STYLE
+//  DRAW — MENU SENSIBILITÉ (desktop uniquement)
+// ══════════════════════════════════════════════════
+function drawSettings(W, H) {
+  ctx.save();
+
+  // Fond semi-transparent
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(0, 0, W, H);
+
+  const p   = getSettingsPanelRect();
+  const hit = getSliderHitArea();
+
+  // Panel
+  rrect(p.x, p.y, p.w, p.h, 16, 'rgba(8,8,40,0.97)', 'rgba(110,90,255,0.7)', 2);
+
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#cbc3ff'; ctx.font = 'bold 15px system-ui';
+  ctx.fillText('🖱️  Sensibilité souris', p.x + p.w / 2, p.y + 22);
+
+  // Pourcentage
+  const pct = Math.round(mouseSensitivity * 100);
+  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 13px system-ui';
+  ctx.fillText(pct + '%', p.x + p.w / 2, p.y + 44);
+
+  // Track slider
+  const sx = hit.x, sy = hit.y, sw = hit.w, sh = hit.h;
+  rrect(sx, sy, sw, sh, sh / 2, 'rgba(255,255,255,0.1)', 'rgba(110,90,255,0.4)', 1);
+
+  // Fill slider
+  const fillW = sw * mouseSensitivity;
+  const grad  = ctx.createLinearGradient(sx, 0, sx + sw, 0);
+  grad.addColorStop(0, '#5544dd');
+  grad.addColorStop(1, '#aa44ff');
+  rrect(sx, sy, Math.max(sh, fillW), sh, sh / 2, grad);
+
+  // Thumb
+  const thumbX = sx + fillW;
+  ctx.beginPath();
+  ctx.arc(thumbX, sy + sh / 2, 10, 0, Math.PI * 2);
+  ctx.fillStyle = sliderDrag ? '#ffffff' : '#cbc3ff';
+  ctx.fill();
+  ctx.strokeStyle = '#5544dd'; ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Labels min/max
+  ctx.fillStyle = 'rgba(180,170,240,0.6)'; ctx.font = '10px system-ui';
+  ctx.textAlign = 'left';  ctx.fillText('Lent',   sx,      sy + sh + 12);
+  ctx.textAlign = 'right'; ctx.fillText('Rapide', sx + sw, sy + sh + 12);
+
+  // Hint fermeture
+  ctx.fillStyle = 'rgba(150,140,220,0.5)'; ctx.font = '10px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('[O] ou clic extérieur pour fermer', p.x + p.w / 2, p.y + p.h - 10);
+
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════════
+//  DRAW — LOOTBOX
 // ══════════════════════════════════════════════════
 function drawLootbox(W, H) {
   ctx.save();
@@ -770,25 +869,20 @@ function drawLootbox(W, H) {
 
 // ══════════════════════════════════════════════════
 //  DRAW — ÉCRAN TITRE
-//  FIX UI : on affiche juste le titre + bouton, sans description
 // ══════════════════════════════════════════════════
 function drawStart(W, H) {
   ctx.save();
   ctx.fillStyle = 'rgba(4,4,18,0.75)'; ctx.fillRect(0, 0, W, H);
   const cx = W / 2, cy = H / 2;
 
-  // Panneau centré, plus compact sans le texte descriptif
   rrect(cx - 140, cy - 160, 280, 320, 28, 'rgba(12,12,48,0.96)', 'rgba(110,90,255,0.45)');
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
-  // Hibou animé (bob sur la lune en fond)
   drawEmoji('🦉', cx, cy - 95, 72);
 
-  // Titre principal
   ctx.fillStyle = '#cbc3ff'; ctx.font = '900 32px system-ui';
   ctx.fillText('HIBOU 2D', cx, cy - 20);
 
-  // Bouton JOUER
   const g = ctx.createLinearGradient(cx - 100, cy + 55, cx + 100, cy + 105);
   g.addColorStop(0, '#5544dd'); g.addColorStop(1, '#9944ee');
   rrect(cx - 100, cy + 55, 200, 50, 25, g);
@@ -819,9 +913,9 @@ function drawOver(W, H) {
   const medal = score >= 100 ? '👑' : score >= 50 ? '🥇' : score >= 20 ? '🥈' : '🪺';
   drawEmoji(medal, cx, cy + 50, 45);
   const pulse = Math.sin(Date.now() / 150) * 5;
-  const g = ctx.createLinearGradient(cx - 100, cy + 110, cx + 100, cy + 160);
-  g.addColorStop(0, '#cc2222'); g.addColorStop(1, '#cc22aa');
-  rrect(cx - 100 - pulse / 2, cy + 110 - pulse / 2, 200 + pulse, 50 + pulse, 25, g);
+  const gr = ctx.createLinearGradient(cx - 100, cy + 110, cx + 100, cy + 160);
+  gr.addColorStop(0, '#cc2222'); gr.addColorStop(1, '#cc22aa');
+  rrect(cx - 100 - pulse / 2, cy + 110 - pulse / 2, 200 + pulse, 50 + pulse, 25, gr);
   ctx.fillStyle = '#fff'; ctx.font = 'bold 18px system-ui';
   ctx.fillText('↺ Rejouer', cx, cy + 135);
   ctx.restore();
