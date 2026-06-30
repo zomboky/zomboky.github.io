@@ -118,26 +118,12 @@ document.addEventListener('keydown', e => {
   keys[e.key] = true; mouse.on = false;
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
   if (state === S.START || state === S.OVER) beginGame();
-
-  // FIX FREEZE LOOTBOX : toute touche skip l'attente quand la case a atterri
-  if (state === S.LOOT && lootbox.phase === 'land' && lootbox.landTimer >= 30) {
-    applyLoot(lootbox.result.id);
-    state     = S.PLAY;
-    owl.invul = 60;
-  }
 });
 document.addEventListener('keyup', e => { keys[e.key] = false; });
 document.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true; });
 canvas.addEventListener('pointerdown', e => {
   mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true;
   if (state === S.START || state === S.OVER) beginGame();
-
-  // FIX FREEZE LOOTBOX : clic/tap skip l'attente quand la case a atterri
-  if (state === S.LOOT && lootbox.phase === 'land' && lootbox.landTimer >= 30) {
-    applyLoot(lootbox.result.id);
-    state     = S.PLAY;
-    owl.invul = 60;
-  }
 });
 canvas.addEventListener('pointermove', e => { if (mouse.on) { mouse.x = e.clientX; mouse.y = e.clientY; } });
 
@@ -418,45 +404,72 @@ function initLootboxScroll(result) {
   for (let i = 0; i < ITEM_COUNT; i++) {
     items.push(i === TARGET_IDX ? result : rollLoot());
   }
-  const finalScroll = -(TARGET_IDX * CASE_STRIDE);
-  const startScroll = finalScroll + CASE_STRIDE * (ITEM_COUNT * 0.7);
+
+  // scroll = décalage du bord gauche de la case 0 par rapport au bord gauche de la barre.
+  // La case i est dessinée à : barLeft + scroll + i * CASE_STRIDE
+  // On veut que la case TARGET_IDX soit centrée dans la barre (largeur = 5 cases).
+  // Centre de la barre = barLeft + (5 * CASE_STRIDE - CASE_GAP) / 2
+  // Centre de la case i = barLeft + scroll + i * CASE_STRIDE + CASE_W / 2
+  // → finalScroll tel que : scroll + TARGET_IDX * CASE_STRIDE + CASE_W/2 = barWidth/2
+  const barWidth   = CASE_STRIDE * 5 - CASE_GAP;
+  const finalScroll = barWidth / 2 - CASE_W / 2 - TARGET_IDX * CASE_STRIDE;
+
+  // On démarre très à droite : la case 0 commence hors champ à droite
+  const startScroll = barWidth + CASE_STRIDE * 4;
 
   lootbox = {
     items,
     result,
-    scroll:      startScroll,
-    finalScroll,
-    speed:       -28,
+    scroll:      startScroll,   // position courante (diminue vers finalScroll)
+    finalScroll,                // position cible
     phase:       'scroll',
-    landTimer:   0
+    landTimer:   0,
+    pauseTimer:  0              // délai de 0.5s après applyLoot avant de rendre les contrôles
   };
 }
 
 // ══════════════════════════════════════════════════
 //  UPDATE LOOTBOX
+//  Easing : on interpole scroll → finalScroll avec un facteur décroissant.
+//  La roulette part vite puis freine naturellement sans bug de signe.
 // ══════════════════════════════════════════════════
 function updateLootbox() {
   if (lootbox.phase === 'scroll') {
-    lootbox.scroll += lootbox.speed;
-    const distLeft = lootbox.scroll - lootbox.finalScroll;
-    if (distLeft > 0) {
-      lootbox.speed = Math.max(lootbox.speed * 0.97, -0.5);
-    }
-    // Snap final quand on est très proche de la cible
-    if (Math.abs(distLeft) < 1.5 && Math.abs(lootbox.speed) < 1) {
+    const remaining = lootbox.finalScroll - lootbox.scroll; // toujours négatif (on va vers la gauche)
+
+    // On commence avec un easing rapide (facteur 0.04) puis on ralentit.
+    // Pour garder une vitesse de départ élevée, on clamp la vitesse minimale
+    // tant qu'on est loin de la cible.
+    const speed = remaining * 0.06; // proportionnel à la distance restante
+
+    // Vitesse minimale tant qu'on est loin (évite un démarrage trop mou)
+    const minSpeed = Math.abs(remaining) > CASE_STRIDE * 2 ? -8 : 0;
+    lootbox.scroll += Math.min(speed, minSpeed);
+
+    // Snap final : on verrouille quand on est à moins d'1px
+    if (Math.abs(remaining) < 1) {
       lootbox.scroll = lootbox.finalScroll;
-      lootbox.speed  = 0;
       lootbox.phase  = 'land';
       screenShake    = 8;
     }
-  } else {
-    // Phase 'land' : compteur avant application automatique (120 frames = 2s)
-    // Le joueur peut aussi skip en appuyant (géré dans les listeners input)
+
+  } else if (lootbox.phase === 'land') {
+    // Affiche le résultat 2s, puis applique le buff et attend 0.5s avant de reprendre
     lootbox.landTimer++;
-    if (lootbox.landTimer >= 120) {
+
+    if (lootbox.landTimer === 120) {
+      // Application du buff dès que le timer atteint 120 frames (2s)
       applyLoot(lootbox.result.id);
-      state     = S.PLAY;
-      owl.invul = 60;
+    }
+
+    if (lootbox.landTimer >= 120) {
+      // 0.5s de pause supplémentaire (30 frames) pour laisser le joueur reprendre
+      lootbox.pauseTimer++;
+      if (lootbox.pauseTimer >= 30) {
+        state           = S.PLAY;
+        owl.invul       = 90; // invulnérabilité étendue pour la reprise
+        canvas.style.cursor = 'none';
+      }
     }
   }
 }
