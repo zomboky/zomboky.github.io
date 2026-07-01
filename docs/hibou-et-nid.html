@@ -48,6 +48,15 @@ let moon = {
   fillProgress: 0
 };
 
+// ── Tempête ───────────────────────────────────────
+let storm = {
+  active: false,
+  timer:  0,
+  next:   2100
+};
+let rocks     = [];
+let windLines = [];
+
 // ── Buffs ────────────────────────────────────────
 let buffs = { speed: 0, multi: 0, slow: 0 };
 let specialItem = null;
@@ -72,16 +81,22 @@ function rollLoot() {
 let lootbox = { items: [], scroll: 0, speed: 0, phase: 'scroll', result: null };
 
 // ── Entités ─────────────────────────────────────
-const owl = { x: 0, y: 0, size: 34, speed: 6, bob: 0, invul: 0 };
+const owl = { x: 0, y: 0, size: 34, speed: 6, bob: 0, invul: 0, px: 0, py: 0, vx: 0, angle: 0, flap: 0, rockInvul: 0 };
 let branches  = [];
 let bears     = [];
 let particles = [];
 
 const BRANCH_E = ['🪵', '🌿', '🍃', '🍂'];
+const ROTTEN_LIFE   = 600;  // 10s à 60fps
+const ROTTEN_CHANCE = 0.08;
 
 // ── Helpers ─────────────────────────────────────
 const rnd  = (a, b) => a + Math.random() * (b - a);
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+function lerpAngle(a, b, t) {
+  let diff = ((b - a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+  return a + diff * t;
+}
 
 function rrect(x, y, w, h, r, fill, stroke, lw) {
   ctx.beginPath(); ctx.roundRect(x, y, w, h, r);
@@ -239,13 +254,16 @@ function bearTarget() {
 // ══════════════════════════════════════════════════
 function newBranch() {
   const m = 40;
+  const rotten = Math.random() < ROTTEN_CHANCE;
   return {
     x:  rnd(m, canvas.width  - m),
     y:  rnd(m, canvas.height - m),
     e:  BRANCH_E[Math.floor(Math.random() * 4)],
     size: 24,
     w:  rnd(0, Math.PI * 2),
-    ws: rnd(0.03, 0.07)
+    ws: rotten ? rnd(0.06, 0.11) : rnd(0.03, 0.07),
+    rotten,
+    age: 0
   };
 }
 
@@ -275,8 +293,11 @@ function beginGame() {
   settingsOpen = false;
   state = S.PLAY; canvas.style.cursor = 'none';
   owl.x = canvas.width / 2; owl.y = canvas.height / 2; owl.invul = 60;
+  owl.px = owl.x; owl.py = owl.y; owl.vx = 0; owl.angle = 0; owl.flap = 0; owl.rockInvul = 0;
   score = 0; nest = 0; combo = 1; comboTimer = 0; screenShake = 0; lives = 1;
-  moon = { state: 'none', timer: 0, next: 900, fillProgress: 0 };
+  moon  = { state: 'none', timer: 0, next: 900, fillProgress: 0 };
+  storm = { active: false, timer: 0, next: rnd(1800, 3600) };
+  rocks = []; windLines = [];
   buffs = { speed: 0, multi: 0, slow: 0, invincible: 0 };
   lootbox = { items: [], scroll: 0, speed: 0, phase: 'scroll', result: null };
   specialItem = null;
@@ -297,6 +318,7 @@ function update() {
   // ── Timers globaux ──
   owl.bob += 0.1;
   if (owl.invul        > 0) owl.invul--;
+  if (owl.rockInvul    > 0) owl.rockInvul--;
   if (buffs.speed      > 0) buffs.speed--;
   if (buffs.multi      > 0) buffs.multi--;
   if (buffs.slow       > 0) buffs.slow--;
@@ -304,8 +326,10 @@ function update() {
   owl.speed = buffs.speed > 0 ? 11 : 6;
 
   updateMoon();
+  updateStorm();
 
   // ── Mouvements du hibou ──
+  owl.px = owl.x; owl.py = owl.y;
   if (mouse.on) {
     const lerpF = getMouseLerp(buffs.speed > 0);
     owl.x += (mouse.x - owl.x) * lerpF;
@@ -320,10 +344,20 @@ function update() {
   owl.x = Math.max(r, Math.min(canvas.width  - r, owl.x));
   owl.y = Math.max(r, Math.min(canvas.height - r, owl.y));
 
+  // ── Cap & battement d'ailes ──
+  const mvx = owl.x - owl.px, mvy = owl.y - owl.py;
+  const mvMag = Math.hypot(mvx, mvy);
+  owl.vx = mvx;
+  if (mvMag > 0.2) owl.angle = lerpAngle(owl.angle, Math.atan2(mvy, mvx), 0.2);
+  owl.flap += 0.22 + (buffs.speed > 0 ? 0.12 : 0) + Math.min(mvMag * 0.015, 0.15);
+  if (mvMag > 1.5 && Math.random() < 0.5) {
+    particles.push({ type: 'dot', x: owl.x, y: owl.y, vx: -mvx * 0.1, vy: -mvy * 0.1, life: 0.3, c: 'rgba(255,255,255,0.7)' });
+  }
+
   for (const s of stars) { s.a += s.da; if (s.a > 1 || s.a < 0.05) s.da *= -1; }
 
   // ── Cadeau spécial ──
-  if (!specialItem && moon.state === 'none' && Math.random() < 0.0005) {
+  if (!specialItem && moon.state === 'none' && !storm.active && Math.random() < 0.0005) {
     specialItem = { x: rnd(60, canvas.width - 60), y: rnd(60, canvas.height - 60), bob: 0 };
   }
   if (specialItem) {
@@ -340,8 +374,23 @@ function update() {
   // ── Collecte des branches ──
   if (moon.state === 'none') {
     for (let i = branches.length - 1; i >= 0; i--) {
-      branches[i].w += branches[i].ws;
-      if (dist(owl, branches[i]) < r + branches[i].size * 0.4) {
+      const br = branches[i];
+      br.w += br.ws;
+
+      if (br.rotten) {
+        br.age++;
+        if (br.age >= ROTTEN_LIFE) { branches.splice(i, 1); branches.push(newBranch()); continue; }
+      }
+
+      if (dist(owl, br) < r + br.size * 0.4) {
+        if (br.rotten) {
+          combo = Math.max(1, combo - 1);
+          screenShake = Math.max(screenShake, 6);
+          spawnFX(br.x, br.y, 8, 'death', '-1 Combo 🤢');
+          branches.splice(i, 1); branches.push(newBranch());
+          continue;
+        }
+
         const multi = buffs.multi > 0 ? 5 : 1;
         const gain  = combo * multi;
         score += gain;
@@ -355,7 +404,7 @@ function update() {
         }
 
         screenShake = Math.min(4 + combo * 0.5, 15);
-        spawnFX(branches[i].x, branches[i].y, 12, 'collect', `+${gain}`);
+        spawnFX(br.x, br.y, 12, 'collect', `+${gain}`);
         combo++; comboTimer = MAX_COMBO_TIME;
         branches.splice(i, 1); branches.push(newBranch());
         while (bears.length < bearTarget()) bears.push(newBear());
@@ -365,6 +414,7 @@ function update() {
   }
 
   updateBears(r);
+  updateRocks(r);
   updateParticles();
 }
 
@@ -372,6 +422,7 @@ function update() {
 //  UPDATE LUNE
 // ══════════════════════════════════════════════════
 function updateMoon() {
+  if (storm.active) return;
   if (moon.state === 'none') {
     moon.next--;
     if (moon.next <= 120 && moon.fillProgress < 1) {
@@ -397,6 +448,83 @@ function updateMoon() {
       screenShake       = 10;
     }
   }
+}
+
+// ══════════════════════════════════════════════════
+//  UPDATE TEMPÊTE
+// ══════════════════════════════════════════════════
+const STORM_DURATION = 1200; // 20s à 60fps
+
+function updateStorm() {
+  if (!storm.active) {
+    if (moon.state === 'none') {
+      storm.next--;
+      if (storm.next <= 0) {
+        storm.active     = true;
+        storm.timer      = STORM_DURATION;
+        storm.spawnTimer = 0;
+        rocks = [];
+        initWindLines();
+        screenShake = 14;
+        spawnFX(canvas.width / 2, 60, 0, 'death', '🌬️ TEMPÊTE !');
+      }
+    }
+    return;
+  }
+
+  storm.timer--;
+  storm.spawnTimer--;
+  if (storm.spawnTimer <= 0) {
+    rocks.push(newRock());
+    storm.spawnTimer = Math.floor(rnd(48, 72)); // 0.8-1.2s
+  }
+  for (const wl of windLines) {
+    wl.x += wl.speed;
+    if (wl.x > canvas.width + 60) { wl.x = -60; wl.y = rnd(0, canvas.height); }
+  }
+
+  if (storm.timer <= 0) {
+    storm.active = false;
+    storm.next   = rnd(1800, 3600);
+    rocks = [];
+    screenShake = 8;
+  }
+}
+
+function newRock() {
+  return {
+    x: rnd(20, canvas.width - 20),
+    y: -40,
+    vy: rnd(3, 4.2),
+    vx: rnd(-1.4, 1.4),
+    size: 26,
+    rot: rnd(0, Math.PI * 2),
+    rotSpeed: rnd(-0.06, 0.06)
+  };
+}
+
+function updateRocks(owlRadius) {
+  for (let i = rocks.length - 1; i >= 0; i--) {
+    const rk = rocks[i];
+    rk.x += rk.vx; rk.y += rk.vy; rk.rot += rk.rotSpeed;
+
+    if (rk.y > canvas.height + 50) { rocks.splice(i, 1); continue; }
+
+    if (owl.rockInvul <= 0 && dist(owl, rk) < owlRadius * 0.8 + rk.size * 0.35) {
+      score = Math.max(0, score - 20);
+      owl.rockInvul = 20;
+      screenShake = Math.max(screenShake, 10);
+      spawnFX(rk.x, rk.y, 10, 'death', '-20');
+      rocks.splice(i, 1);
+    }
+  }
+}
+
+function initWindLines() {
+  windLines = Array.from({ length: 36 }, () => ({
+    x: rnd(0, canvas.width), y: rnd(0, canvas.height),
+    len: rnd(20, 55), speed: rnd(9, 18), a: rnd(0.15, 0.4)
+  }));
 }
 
 // ══════════════════════════════════════════════════
@@ -538,7 +666,7 @@ function draw() {
 
   const t = moon.fillProgress;
   for (const s of stars) {
-    ctx.save(); ctx.globalAlpha = s.a;
+    ctx.save(); ctx.globalAlpha = s.a * (storm.active ? 0.15 : 1);
     if (moon.state === 'blood' && t > 0.5)      ctx.fillStyle = `rgba(255,${Math.round(200 - t*160)},${Math.round(180 - t*160)},1)`;
     else if (moon.state === 'full' && t > 0.5)  ctx.fillStyle = '#fffaee';
     else                                          ctx.fillStyle = '#ffffff';
@@ -546,9 +674,13 @@ function draw() {
     ctx.restore();
   }
 
+  ctx.save(); if (storm.active) ctx.globalAlpha = 0.25;
   drawMoon(W, H);
+  ctx.restore();
 
   if (state === S.START) { drawStart(W, H); ctx.restore(); return; }
+
+  if (storm.active) drawWindLines();
 
   if (specialItem) {
     ctx.save();
@@ -559,7 +691,22 @@ function draw() {
   }
 
   if (moon.state === 'none') {
-    for (const b of branches) drawEmoji(b.e, b.x, b.y + Math.sin(b.w) * 4, b.size);
+    for (const b of branches) {
+      if (b.rotten) {
+        const fadeStart = ROTTEN_LIFE - 60;
+        const alpha = b.age > fadeStart ? Math.max(0, 1 - (b.age - fadeStart) / 60) : 1;
+        ctx.save();
+        ctx.globalAlpha  = alpha;
+        ctx.filter       = 'grayscale(70%) brightness(0.75) sepia(25%)';
+        ctx.shadowColor  = 'rgba(180,40,20,0.65)';
+        ctx.shadowBlur   = 10;
+        drawEmoji(b.e, b.x, b.y + Math.sin(b.w) * 4, b.size);
+        ctx.filter = 'none';
+        ctx.restore();
+      } else {
+        drawEmoji(b.e, b.x, b.y + Math.sin(b.w) * 4, b.size);
+      }
+    }
   }
 
   for (const b of bears) {
@@ -567,8 +714,14 @@ function draw() {
     drawEmoji('🐻', b.x, b.y + Math.sin(b.bob) * 3, b.size);
   }
 
+  for (const rk of rocks) drawRock(rk);
+
   if (state === S.PLAY || state === S.LOOT) {
     if (owl.invul <= 0 || Math.floor(Date.now() / 80) % 2 === 0) {
+      const faceLeft  = Math.cos(owl.angle) < 0;
+      const tilt      = Math.max(-0.3, Math.min(0.3, owl.vx * 0.035));
+      const flapScale = 1 + Math.sin(owl.flap) * 0.09;
+
       ctx.save();
       if (buffs.invincible > 0) {
         ctx.shadowColor = '#ffd700';
@@ -577,7 +730,10 @@ function draw() {
         ctx.shadowColor = buffs.speed > 0 ? '#00ffff' : (combo > 2 ? '#ff4400' : 'rgba(255,200,80,0.65)');
         ctx.shadowBlur  = buffs.speed > 0 || combo > 2 ? 30 : 20;
       }
-      drawEmoji('🦉', owl.x, owl.y + Math.sin(owl.bob) * 4, owl.size);
+      ctx.translate(owl.x, owl.y + Math.sin(owl.bob) * 4);
+      ctx.rotate(tilt);
+      ctx.scale(faceLeft ? -1 : 1, flapScale);
+      drawEmoji('🦉', 0, 0, owl.size);
       ctx.restore();
     }
   }
@@ -613,7 +769,10 @@ function draw() {
 function drawSky(W, H) {
   const t   = moon.fillProgress;
   const sky = ctx.createLinearGradient(0, 0, 0, H);
-  if (moon.state === 'blood') {
+  if (storm.active) {
+    sky.addColorStop(0, '#25272d');
+    sky.addColorStop(1, '#3a3d45');
+  } else if (moon.state === 'blood') {
     sky.addColorStop(0, `rgb(${Math.round(4 + t*22)},4,${Math.round(14 - t*9)})`);
     sky.addColorStop(1, `rgb(${Math.round(12 + t*49)},${Math.round(16 - t*8)},${Math.round(48 - t*40)})`);
   } else if (moon.state === 'full') {
@@ -672,14 +831,43 @@ function drawMoon(W, H) {
 }
 
 // ══════════════════════════════════════════════════
+//  DRAW — TEMPÊTE
+// ══════════════════════════════════════════════════
+function drawWindLines() {
+  ctx.save();
+  ctx.strokeStyle = '#c7cbd4';
+  ctx.lineCap = 'round';
+  for (const wl of windLines) {
+    ctx.globalAlpha = wl.a;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(wl.x, wl.y);
+    ctx.lineTo(wl.x - wl.len, wl.y + wl.len * 0.22);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawRock(rk) {
+  ctx.save();
+  ctx.translate(rk.x, rk.y);
+  ctx.rotate(rk.rot);
+  ctx.shadowColor = 'rgba(120,120,130,0.6)';
+  ctx.shadowBlur  = 8;
+  drawEmoji('🪨', 0, 0, rk.size);
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════════
 //  DRAW — HUD
 // ══════════════════════════════════════════════════
 function drawHUD() {
-  const isLunaire = moon.state !== 'none';
-  const hudH      = isLunaire ? 100 : 80;
-  const border    = moon.state === 'blood' ? 'rgba(255,50,50,0.8)'
-                  : moon.state === 'full'  ? 'rgba(200,220,255,0.5)'
-                  : 'rgba(100,90,220,0.4)';
+  const isEvent = moon.state !== 'none' || storm.active;
+  const hudH    = isEvent ? 100 : 80;
+  const border  = moon.state === 'blood' ? 'rgba(255,50,50,0.8)'
+                : moon.state === 'full'  ? 'rgba(200,220,255,0.5)'
+                : storm.active           ? 'rgba(170,175,185,0.6)'
+                : 'rgba(100,90,220,0.4)';
 
   ctx.save();
   rrect(12, 12, 230, hudH, 14, 'rgba(8,8,35,0.82)', border);
@@ -698,7 +886,7 @@ function drawHUD() {
   if (buffs.slow       > 0) { ctx.fillStyle = '#00ffff'; ctx.fillText('❄️ GELÉS',        24, yTxt); yTxt += 16; }
   if (buffs.invincible > 0) { ctx.fillStyle = '#ffd700'; ctx.fillText('🦉 INVINCIBLE !', 24, yTxt); yTxt += 16; }
 
-  if (moon.state === 'none' && combo > 1 && buffs.multi === 0) {
+  if (moon.state === 'none' && !storm.active && combo > 1 && buffs.multi === 0) {
     ctx.fillStyle = '#ffaa00'; ctx.font = 'bold 13px system-ui';
     ctx.fillText('🔥 Combo x' + combo, 24, 50);
     const cbW = 80 * (comboTimer / MAX_COMBO_TIME);
@@ -706,14 +894,17 @@ function drawHUD() {
     rrect(120, 46, Math.max(0, cbW), 6, 3, '#ffaa00');
   }
 
-  if (isLunaire) {
+  if (moon.state !== 'none') {
     const col = moon.state === 'blood' ? '#ff3333' : '#ccddff';
     const ico = moon.state === 'blood' ? '🩸' : '🌕';
     ctx.fillStyle = col; ctx.font = '900 14px system-ui';
     ctx.fillText(`${ico} SURVIE : ${Math.ceil(moon.timer / 60)}s`, 24, 50);
+  } else if (storm.active) {
+    ctx.fillStyle = '#cfd3da'; ctx.font = '900 14px system-ui';
+    ctx.fillText(`🌬️ TEMPÊTE : ${Math.ceil(storm.timer / 60)}s`, 24, 50);
   }
 
-  const barY = isLunaire ? 70 : 62;
+  const barY = isEvent ? 70 : 62;
   rrect(22, barY, 190, 10, 5, 'rgba(255,255,255,0.1)');
   const bw    = Math.max(10, 190 * nest / 100);
   const bar   = ctx.createLinearGradient(22, 0, 212, 0);
