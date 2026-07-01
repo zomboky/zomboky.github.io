@@ -54,7 +54,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x04040e);
-scene.fog = new THREE.FogExp2(0x0c1030, 0.028);
+scene.fog = new THREE.FogExp2(0x0c1030, 0.008);
 
 const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 500);
 
@@ -73,6 +73,11 @@ scene.add(ground);
 // ══════════════════════════════════════════════════
 //  CIEL — étoiles + lune (non affectées par le brouillard, toujours brillantes)
 // ══════════════════════════════════════════════════
+let moonMesh, moonGlow;
+const MOON_BASE_SCALE = 1, MOON_FULL_SCALE = 1.7;
+const MOON_BASE_LIGHT = 0.6, MOON_FULL_LIGHT = 1.5;
+const MOON_BASE_COLOR = new THREE.Color(0xfef6d8), MOON_FULL_COLOR = new THREE.Color(0xeaf2ff);
+
 function makeSky() {
   const starCount = 1600;
   const positions = new Float32Array(starCount * 3);
@@ -98,12 +103,12 @@ function makeSky() {
   scene.add(new THREE.Points(starGeo, starMat));
 
   const moonPos = moonLight.position.clone().normalize().multiplyScalar(320);
-  const moon = new THREE.Mesh(
+  moonMesh = new THREE.Mesh(
     new THREE.SphereGeometry(16, 24, 24),
-    new THREE.MeshBasicMaterial({ color: 0xfef6d8, fog: false })
+    new THREE.MeshBasicMaterial({ color: MOON_BASE_COLOR.clone(), fog: false })
   );
-  moon.position.copy(moonPos);
-  scene.add(moon);
+  moonMesh.position.copy(moonPos);
+  scene.add(moonMesh);
 
   const glowCanvas = document.createElement('canvas');
   glowCanvas.width = glowCanvas.height = 256;
@@ -114,10 +119,10 @@ function makeSky() {
   grad.addColorStop(1, 'rgba(255,250,220,0)');
   gctx.fillStyle = grad; gctx.fillRect(0, 0, 256, 256);
   const glowTex = new THREE.CanvasTexture(glowCanvas);
-  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, fog: false }));
-  glow.scale.set(110, 110, 1);
-  glow.position.copy(moonPos);
-  scene.add(glow);
+  moonGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, fog: false }));
+  moonGlow.scale.set(110, 110, 1);
+  moonGlow.position.copy(moonPos);
+  scene.add(moonGlow);
 }
 
 function resize() {
@@ -134,29 +139,40 @@ window.addEventListener('resize', resize);
 //  VOLUME DE JEU (sphère 3D)
 // ══════════════════════════════════════════════════
 const ARENA_CENTER = new THREE.Vector3(0, 35, 0);
-const ARENA_RADIUS  = 70;
+const ARENA_RADIUS_XZ = 140; // largeur x2
+const ARENA_RADIUS_Y  = 105; // hauteur x1.5
 const FLOOR_Y       = 1.5;
 const OWL_COLLIDE_RADIUS = 0.3;
 const TREE_HIT_COOLDOWN  = 45;
+
+// Facteur radial normalisé (ellipsoïde) : 0 au centre, 1 sur la bordure, >1 en dehors.
+function ellipsoidFactor(pos) {
+  const dx = (pos.x - ARENA_CENTER.x) / ARENA_RADIUS_XZ;
+  const dy = (pos.y - ARENA_CENTER.y) / ARENA_RADIUS_Y;
+  const dz = (pos.z - ARENA_CENTER.z) / ARENA_RADIUS_XZ;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
 
 // Quadrillage vert marquant la limite sphérique de l'arène : invisible de loin,
 // de plus en plus opaque à mesure que le hibou s'approche du bord.
 let boundaryGrid;
 const BOUNDARY_FADE_DIST = 22;
 function makeBoundaryGrid() {
-  const geo = new THREE.SphereGeometry(ARENA_RADIUS, 40, 28);
+  const geo = new THREE.SphereGeometry(1, 40, 28);
   const mat = new THREE.MeshBasicMaterial({
     color: 0x33ff66, wireframe: true, transparent: true, opacity: 0,
     depthWrite: false, fog: false
   });
   boundaryGrid = new THREE.Mesh(geo, mat);
+  boundaryGrid.scale.set(ARENA_RADIUS_XZ, ARENA_RADIUS_Y, ARENA_RADIUS_XZ);
   boundaryGrid.position.copy(ARENA_CENTER);
   boundaryGrid.visible = false;
   scene.add(boundaryGrid);
 }
 function updateBoundaryGrid() {
-  const distToEdge = ARENA_RADIUS - owlGroup.position.distanceTo(ARENA_CENTER);
-  const opacity = THREE.MathUtils.clamp(1 - distToEdge / BOUNDARY_FADE_DIST, 0, 0.85);
+  const f = ellipsoidFactor(owlGroup.position);
+  const fadeFrac = BOUNDARY_FADE_DIST / ARENA_RADIUS_XZ;
+  const opacity = THREE.MathUtils.clamp((f - (1 - fadeFrac)) / fadeFrac, 0, 0.85);
   boundaryGrid.material.opacity = opacity;
   boundaryGrid.visible = opacity > 0.01;
 }
@@ -167,10 +183,64 @@ function randomPointInArena(minY, maxY) {
     x = rnd(-1, 1); y = rnd(-1, 1); z = rnd(-1, 1);
   } while (x * x + y * y + z * z > 1);
   const dir = new THREE.Vector3(x, y, z).normalize();
-  const r = ARENA_RADIUS * Math.cbrt(Math.random());
-  const p = ARENA_CENTER.clone().add(dir.multiplyScalar(r));
+  const r = Math.cbrt(Math.random());
+  const p = new THREE.Vector3(
+    ARENA_CENTER.x + dir.x * r * ARENA_RADIUS_XZ,
+    ARENA_CENTER.y + dir.y * r * ARENA_RADIUS_Y,
+    ARENA_CENTER.z + dir.z * r * ARENA_RADIUS_XZ
+  );
   p.y = THREE.MathUtils.clamp(p.y, minY, maxY);
   return p;
+}
+
+// ══════════════════════════════════════════════════
+//  PLEINE LUNE — événement périodique de survie (calqué sur hibou-et-nid)
+//  Debug : maintenir L force l'activation immédiate.
+// ══════════════════════════════════════════════════
+const MOON_DURATION  = 10;   // secondes
+const MOON_WARN_TIME = 2;    // secondes de "remplissage" avant déclenchement
+let moon = { state: 'none', timer: 0, next: 15, fillProgress: 0 };
+
+function activateFullMoon() {
+  moon.state = 'full';
+  moon.fillProgress = 1;
+  moon.timer = MOON_DURATION;
+  screenShake = Math.max(screenShake, 20);
+  spawnFX(owlGroup.position, 30, 'collect', '🌕 PLEINE LUNE !');
+  while (bears.length < bearTarget()) bears.push(newBear());
+}
+function deactivateFullMoon() {
+  moon.state = 'none';
+  moon.fillProgress = 0;
+  moon.next = rnd(20, 30);
+  screenShake = Math.max(screenShake, 10);
+}
+function updateMoon(dt) {
+  const forced = keys['l'];
+  if (forced) {
+    if (moon.state !== 'full') activateFullMoon();
+    moon.timer = MOON_DURATION;
+    moon.fillProgress = 1;
+    return;
+  }
+  if (moon.state === 'none') {
+    moon.next -= dt;
+    if (moon.next <= MOON_WARN_TIME && moon.fillProgress < 1) {
+      moon.fillProgress = Math.min(1, moon.fillProgress + dt / MOON_WARN_TIME);
+    }
+    if (moon.next <= 0) activateFullMoon();
+  } else {
+    moon.timer -= dt;
+    if (moon.timer <= 0) deactivateFullMoon();
+  }
+}
+function updateMoonVisual() {
+  const t = moon.fillProgress;
+  const scale = THREE.MathUtils.lerp(MOON_BASE_SCALE, MOON_FULL_SCALE, t);
+  moonMesh.scale.setScalar(scale);
+  moonGlow.scale.setScalar(THREE.MathUtils.lerp(110, 110 * MOON_FULL_SCALE, t));
+  moonMesh.material.color.copy(MOON_BASE_COLOR).lerp(MOON_FULL_COLOR, t);
+  moonLight.intensity = THREE.MathUtils.lerp(MOON_BASE_LIGHT, MOON_FULL_LIGHT, t);
 }
 
 // ══════════════════════════════════════════════════
@@ -183,7 +253,7 @@ function makeTrees() {
     { trunk: 0x2e2118, leaf: [0x123318, 0x1a4a22, 0x26612c] },
     { trunk: 0x332419, leaf: [0x173d24, 0x1f5230, 0x2a6b3a] }
   ];
-  const count = 220;
+  const count = 600; // densité adaptée à l'arène agrandie
   treeColliders = [];
   const trunkMat = new THREE.MeshStandardMaterial({ roughness: 1 });
   const leafMat  = new THREE.MeshStandardMaterial({ roughness: 1 });
@@ -195,7 +265,7 @@ function makeTrees() {
 
   for (let i = 0; i < count; i++) {
     const angle = rnd(0, Math.PI * 2);
-    const r = rnd(15, 85);
+    const r = rnd(15, 170);
     const x = Math.cos(angle) * r, z = Math.sin(angle) * r;
     const trunkH = rnd(4, 10);
     const pal = palettes[i % 3];
@@ -370,10 +440,10 @@ function updateFlight(dt) {
 
   owlGroup.translateZ(-speed * dt);
 
-  // Clamp dans le volume 3D (sphère + plancher)
+  // Clamp dans le volume 3D (ellipsoïde + plancher)
   const offset = owlGroup.position.clone().sub(ARENA_CENTER);
-  const len = offset.length();
-  if (len > ARENA_RADIUS) owlGroup.position.copy(ARENA_CENTER.clone().add(offset.setLength(ARENA_RADIUS)));
+  const f = ellipsoidFactor(owlGroup.position);
+  if (f > 1) owlGroup.position.copy(ARENA_CENTER.clone().add(offset.multiplyScalar(1 / f)));
   if (owlGroup.position.y < FLOOR_Y) owlGroup.position.y = FLOOR_Y;
 
   checkTreeCollision();
@@ -464,6 +534,7 @@ function removeBranch(i) {
 }
 
 function updateBranches() {
+  if (moon.state !== 'none') return; // pleine lune : survie pure, pas de collecte
   for (let i = branches.length - 1; i >= 0; i--) {
     const br = branches[i];
     br.w += br.ws;
@@ -504,7 +575,10 @@ function updateBranches() {
 //  OURS
 // ══════════════════════════════════════════════════
 let bears = [];
-function bearTarget() { return Math.min(2 + Math.floor(score / 15), 10); }
+function bearTarget() {
+  if (moon.state === 'full') return 12;
+  return Math.min(2 + Math.floor(score / 15), 10);
+}
 
 function newBear() {
   const mat = new THREE.SpriteMaterial({ map: bearTexture, transparent: true });
@@ -517,17 +591,19 @@ function newBear() {
   const dir = new THREE.Vector3(Math.cos(angle) * Math.cos(elev), Math.sin(elev), Math.sin(angle) * Math.cos(elev));
   let pos = owlGroup.position.clone().add(dir.multiplyScalar(distR));
   const offset = pos.clone().sub(ARENA_CENTER);
-  if (offset.length() > ARENA_RADIUS) offset.setLength(ARENA_RADIUS * 0.95);
+  const f = ellipsoidFactor(pos);
+  if (f > 1) offset.multiplyScalar(0.95 / f);
   pos = ARENA_CENTER.clone().add(offset);
   pos.y = THREE.MathUtils.clamp(pos.y, 3, 68);
   sprite.position.copy(pos);
   scene.add(sprite);
 
   const updateDelay = rnd(20, 80);
+  const isFullMoon = moon.state === 'full';
   return {
     sprite,
-    life: rnd(1000, 2000),
-    spdBase: 9 + Math.min(score * 0.18, 13), // unités / seconde (voir updateBears, mouvement mis à l'échelle par dt)
+    life: isFullMoon ? rnd(300, 600) : rnd(1000, 2000),
+    spdBase: (isFullMoon ? 14 : 9) + Math.min(score * 0.18, 13), // unités / seconde (voir updateBears, mouvement mis à l'échelle par dt)
     target: owlGroup.position.clone(),
     updateDelay, updateTimer: Math.floor(rnd(0, updateDelay)),
     drift: new THREE.Vector3(rnd(-1, 1), rnd(-1, 1), rnd(-1, 1)).normalize().multiplyScalar(rnd(0.3, 1.4)),
@@ -656,6 +732,16 @@ function drawHUD() {
   hctx.fillStyle = '#fff'; hctx.font = 'bold 9px system-ui'; hctx.textAlign = 'center';
   hctx.fillText('NID ' + nest + '% ➔ +1 ❤️', 117, barY + 5);
   hctx.restore();
+
+  if (moon.state === 'full') {
+    hctx.save();
+    const w = hudCanvas.width;
+    rrect(w / 2 - 140, 12, 280, 40, 14, 'rgba(20,20,50,0.85)', 'rgba(200,220,255,0.6)');
+    hctx.fillStyle = '#ccddff'; hctx.font = 'bold 16px system-ui';
+    hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+    hctx.fillText('🌕 PLEINE LUNE ! SURVIE : ' + Math.ceil(Math.max(0, moon.timer)) + 's', w / 2, 32);
+    hctx.restore();
+  }
 }
 
 function drawStart() {
@@ -757,6 +843,7 @@ function beginGame() {
   branches = Array.from({ length: 8 }, newBranch);
   bears = [newBear(), newBear()];
   particles = [];
+  moon = { state: 'none', timer: 0, next: 15, fillProgress: 0 };
 }
 
 // ══════════════════════════════════════════════════
@@ -773,6 +860,7 @@ function update() {
   if (state === S.PLAY) {
     if (owlInvul > 0) owlInvul--;
     if (treeCooldown > 0) treeCooldown--;
+    updateMoon(dt);
     const speedRatio = updateFlight(dt);
     updateFlap(dt, speedRatio);
     updateBranches();
@@ -783,6 +871,7 @@ function update() {
     mouseDX = 0; mouseDY = 0;
     boundaryGrid.visible = false;
   }
+  updateMoonVisual();
   updateParticles();
 }
 
