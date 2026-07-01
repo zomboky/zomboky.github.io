@@ -37,6 +37,7 @@ let state = S.START;
 const MAX_COMBO_TIME = 120;
 let score = 0, nest = 0, combo = 1, comboTimer = 0, lives = 1, best = 0;
 let owlInvul = 0;
+let treeCooldown = 0;
 let screenShake = 0, hitFlash = 0;
 
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -69,6 +70,56 @@ const ground = new THREE.Mesh(
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 
+// ══════════════════════════════════════════════════
+//  CIEL — étoiles + lune (non affectées par le brouillard, toujours brillantes)
+// ══════════════════════════════════════════════════
+function makeSky() {
+  const starCount = 1600;
+  const positions = new Float32Array(starCount * 3);
+  const colors = new Float32Array(starCount * 3);
+  const palette = [new THREE.Color(0xffffff), new THREE.Color(0xaaccff), new THREE.Color(0xffe9c4)];
+  const c = new THREE.Color();
+  for (let i = 0; i < starCount; i++) {
+    const r = rnd(200, 400);
+    const theta = rnd(0, Math.PI * 2), phi = Math.acos(rnd(-1, 1));
+    positions[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
+    positions[i * 3 + 1] = Math.abs(r * Math.cos(phi)) + 10;
+    positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+    c.copy(palette[Math.floor(Math.random() * palette.length)]);
+    colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+  }
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const starMat = new THREE.PointsMaterial({
+    size: 2, vertexColors: true, transparent: true, opacity: 0.95,
+    depthWrite: false, sizeAttenuation: true, fog: false
+  });
+  scene.add(new THREE.Points(starGeo, starMat));
+
+  const moonPos = moonLight.position.clone().normalize().multiplyScalar(320);
+  const moon = new THREE.Mesh(
+    new THREE.SphereGeometry(16, 24, 24),
+    new THREE.MeshBasicMaterial({ color: 0xfef6d8, fog: false })
+  );
+  moon.position.copy(moonPos);
+  scene.add(moon);
+
+  const glowCanvas = document.createElement('canvas');
+  glowCanvas.width = glowCanvas.height = 256;
+  const gctx = glowCanvas.getContext('2d');
+  const grad = gctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+  grad.addColorStop(0, 'rgba(255,250,220,0.9)');
+  grad.addColorStop(0.4, 'rgba(255,250,220,0.35)');
+  grad.addColorStop(1, 'rgba(255,250,220,0)');
+  gctx.fillStyle = grad; gctx.fillRect(0, 0, 256, 256);
+  const glowTex = new THREE.CanvasTexture(glowCanvas);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, fog: false }));
+  glow.scale.set(110, 110, 1);
+  glow.position.copy(moonPos);
+  scene.add(glow);
+}
+
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h);
@@ -85,6 +136,30 @@ window.addEventListener('resize', resize);
 const ARENA_CENTER = new THREE.Vector3(0, 35, 0);
 const ARENA_RADIUS  = 70;
 const FLOOR_Y       = 1.5;
+const OWL_COLLIDE_RADIUS = 0.3;
+const TREE_HIT_COOLDOWN  = 45;
+
+// Quadrillage vert marquant la limite sphérique de l'arène : invisible de loin,
+// de plus en plus opaque à mesure que le hibou s'approche du bord.
+let boundaryGrid;
+const BOUNDARY_FADE_DIST = 22;
+function makeBoundaryGrid() {
+  const geo = new THREE.SphereGeometry(ARENA_RADIUS, 40, 28);
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0x33ff66, wireframe: true, transparent: true, opacity: 0,
+    depthWrite: false, fog: false
+  });
+  boundaryGrid = new THREE.Mesh(geo, mat);
+  boundaryGrid.position.copy(ARENA_CENTER);
+  boundaryGrid.visible = false;
+  scene.add(boundaryGrid);
+}
+function updateBoundaryGrid() {
+  const distToEdge = ARENA_RADIUS - owlGroup.position.distanceTo(ARENA_CENTER);
+  const opacity = THREE.MathUtils.clamp(1 - distToEdge / BOUNDARY_FADE_DIST, 0, 0.85);
+  boundaryGrid.material.opacity = opacity;
+  boundaryGrid.visible = opacity > 0.01;
+}
 
 function randomPointInArena(minY, maxY) {
   let x, y, z;
@@ -101,6 +176,7 @@ function randomPointInArena(minY, maxY) {
 // ══════════════════════════════════════════════════
 //  ARBRES PROCÉDURAUX (InstancedMesh)
 // ══════════════════════════════════════════════════
+let treeColliders = [];
 function makeTrees() {
   const palettes = [
     { trunk: 0x3a2a1e, leaf: [0x0e3d1e, 0x155226, 0x1f6b30] },
@@ -108,6 +184,7 @@ function makeTrees() {
     { trunk: 0x332419, leaf: [0x173d24, 0x1f5230, 0x2a6b3a] }
   ];
   const count = 220;
+  treeColliders = [];
   const trunkMat = new THREE.MeshStandardMaterial({ roughness: 1 });
   const leafMat  = new THREE.MeshStandardMaterial({ roughness: 1 });
   const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.25, 0.35, 1, 6), trunkMat, count);
@@ -136,6 +213,15 @@ function makeTrees() {
     dummy.updateMatrix();
     leaves.setMatrixAt(i, dummy.matrix);
     leaves.setColorAt(i, color.setHex(pal.leaf[Math.floor(Math.random() * 3)]));
+
+    // Collision calquée sur la géométrie réelle : tronc fin en bas, cône de feuillage qui se rétrécit vers le haut.
+    treeColliders.push({
+      x, z,
+      trunkR: 0.3,
+      leafBase: trunkH - leafH * 0.05,
+      leafTop: trunkH + leafH * 0.95,
+      leafR
+    });
   }
   trunks.instanceMatrix.needsUpdate = true;
   leaves.instanceMatrix.needsUpdate = true;
@@ -220,21 +306,29 @@ function updateFlap(dt, speedRatio) {
 //  ENTRÉES — clavier (ZQSD/AE) + souris (joystick additionnel)
 // ══════════════════════════════════════════════════
 const keys = {};
+const ARROW_KEYS = ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
 window.addEventListener('keydown', e => {
   keys[e.key.toLowerCase()] = true;
-  if (e.key === ' ') e.preventDefault();
+  if (e.key === ' ' || ARROW_KEYS.includes(e.key.toLowerCase())) e.preventDefault();
   if (state === S.START || state === S.OVER) beginGame();
 });
 window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 
-let lastMouseX = null, lastMouseY = null;
+// Souris en pointer-lock : le curseur ne sort jamais de l'écran, donc le lacet/tangage
+// ne se bloque plus quand on atteint le bord (mouvements relatifs via movementX/Y).
 let mouseDX = 0, mouseDY = 0;
+function requestFlightPointerLock() {
+  if (glCanvas.requestPointerLock) glCanvas.requestPointerLock();
+}
 window.addEventListener('pointermove', e => {
-  if (lastMouseX !== null) { mouseDX += e.clientX - lastMouseX; mouseDY += e.clientY - lastMouseY; }
-  lastMouseX = e.clientX; lastMouseY = e.clientY;
+  if (document.pointerLockElement === glCanvas) {
+    mouseDX += e.movementX;
+    mouseDY += e.movementY;
+  }
 });
 window.addEventListener('pointerdown', () => {
   if (state === S.START || state === S.OVER) beginGame();
+  if (state === S.PLAY) requestFlightPointerLock();
 });
 
 // Vitesses angulaires (rad/s) et sensibilité souris — ajustables en polish
@@ -252,8 +346,8 @@ const MAX_SPEED    = 28;
 let speed = 0;
 
 function updateFlight(dt) {
-  const yawIn   = (keys['q'] ? 1 : 0) - (keys['d'] ? 1 : 0);
-  const pitchIn = (keys['s'] ? 1 : 0) - (keys['z'] ? 1 : 0);
+  const yawIn   = (keys['q'] || keys['arrowleft']  ? 1 : 0) - (keys['d'] || keys['arrowright'] ? 1 : 0);
+  const pitchIn = (keys['s'] || keys['arrowdown']  ? 1 : 0) - (keys['z'] || keys['arrowup']    ? 1 : 0);
   const rollIn  = (keys['a'] ? 1 : 0) - (keys['e'] ? 1 : 0);
 
   let yawDelta   = yawIn * YAW_RATE * dt;
@@ -282,7 +376,47 @@ function updateFlight(dt) {
   if (len > ARENA_RADIUS) owlGroup.position.copy(ARENA_CENTER.clone().add(offset.setLength(ARENA_RADIUS)));
   if (owlGroup.position.y < FLOOR_Y) owlGroup.position.y = FLOOR_Y;
 
+  checkTreeCollision();
+
   return speed / MAX_SPEED;
+}
+
+// Collision avec un arbre : grosse perte de score/nid + vitesse ramenée à zéro.
+function checkTreeCollision() {
+  if (treeCooldown > 0) return;
+  const p = owlGroup.position;
+  for (const t of treeColliders) {
+    let r;
+    if (p.y < t.leafBase) {
+      r = t.trunkR; // sous le feuillage : seul le tronc fin peut toucher
+    } else if (p.y <= t.leafTop) {
+      const frac = (p.y - t.leafBase) / (t.leafTop - t.leafBase);
+      r = t.leafR * (1 - frac); // cône qui se rétrécit vers le sommet
+    } else {
+      continue; // au-dessus de l'arbre : pas de collision
+    }
+    r += OWL_COLLIDE_RADIUS;
+    const dx = p.x - t.x, dz = p.z - t.z;
+    const distSq = dx * dx + dz * dz;
+    if (distSq < r * r) {
+      const dist = Math.sqrt(distSq) || 0.001;
+      p.x += (dx / dist) * (r - dist + 0.3);
+      p.z += (dz / dist) * (r - dist + 0.3);
+      onTreeHit();
+      return;
+    }
+  }
+}
+
+function onTreeHit() {
+  speed = 0;
+  score = Math.max(0, score - 15);
+  nest = Math.max(0, nest - 30);
+  combo = 1; comboTimer = 0;
+  screenShake = Math.max(screenShake, 22);
+  hitFlash = Math.max(hitFlash, 0.5);
+  treeCooldown = TREE_HIT_COOLDOWN;
+  spawnFX(owlGroup.position, 18, 'death', 'CRASH ! 🌳');
 }
 
 // ══════════════════════════════════════════════════
@@ -392,13 +526,14 @@ function newBear() {
   const updateDelay = rnd(20, 80);
   return {
     sprite,
-    life: rnd(480, 1200),
-    spdBase: 1.8 + Math.min(score * 0.05, 4.5),
+    life: rnd(1000, 2000),
+    spdBase: 9 + Math.min(score * 0.18, 13), // unités / seconde (voir updateBears, mouvement mis à l'échelle par dt)
     target: owlGroup.position.clone(),
     updateDelay, updateTimer: Math.floor(rnd(0, updateDelay)),
     drift: new THREE.Vector3(rnd(-1, 1), rnd(-1, 1), rnd(-1, 1)).normalize().multiplyScalar(rnd(0.3, 1.4)),
     bob: rnd(0, Math.PI * 2),
-    spawnPulse: 1
+    spawnPulse: 1,
+    spawnGrace: 90 // frames d'immunité après l'apparition, pour ne pas mourir dans la seconde qui suit
   };
 }
 function removeBear(i) {
@@ -407,7 +542,7 @@ function removeBear(i) {
   bears.splice(i, 1);
 }
 
-function updateBears() {
+function updateBears(dt) {
   for (let i = bears.length - 1; i >= 0; i--) {
     const b = bears[i];
     b.life--;
@@ -417,6 +552,7 @@ function updateBears() {
       if (bears.length < bearTarget()) bears.push(newBear());
       continue;
     }
+    if (b.spawnGrace > 0) b.spawnGrace--;
     b.bob += 0.12;
     if (b.spawnPulse > 0) b.spawnPulse = Math.max(0, b.spawnPulse - 0.05);
     b.sprite.scale.setScalar(2.6 * (1 - b.spawnPulse * 0.6));
@@ -427,12 +563,13 @@ function updateBears() {
       b.drift.set(rnd(-1, 1), rnd(-1, 1), rnd(-1, 1)).normalize().multiplyScalar(rnd(0.3, 1.4));
       b.target.copy(owlGroup.position);
     }
+    // Déplacement normalisé vers la cible, à vitesse constante en unités/seconde (mis à l'échelle par dt).
     const toTarget = b.target.clone().sub(b.sprite.position).add(b.drift.clone().multiplyScalar(30));
     const d = toTarget.length() || 1;
-    b.sprite.position.add(toTarget.multiplyScalar(b.spdBase / d));
+    b.sprite.position.add(toTarget.multiplyScalar((b.spdBase * dt) / d));
     b.sprite.position.y += Math.sin(b.bob) * 0.02;
 
-    if (owlInvul <= 0 && owlGroup.position.distanceTo(b.sprite.position) < COLLECT_RADIUS + 1) {
+    if (owlInvul <= 0 && b.spawnGrace <= 0 && owlGroup.position.distanceTo(b.sprite.position) < COLLECT_RADIUS + 1) {
       lives--;
       screenShake = 25; hitFlash = 0.6;
       spawnFX(b.sprite.position, 16, 'death');
@@ -441,6 +578,7 @@ function updateBears() {
         state = S.OVER;
         owlGroup.visible = false;
         document.body.style.cursor = 'default';
+        if (document.pointerLockElement) document.exitPointerLock();
       } else {
         owlInvul = 120;
         spawnFX(owlGroup.position, 30, 'death', '-1 Vie !');
@@ -531,11 +669,11 @@ function drawStart() {
   hctx.fillStyle = '#cbc3ff'; hctx.font = '900 28px system-ui';
   hctx.fillText('HIBOU 3D', cx, cy - 100);
   hctx.fillStyle = '#cbc3dd'; hctx.font = '14px system-ui';
-  hctx.fillText('Q / D = lacet (yaw)', cx, cy - 50);
-  hctx.fillText('Z / S = tangage (pitch)', cx, cy - 28);
+  hctx.fillText('Q / D ou ← / → = lacet (yaw)', cx, cy - 50);
+  hctx.fillText('Z / S ou ↑ / ↓ = tangage (pitch)', cx, cy - 28);
   hctx.fillText('A / E = roulis (roll)', cx, cy - 6);
   hctx.fillText('Espace = accélérer   Ctrl = freiner', cx, cy + 20);
-  hctx.fillText('Souris = pilotage additionnel (yaw/pitch)', cx, cy + 44);
+  hctx.fillText('Souris (verrouillée) = pilotage additionnel', cx, cy + 44);
   hctx.fillStyle = '#fff'; hctx.font = 'bold 18px system-ui';
   hctx.fillText('Clique ou appuie sur une touche', cx, cy + 100);
   hctx.fillText('pour décoller', cx, cy + 124);
@@ -606,11 +744,13 @@ function beginGame() {
   state = S.PLAY;
   document.body.style.cursor = 'none';
   score = 0; nest = 0; combo = 1; comboTimer = 0; lives = 1;
-  screenShake = 0; hitFlash = 0; owlInvul = 60; speed = 0;
+  screenShake = 0; hitFlash = 0; owlInvul = 60; treeCooldown = 0;
+  speed = MAX_SPEED * 0.55; // décolle déjà lancé
 
-  owlGroup.position.copy(ARENA_CENTER);
+  owlGroup.position.set(ARENA_CENTER.x, 16, ARENA_CENTER.z); // altitude basse au départ
   owlGroup.quaternion.identity();
   owlGroup.visible = true;
+  requestFlightPointerLock();
 
   for (const br of branches) { scene.remove(br.sprite); br.sprite.material.dispose(); }
   for (const b of bears)     { scene.remove(b.sprite);  b.sprite.material.dispose(); }
@@ -632,13 +772,16 @@ function update() {
 
   if (state === S.PLAY) {
     if (owlInvul > 0) owlInvul--;
+    if (treeCooldown > 0) treeCooldown--;
     const speedRatio = updateFlight(dt);
     updateFlap(dt, speedRatio);
     updateBranches();
-    updateBears();
+    updateBears(dt);
+    updateBoundaryGrid();
     owlGroup.visible = !(owlInvul > 0 && Math.floor(Date.now() / 80) % 2 !== 0);
   } else {
     mouseDX = 0; mouseDY = 0;
+    boundaryGrid.visible = false;
   }
   updateParticles();
 }
@@ -655,7 +798,9 @@ function loop() {
 }
 
 resize();
+makeSky();
 makeTrees();
+makeBoundaryGrid();
 loop();
 </script>
 </body>
