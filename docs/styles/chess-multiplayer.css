@@ -1,0 +1,251 @@
+body.chess-page {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #eee;
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 12px 60px;
+  box-sizing: border-box;
+}
+
+.chess-page h1 {
+  color: #333;
+  margin: 10px 0 20px;
+  text-align: center;
+}
+
+.card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  padding: 24px;
+  width: 100%;
+  max-width: 420px;
+  box-sizing: border-box;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* --- lobby --- */
+
+#lobby .lobby-section {
+  margin-bottom: 20px;
+}
+
+#lobby h2 {
+  font-size: 1.05rem;
+  color: #444;
+  margin: 0 0 10px;
+}
+
+#lobby input[type="text"] {
+  padding: 10px;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 140px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-align: center;
+}
+
+.btn {
+  padding: 10px 18px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  border: 1px solid #567d46;
+  background: #6aa84f;
+  color: #fff;
+  border-radius: 5px;
+}
+
+.btn:hover {
+  background: #5c9342;
+}
+
+.btn.secondary {
+  background: #fff;
+  color: #444;
+  border-color: #ccc;
+}
+
+.btn.secondary:hover {
+  background: #f0f0f0;
+}
+
+.btn.danger {
+  background: #fff;
+  color: #c0392b;
+  border-color: #e0a29b;
+}
+
+.btn.danger:hover {
+  background: #fdecea;
+}
+
+#lobby-error {
+  color: #c0392b;
+  min-height: 1.2em;
+  font-size: 0.9rem;
+}
+
+/* --- game --- */
+
+#game {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.game-topbar {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.room-code-box {
+  font-family: monospace;
+  font-size: 1.1rem;
+  background: #f0f0f0;
+  padding: 6px 12px;
+  border-radius: 4px;
+  letter-spacing: 3px;
+}
+
+#conn-status {
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.board {
+  width: 400px;
+  max-width: 90vw;
+  height: 400px;
+  max-height: 90vw;
+  margin: 8px 0;
+}
+
+.game-info {
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+#status {
+  font-weight: bold;
+  color: #333;
+  min-height: 1.4em;
+}
+
+#my-color {
+  font-weight: normal;
+  color: #666;
+}
+
+.game-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 10px 0;
+}
+
+.moves-panel {
+  width: 100%;
+  max-width: 400px;
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  padding: 8px;
+  max-height: 140px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+#moves-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: monospace;
+  font-size: 0.9rem;
+}
+
+#moves-list li {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.move-num {
+  color: #999;
+  min-width: 28px;
+}
+
+.move-white,
+.move-black {
+  min-width: 60px;
+}
+
+/* --- promotion modal / end overlay --- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.overlay-box {
+  background: #fff;
+  border-radius: 10px;
+  padding: 24px;
+  text-align: center;
+  max-width: 320px;
+}
+
+.promo-choices {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.promo-choices button {
+  font-size: 1rem;
+  padding: 10px 14px;
+  cursor: pointer;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.promo-choices button:hover {
+  background: #f0f0f0;
+}
+
+#end-message {
+  font-size: 1.1rem;
+  font-weight: bold;
+  margin-bottom: 16px;
+}
+
+.end-controls {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}

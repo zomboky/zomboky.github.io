@@ -22,7 +22,8 @@ body {
 }
 
 /* liens */
-#lien {
+#lien,
+.lien {
   color: black;
   text-decoration: none;
   background: #fdf6e3;

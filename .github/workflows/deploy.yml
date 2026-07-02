@@ -15,9 +15,36 @@ jobs:
           username: ${{ secrets.REMOTE_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            set -e
             sudo git config --global --add safe.directory /var/www/html
             cd /var/www/html
             sudo git pull origin master
+
+            # --- Chess multiplayer WebSocket server (deploy before docs
+            # copy removes the source, and before it's exposed under the
+            # public docroot) ---
+            id -u chessd >/dev/null 2>&1 || sudo useradd -r -s /sbin/nologin chessd
+            command -v node >/dev/null 2>&1 || sudo dnf install -y nodejs
+
+            sudo rm -rf /opt/chess-server
+            sudo mkdir -p /opt/chess-server
+            sudo cp -R /var/www/html/server/chess-server/. /opt/chess-server/
+            cd /opt/chess-server
+            sudo npm install --omit=dev
+            sudo chown -R chessd:chessd /opt/chess-server
+            cd /var/www/html
+
             sudo cp -R docs/* .
+            sudo rm -rf server
             sudo chown -R apache:apache /var/www/html
             sudo restorecon -Rv /var/www/html
+
+            sudo cp /opt/chess-server/deploy/chess-server.service /etc/systemd/system/chess-server.service
+            sudo systemctl daemon-reload
+            sudo systemctl enable chess-server
+            sudo systemctl restart chess-server
+
+            sudo cp /opt/chess-server/deploy/chess-ws.conf /etc/httpd/conf.d/chess-ws.conf
+            sudo setsebool -P httpd_can_network_connect 1 || true
+            sudo apachectl configtest
+            sudo systemctl reload httpd
