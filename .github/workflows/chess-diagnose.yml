@@ -23,6 +23,11 @@ jobs:
           envs: SETUP_TLS
           script: |
             if [ "$SETUP_TLS" = "true" ]; then
+              echo "== enabling EPEL (certbot lives there on Oracle Linux) =="
+              cat /etc/os-release
+              sudo dnf install -y oracle-epel-release-el9 || sudo dnf install -y oracle-epel-release-el8 || true
+              sudo dnf config-manager --set-enabled ol9_developer_EPEL || sudo dnf config-manager --set-enabled ol8_developer_EPEL || true
+
               echo "== installing certbot =="
               sudo dnf install -y certbot python3-certbot-apache
 
