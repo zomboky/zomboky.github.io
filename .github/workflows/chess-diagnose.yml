@@ -31,6 +31,16 @@ jobs:
               echo "== installing certbot =="
               sudo dnf install -y certbot python3-certbot-apache
 
+              echo "== ensuring mod_ssl's default placeholder cert exists (its stock ssl.conf references it and fails configtest otherwise) =="
+              CRT_PATH=$(sudo grep -oP '(?<=SSLCertificateFile\s)\S+' /etc/httpd/conf.d/ssl.conf 2>/dev/null | head -1)
+              KEY_PATH=$(sudo grep -oP '(?<=SSLCertificateKeyFile\s)\S+' /etc/httpd/conf.d/ssl.conf 2>/dev/null | head -1)
+              echo "expected placeholder cert: $CRT_PATH key: $KEY_PATH"
+              if [ -n "$CRT_PATH" ] && [ ! -s "$CRT_PATH" ]; then
+                sudo mkdir -p "$(dirname "$CRT_PATH")" "$(dirname "$KEY_PATH")"
+                sudo openssl req -x509 -nodes -days 1 -newkey rsa:2048 -keyout "$KEY_PATH" -out "$CRT_PATH" -subj "/CN=localhost"
+              fi
+              sudo apachectl configtest
+
               echo "== requesting/renewing certificate for bear.servebeer.com =="
               sudo certbot --apache -d bear.servebeer.com --non-interactive --agree-tos \
                 -m remi.tournie@gmail.com --redirect
