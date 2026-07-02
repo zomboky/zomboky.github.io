@@ -1,0 +1,16 @@
+{
+  "name": "chess-server",
+  "version": "1.0.0",
+  "description": "Serveur WebSocket relais/arbitre pour le jeu d'échecs multijoueur de zomboky.github.io",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

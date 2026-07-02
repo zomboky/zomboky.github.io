@@ -2,43 +2,80 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Plateau d'Échecs - Version 0.0.1</title>
-    
-    <link rel="stylesheet" href="https://unpkg.com/chessboardjs@0.0.1/www/css/chessboard.css">
-    
-    <style>
-        /* CSS pour centrer et définir la taille du plateau (inchangé) */
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background-color: #f0f0f0;
-        }
-        #myBoard {
-            width: 400px;
-            max-width: 90vw;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Échecs multijoueur</title>
+
+    <link rel="stylesheet" href="chessground/chessground.base.css">
+    <link rel="stylesheet" href="chessground/chessground.brown.css">
+    <link rel="stylesheet" href="chessground/chessground.cburnett.css">
+    <link rel="stylesheet" href="styles/chess-multiplayer.css">
 </head>
-<body>
+<body class="chess-page">
 
-    <div id="myBoard"></div>
+    <h1>Échecs en ligne</h1>
 
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    
-    <script src="https://unpkg.com/chessboardjs@0.0.1/www/js/chessboard.js"></script>
+    <div id="lobby" class="card">
+        <div class="lobby-section">
+            <h2>Créer une partie</h2>
+            <button id="create-btn" class="btn">Créer une partie</button>
+        </div>
+        <div class="lobby-section">
+            <h2>Rejoindre une partie</h2>
+            <input id="join-code" type="text" maxlength="4" placeholder="CODE">
+            <button id="join-btn" class="btn secondary">Rejoindre</button>
+        </div>
+        <p id="lobby-error"></p>
+    </div>
 
-    <script>
-        var config = {
-            draggable: true,
-            position: 'start'
-        };
+    <div id="game" class="hidden">
+        <div class="game-topbar">
+            <span>Code : <span id="room-code" class="room-code-box"></span></span>
+            <button id="copy-link-btn" class="btn secondary">Copier le lien d'invitation</button>
+            <span id="conn-status"></span>
+        </div>
 
-        // L'objet 'Chessboard' sera maintenant défini
-        var board = Chessboard('myBoard', config);
-    </script>
+        <div class="game-info">
+            <div id="status"></div>
+            <div>Vous jouez : <span id="my-color"></span></div>
+        </div>
 
+        <div id="board" class="board brown cburnett"></div>
+
+        <div class="game-controls">
+            <button id="resign-btn" class="btn danger">Abandonner</button>
+            <button id="rematch-btn" class="btn secondary">Revanche</button>
+            <button id="quit-btn" class="btn secondary">Quitter</button>
+        </div>
+
+        <div class="moves-panel">
+            <ol id="moves-list"></ol>
+        </div>
+    </div>
+
+    <div id="promo-modal" class="overlay hidden">
+        <div class="overlay-box">
+            <p>Choisissez une pièce pour la promotion :</p>
+            <div class="promo-choices">
+                <button data-piece="q">Dame</button>
+                <button data-piece="r">Tour</button>
+                <button data-piece="b">Fou</button>
+                <button data-piece="n">Cavalier</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="end-overlay" class="overlay hidden">
+        <div class="overlay-box">
+            <p id="end-message"></p>
+            <div class="end-controls">
+                <button id="end-rematch-btn" class="btn">Revanche</button>
+                <button id="end-quit-btn" class="btn secondary">Quitter</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="chess/chess.min.js"></script>
+    <script src="chessground/chessground.min.js"></script>
+    <script src="scripts/chess-multiplayer.js"></script>
 </body>
 </html>
