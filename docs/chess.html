@@ -9,46 +9,118 @@
     <link rel="stylesheet" href="chessground/chessground.brown.css">
     <link rel="stylesheet" href="chessground/chessground.cburnett.css">
     <link rel="stylesheet" href="styles/chess-multiplayer.css">
+    <script>
+      // Applied before first paint to avoid a flash of the wrong theme.
+      (function () {
+        try {
+          var saved = localStorage.getItem('chess-theme');
+          var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (dark) document.documentElement.classList.add('theme-dark');
+        } catch (e) { /* ignore */ }
+      })();
+    </script>
 </head>
 <body class="chess-page">
 
-    <h1>Échecs en ligne</h1>
-
-    <div id="lobby" class="card">
-        <div class="lobby-section">
-            <h2>Créer une partie</h2>
-            <button id="create-btn" class="btn">Créer une partie</button>
-        </div>
-        <div class="lobby-section">
-            <h2>Rejoindre une partie</h2>
-            <input id="join-code" type="text" maxlength="4" placeholder="CODE">
-            <button id="join-btn" class="btn secondary">Rejoindre</button>
-        </div>
-        <p id="lobby-error"></p>
+    <div class="top-bar">
+        <h1>Échecs en ligne</h1>
+        <label class="theme-switch" title="Thème clair / sombre">
+            <span class="theme-icon">☀️</span>
+            <input type="checkbox" id="theme-toggle">
+            <span class="theme-slider"></span>
+            <span class="theme-icon">🌙</span>
+        </label>
     </div>
 
-    <div id="game" class="hidden">
-        <div class="game-topbar">
-            <span>Code : <span id="room-code" class="room-code-box"></span></span>
-            <button id="copy-link-btn" class="btn secondary">Copier le lien d'invitation</button>
-            <span id="conn-status"></span>
+    <p id="https-warning" class="warning-banner hidden">
+        Cette page est chargée en HTTPS, le multijoueur ne peut pas s'y connecter.
+        Ouvrez plutôt <a href="http://bear.servebeer.com/chess.html">http://bear.servebeer.com/chess.html</a>.
+    </p>
+
+    <div class="pseudo-row">
+        Pseudo : <span id="pseudo-display"></span>
+        <button id="edit-pseudo-btn" class="btn secondary small">Modifier</button>
+    </div>
+
+    <div class="chess-layout">
+        <div class="chess-main">
+            <div id="lobby" class="card">
+                <div class="lobby-section">
+                    <h2>Créer une partie</h2>
+                    <button id="create-btn" class="btn">Créer une partie</button>
+                </div>
+                <div class="lobby-section">
+                    <h2>Rejoindre une partie</h2>
+                    <input id="join-code" type="text" maxlength="4" placeholder="CODE">
+                    <button id="join-btn" class="btn secondary">Rejoindre</button>
+                </div>
+                <div class="lobby-section">
+                    <h2>Jouer contre <span class="gm-badge">GM</span> Hibou Chess</h2>
+                    <div class="ai-color-choice">
+                        <label><input type="radio" name="ai-color" value="white" checked> Blancs</label>
+                        <label><input type="radio" name="ai-color" value="black"> Noirs</label>
+                        <label><input type="radio" name="ai-color" value="random"> Aléatoire</label>
+                    </div>
+                    <button id="play-ai-btn" class="btn">Défier GM Hibou Chess</button>
+                </div>
+                <p id="lobby-error"></p>
+            </div>
+
+            <div id="game" class="hidden">
+                <div class="game-topbar">
+                    <span id="room-code-row">Code : <span id="room-code" class="room-code-box"></span></span>
+                    <button id="copy-link-btn" class="btn secondary">Copier le lien d'invitation</button>
+                    <span id="conn-status"></span>
+                </div>
+
+                <div id="opponent-bar" class="opponent-bar hidden">
+                    <span id="opponent-badge" class="gm-badge hidden">GM</span>
+                    <span class="opponent-name" id="opponent-name">Adversaire</span>
+                    <svg id="owl-logo" class="owl-logo hidden" viewBox="0 0 64 64" aria-hidden="true">
+                        <ellipse cx="32" cy="36" rx="22" ry="24" fill="#7a5230"/>
+                        <circle cx="22" cy="28" r="11" fill="#fff"/>
+                        <circle cx="42" cy="28" r="11" fill="#fff"/>
+                        <circle cx="22" cy="28" r="5" fill="#2b2b2b"/>
+                        <circle cx="42" cy="28" r="5" fill="#2b2b2b"/>
+                        <polygon points="32,32 27,42 37,42" fill="#e8a33d"/>
+                        <polygon points="14,10 20,22 8,20" fill="#7a5230"/>
+                        <polygon points="50,10 56,20 44,22" fill="#7a5230"/>
+                    </svg>
+                </div>
+
+                <div class="game-info">
+                    <div id="status"></div>
+                    <div>Vous jouez : <span id="my-color"></span></div>
+                </div>
+
+                <div id="board" class="board brown cburnett"></div>
+
+                <div class="game-controls">
+                    <button id="resign-btn" class="btn danger">Abandonner</button>
+                    <button id="rematch-btn" class="btn secondary">Revanche</button>
+                    <button id="quit-btn" class="btn secondary">Quitter</button>
+                </div>
+
+                <div class="moves-panel">
+                    <ol id="moves-list"></ol>
+                </div>
+            </div>
         </div>
 
-        <div class="game-info">
-            <div id="status"></div>
-            <div>Vous jouez : <span id="my-color"></span></div>
-        </div>
+        <aside class="presence-panel">
+            <h2>Connecté·e·s</h2>
+            <ul id="presence-list"></ul>
+        </aside>
+    </div>
 
-        <div id="board" class="board brown cburnett"></div>
-
-        <div class="game-controls">
-            <button id="resign-btn" class="btn danger">Abandonner</button>
-            <button id="rematch-btn" class="btn secondary">Revanche</button>
-            <button id="quit-btn" class="btn secondary">Quitter</button>
-        </div>
-
-        <div class="moves-panel">
-            <ol id="moves-list"></ol>
+    <div id="pseudo-modal" class="overlay hidden">
+        <div class="overlay-box">
+            <p>Choisissez un pseudo pour jouer :</p>
+            <input id="pseudo-input" type="text" maxlength="24" placeholder="Votre pseudo">
+            <p id="pseudo-error" class="error-text"></p>
+            <div class="end-controls">
+                <button id="pseudo-confirm-btn" class="btn">Valider</button>
+            </div>
         </div>
     </div>
 
