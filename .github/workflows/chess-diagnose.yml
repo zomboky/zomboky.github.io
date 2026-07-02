@@ -41,21 +41,34 @@ jobs:
               fi
               sudo apachectl configtest
 
-              echo "== requesting/renewing certificate for bear.servebeer.com =="
-              sudo certbot --apache -d bear.servebeer.com --non-interactive --agree-tos \
-                -m remi.tournie@gmail.com --redirect
+              echo "== requesting/renewing certificate for bear.servebeer.com (webroot, no vhost needed) =="
+              sudo mkdir -p /var/www/html/.well-known/acme-challenge
+              sudo certbot certonly --webroot -w /var/www/html -d bear.servebeer.com \
+                --non-interactive --agree-tos -m remi.tournie@gmail.com
+              sudo chown -R apache:apache /var/www/html/.well-known
+              sudo restorecon -Rv /var/www/html/.well-known || true
 
               echo "== opening https in firewalld (idempotent) =="
               sudo firewall-cmd --permanent --add-service=https || true
               sudo firewall-cmd --reload || true
 
-              SSL_CONF=$(sudo grep -rl "ServerName bear.servebeer.com" /etc/httpd/conf.d/ | xargs -r sudo grep -l "VirtualHost \*:443" | head -n1)
-              echo "== ssl vhost file: $SSL_CONF =="
-              if [ -n "$SSL_CONF" ] && ! sudo grep -q "chess-ws" "$SSL_CONF"; then
-                echo "== adding chess-ws ProxyPass to ssl vhost =="
-                sudo sed -i '/<\/VirtualHost>/i\    ProxyPass "/chess-ws" "ws://127.0.0.1:8095/chess-ws"' "$SSL_CONF"
-                sudo sed -i '/<\/VirtualHost>/i\    ProxyPassReverse "/chess-ws" "ws://127.0.0.1:8095/chess-ws"' "$SSL_CONF"
-              fi
+              echo "== writing ssl vhost for bear.servebeer.com =="
+              SSL_CONF=/etc/httpd/conf.d/bear-servebeer-ssl.conf
+              printf '%s\n' \
+                '<VirtualHost *:443>' \
+                '    ServerName bear.servebeer.com' \
+                '    DocumentRoot /var/www/html' \
+                '' \
+                '    SSLEngine on' \
+                '    SSLCertificateFile /etc/letsencrypt/live/bear.servebeer.com/fullchain.pem' \
+                '    SSLCertificateKeyFile /etc/letsencrypt/live/bear.servebeer.com/privkey.pem' \
+                '' \
+                '    ProxyRequests Off' \
+                '    ProxyTimeout 3600' \
+                '    ProxyPass "/chess-ws" "ws://127.0.0.1:8095/chess-ws"' \
+                '    ProxyPassReverse "/chess-ws" "ws://127.0.0.1:8095/chess-ws"' \
+                '</VirtualHost>' \
+                | sudo tee "$SSL_CONF" > /dev/null
 
               sudo apachectl configtest
               sudo systemctl reload httpd
