@@ -11,8 +11,6 @@ import { OBJLoader } from '../three/examples/jsm/loaders/OBJLoader.js';
 
 
 
-console.log("le script test.js a bien été chargé");
-
 // scene
 const scene = new THREE.Scene();
 
@@ -65,7 +63,6 @@ const pointlight = new THREE.PointLight(0xffffff);
 pointlight.position.set(0, 0, 0);
 
 const ambientlight = new THREE.AmbientLight(0xffffff, 0.3);
-ambientlight.position.set()   
 
 
 // Lumière du soleil 
@@ -326,7 +323,7 @@ const mars = new THREE.Mesh(
   new THREE.MeshPhongMaterial({
     map : new THREE.TextureLoader().load('./assets/textures/mars_planet/mars_planet.jpg'),
     normalMap : new THREE.TextureLoader().load('./assets/textures/mars_planet/mars_planet_normal.jpg'),
-    displacementMapMap : new THREE.TextureLoader().load('./assets/textures/mars_planet/mars_planet_disp.jpg'),
+    displacementMap : new THREE.TextureLoader().load('./assets/textures/mars_planet/mars_planet_disp.jpg'),
     displacementScale : 0.05,
   })
 );
@@ -347,7 +344,7 @@ const earth = new THREE.Mesh(
   new THREE.MeshPhongMaterial({
     map : new THREE.TextureLoader().load('./assets/textures/earth_planet/earth_planet.jpg'),
     normalMap : new THREE.TextureLoader().load('./assets/textures/earth_planet/earth_planet_normal.png'),
-    displacementMapMap : new THREE.TextureLoader().load('./assets/textures/earth_planet/earth_planet_disp.png'),
+    displacementMap : new THREE.TextureLoader().load('./assets/textures/earth_planet/earth_planet_disp.png'),
     displacementScale : 0.05,
   })
 );
@@ -368,7 +365,7 @@ const venus = new THREE.Mesh(
   new THREE.MeshPhongMaterial({
     map : new THREE.TextureLoader().load('./assets/textures/venus_planet/venus_planet.jpg'),
     normalMap : new THREE.TextureLoader().load('./assets/textures/venus_planet/venus_planet_normal.png'),
-    displacementMapMap : new THREE.TextureLoader().load('./assets/textures/venus_planet/venus_planet_disp.png'),
+    displacementMap : new THREE.TextureLoader().load('./assets/textures/venus_planet/venus_planet_disp.png'),
     displacementScale : 0.1,
   })
 );
@@ -388,7 +385,7 @@ const mercury = new THREE.Mesh(
   new THREE.MeshPhongMaterial({
     map : new THREE.TextureLoader().load('./assets/textures/mercury_planet/mercury_planet.jpg'),
     normalMap : new THREE.TextureLoader().load('./assets/textures/mercury_planet/mercury_planet_normal.png'),
-    displacementMapMap : new THREE.TextureLoader().load('./assets/textures/mercury_planet/mercury_planet_disp.png'),
+    displacementMap : new THREE.TextureLoader().load('./assets/textures/mercury_planet/mercury_planet_disp.png'),
     displacementScale : 0.1,
   })
 );
@@ -436,10 +433,6 @@ function MoveCamera() {
 
 
   camera.lookAt(0, 0, 0);
- 
-
-  //partie debug
-  console.log("Position caméra : ", camera.position) //3, 40, 8 
 }
 
 
