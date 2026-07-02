@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       setup_tls:
-        description: 'Also (idempotently) provision/renew the Let\'s Encrypt cert for bear.servebeer.com'
+        description: 'Also (idempotently) provision/renew the Lets Encrypt cert for bear.servebeer.com'
         type: boolean
         default: false
 
@@ -38,10 +38,8 @@ jobs:
               echo "== ssl vhost file: $SSL_CONF =="
               if [ -n "$SSL_CONF" ] && ! sudo grep -q "chess-ws" "$SSL_CONF"; then
                 echo "== adding chess-ws ProxyPass to ssl vhost =="
-                sudo cp /opt/chess-server/deploy/chess-ws.conf /tmp/chess-ws-snippet.conf
-                sudo sed -i '/<\/VirtualHost>/i\
-    ProxyPass "/chess-ws" "ws://127.0.0.1:8095/chess-ws"\
-    ProxyPassReverse "/chess-ws" "ws://127.0.0.1:8095/chess-ws"' "$SSL_CONF"
+                sudo sed -i '/<\/VirtualHost>/i\    ProxyPass "/chess-ws" "ws://127.0.0.1:8095/chess-ws"' "$SSL_CONF"
+                sudo sed -i '/<\/VirtualHost>/i\    ProxyPassReverse "/chess-ws" "ws://127.0.0.1:8095/chess-ws"' "$SSL_CONF"
               fi
 
               sudo apachectl configtest
