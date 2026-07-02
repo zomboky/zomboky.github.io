@@ -1,6 +1,51 @@
+:root {
+  --page-bg: #eee;
+  --text: #333;
+  --text-secondary: #666;
+  --text-muted: #888;
+  --card-bg: #fff;
+  --card-shadow: rgba(0, 0, 0, 0.12);
+  --border: #ccc;
+  --border-light: #eee;
+  --input-bg: #fff;
+  --panel-bg: #fafafa;
+  --code-bg: #f0f0f0;
+  --overlay-bg: rgba(0, 0, 0, 0.55);
+  --danger: #c0392b;
+  --danger-border: #e0a29b;
+  --danger-bg-hover: #fdecea;
+  --btn-secondary-hover: #f0f0f0;
+  --warning-bg: #fff6d8;
+  --warning-border: #e0c34d;
+  --gm-green: #2e8b46;
+}
+
+html.theme-dark {
+  --page-bg: #1b1d20;
+  --text: #eee;
+  --text-secondary: #bbb;
+  --text-muted: #888;
+  --card-bg: #26292d;
+  --card-shadow: rgba(0, 0, 0, 0.5);
+  --border: #444;
+  --border-light: #34383d;
+  --input-bg: #1f2226;
+  --panel-bg: #202226;
+  --code-bg: #33373c;
+  --overlay-bg: rgba(0, 0, 0, 0.7);
+  --danger: #ff7a68;
+  --danger-border: #7a3a33;
+  --danger-bg-hover: #3a2422;
+  --btn-secondary-hover: #33373c;
+  --warning-bg: #3a3320;
+  --warning-border: #7a692c;
+  --gm-green: #4caf6a;
+}
+
 body.chess-page {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: #eee;
+  background: var(--page-bg);
+  color: var(--text);
   margin: 0;
   min-height: 100vh;
   display: flex;
@@ -8,26 +53,180 @@ body.chess-page {
   align-items: center;
   padding: 20px 12px 60px;
   box-sizing: border-box;
-}
-
-.chess-page h1 {
-  color: #333;
-  margin: 10px 0 20px;
-  text-align: center;
-}
-
-.card {
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
-  padding: 24px;
-  width: 100%;
-  max-width: 420px;
-  box-sizing: border-box;
+  transition: background 0.2s, color 0.2s;
 }
 
 .hidden {
   display: none !important;
+}
+
+/* --- top bar / theme switch --- */
+
+.top-bar {
+  width: 100%;
+  max-width: 700px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chess-page h1 {
+  color: var(--text);
+  margin: 10px 0 20px;
+  text-align: center;
+  flex: 1;
+}
+
+.theme-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.theme-icon {
+  font-size: 0.9rem;
+}
+
+.theme-switch input {
+  display: none;
+}
+
+.theme-slider {
+  width: 40px;
+  height: 20px;
+  background: var(--border);
+  border-radius: 20px;
+  position: relative;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.theme-slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 2px;
+  top: 2px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.theme-switch input:checked + .theme-slider {
+  background: #567d46;
+}
+
+.theme-switch input:checked + .theme-slider::before {
+  transform: translateX(20px);
+}
+
+/* --- warning banner / pseudo row --- */
+
+.warning-banner {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  color: var(--text);
+  padding: 10px 16px;
+  border-radius: 6px;
+  max-width: 500px;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.warning-banner a {
+  color: var(--text);
+  font-weight: bold;
+}
+
+.pseudo-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+#pseudo-display {
+  font-weight: bold;
+  color: var(--text);
+}
+
+/* --- layout: main column + presence sidebar --- */
+
+.chess-layout {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+  max-width: 700px;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.chess-main {
+  flex: 1;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.presence-panel {
+  width: 200px;
+  flex-shrink: 0;
+  background: var(--card-bg);
+  border-radius: 10px;
+  box-shadow: 0 4px 14px var(--card-shadow);
+  padding: 16px;
+  box-sizing: border-box;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.presence-panel h2 {
+  font-size: 1.05rem;
+  color: var(--text-secondary);
+  margin: 0 0 10px;
+}
+
+#presence-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.9rem;
+}
+
+#presence-list li {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text);
+}
+
+@media (max-width: 700px) {
+  .chess-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .presence-panel {
+    width: 100%;
+    max-width: 420px;
+    order: 2;
+  }
+}
+
+.card {
+  background: var(--card-bg);
+  border-radius: 10px;
+  box-shadow: 0 4px 14px var(--card-shadow);
+  padding: 24px;
+  width: 100%;
+  max-width: 420px;
+  box-sizing: border-box;
 }
 
 /* --- lobby --- */
@@ -38,19 +237,44 @@ body.chess-page {
 
 #lobby h2 {
   font-size: 1.05rem;
-  color: #444;
+  color: var(--text-secondary);
   margin: 0 0 10px;
 }
 
 #lobby input[type="text"] {
   padding: 10px;
   font-size: 1rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 4px;
   width: 140px;
+  background: var(--input-bg);
+  color: var(--text);
   text-transform: uppercase;
   letter-spacing: 2px;
   text-align: center;
+}
+
+.ai-color-choice {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.gm-badge {
+  display: inline-block;
+  border: 2px solid var(--gm-green);
+  color: var(--gm-green);
+  background: rgba(46, 139, 70, 0.08);
+  font-weight: bold;
+  font-size: 0.72rem;
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 1px;
+  margin-right: 6px;
+  vertical-align: middle;
 }
 
 .btn {
@@ -68,27 +292,33 @@ body.chess-page {
 }
 
 .btn.secondary {
-  background: #fff;
-  color: #444;
-  border-color: #ccc;
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  border-color: var(--border);
 }
 
 .btn.secondary:hover {
-  background: #f0f0f0;
+  background: var(--btn-secondary-hover);
 }
 
 .btn.danger {
-  background: #fff;
-  color: #c0392b;
-  border-color: #e0a29b;
+  background: var(--card-bg);
+  color: var(--danger);
+  border-color: var(--danger-border);
 }
 
 .btn.danger:hover {
-  background: #fdecea;
+  background: var(--danger-bg-hover);
 }
 
-#lobby-error {
-  color: #c0392b;
+.btn.small {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+}
+
+#lobby-error,
+.error-text {
+  color: var(--danger);
   min-height: 1.2em;
   font-size: 0.9rem;
 }
@@ -117,7 +347,8 @@ body.chess-page {
 .room-code-box {
   font-family: monospace;
   font-size: 1.1rem;
-  background: #f0f0f0;
+  background: var(--code-bg);
+  color: var(--text);
   padding: 6px 12px;
   border-radius: 4px;
   letter-spacing: 3px;
@@ -125,7 +356,32 @@ body.chess-page {
 
 #conn-status {
   font-size: 0.8rem;
-  color: #888;
+  color: var(--text-muted);
+}
+
+.opponent-bar {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 6px 10px;
+  box-sizing: border-box;
+}
+
+.opponent-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.owl-logo {
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
 }
 
 .board {
@@ -145,13 +401,13 @@ body.chess-page {
 
 #status {
   font-weight: bold;
-  color: #333;
+  color: var(--text);
   min-height: 1.4em;
 }
 
 #my-color {
   font-weight: normal;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .game-controls {
@@ -165,8 +421,8 @@ body.chess-page {
 .moves-panel {
   width: 100%;
   max-width: 400px;
-  background: #fafafa;
-  border: 1px solid #eee;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-light);
   border-radius: 6px;
   padding: 8px;
   max-height: 140px;
@@ -180,6 +436,7 @@ body.chess-page {
   padding: 0;
   font-family: monospace;
   font-size: 0.9rem;
+  color: var(--text);
 }
 
 #moves-list li {
@@ -189,7 +446,7 @@ body.chess-page {
 }
 
 .move-num {
-  color: #999;
+  color: var(--text-muted);
   min-width: 28px;
 }
 
@@ -198,12 +455,12 @@ body.chess-page {
   min-width: 60px;
 }
 
-/* --- promotion modal / end overlay --- */
+/* --- promotion modal / end overlay / pseudo modal --- */
 
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -211,11 +468,24 @@ body.chess-page {
 }
 
 .overlay-box {
-  background: #fff;
+  background: var(--card-bg);
+  color: var(--text);
   border-radius: 10px;
   padding: 24px;
   text-align: center;
   max-width: 320px;
+}
+
+#pseudo-input {
+  padding: 10px;
+  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 10px;
+  background: var(--input-bg);
+  color: var(--text);
 }
 
 .promo-choices {
@@ -229,13 +499,14 @@ body.chess-page {
   font-size: 1rem;
   padding: 10px 14px;
   cursor: pointer;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--card-bg);
+  color: var(--text);
 }
 
 .promo-choices button:hover {
-  background: #f0f0f0;
+  background: var(--btn-secondary-hover);
 }
 
 #end-message {

@@ -10,6 +10,7 @@ WorkingDirectory=/opt/chess-server
 ExecStart=/usr/bin/node /opt/chess-server/server.js
 Environment=CHESS_SERVER_HOST=127.0.0.1
 Environment=CHESS_SERVER_PORT=8095
+Environment=STOCKFISH_PATH=/opt/stockfish/stockfish
 Restart=always
 RestartSec=3
 NoNewPrivileges=true

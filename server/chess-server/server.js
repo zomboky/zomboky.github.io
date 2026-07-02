@@ -3,6 +3,7 @@
 const http = require('http');
 const { WebSocketServer } = require('ws');
 const { Chess } = require('./chess.min.js');
+const { StockfishEngine } = require('./stockfish.js');
 
 const PORT = process.env.CHESS_SERVER_PORT || 8095;
 const HOST = process.env.CHESS_SERVER_HOST || '127.0.0.1';
@@ -11,12 +12,18 @@ const WS_PATH = '/chess-ws';
 const ROOM_TTL_MS = 30 * 60 * 1000; // delete a room after 30min of no activity
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 const HEARTBEAT_INTERVAL_MS = 20 * 1000; // keep the Apache wstunnel proxy alive
+const BOT_DEPTH = 18;
+const PSEUDO_MAX_LEN = 24;
 
 // Codes avoid ambiguous characters (0/O, 1/I).
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 /** @type {Map<string, Room>} */
 const rooms = new Map();
+
+/** @type {Map<WebSocket, {id: number, pseudo: string}>} */
+const clients = new Map();
+let nextClientId = 1;
 
 function generateCode() {
   let code;
@@ -30,6 +37,21 @@ function normalizeCode(code) {
   return String(code || '').trim().toUpperCase();
 }
 
+// Keeps only printable characters (drops newlines/tabs/other control codes
+// a malicious or buggy client could stuff into the pseudo), then trims and
+// caps the length.
+function sanitizePseudo(raw) {
+  const str = String(raw || '');
+  let cleaned = '';
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    const isControlChar = code < 32 || code === 127;
+    if (!isControlChar) cleaned += str[i];
+  }
+  cleaned = cleaned.trim().slice(0, PSEUDO_MAX_LEN);
+  return cleaned || null;
+}
+
 function makeRoom(code) {
   return {
     code,
@@ -37,6 +59,9 @@ function makeRoom(code) {
     players: { white: null, black: null },
     rematch: { white: false, black: false },
     lastActivity: Date.now(),
+    vsBot: false,
+    botColor: null,
+    engine: null,
   };
 }
 
@@ -58,6 +83,25 @@ function broadcast(room, message, exclude) {
   for (const color of ['white', 'black']) {
     const ws = room.players[color];
     if (ws && ws !== exclude) send(ws, message);
+  }
+}
+
+function pseudoOf(ws) {
+  const info = clients.get(ws);
+  return info ? info.pseudo : null;
+}
+
+function opponentInfo(room, color) {
+  if (room.vsBot) return { vsBot: true, opponentPseudo: null };
+  const oppWs = room.players[opponentColor(color)];
+  return { vsBot: false, opponentPseudo: oppWs ? pseudoOf(oppWs) : null };
+}
+
+function broadcastPresence() {
+  const users = Array.from(clients.values()).map((c) => ({ id: c.id, pseudo: c.pseudo }));
+  const message = JSON.stringify({ type: 'presence', users });
+  for (const ws of clients.keys()) {
+    if (ws.readyState === ws.OPEN) ws.send(message);
   }
 }
 
@@ -90,8 +134,37 @@ function statusPayload(room) {
 function sendStartToEach(room) {
   for (const color of ['white', 'black']) {
     const ws = room.players[color];
-    if (ws) send(ws, { type: 'start', color, ...statusPayload(room) });
+    if (ws) send(ws, { type: 'start', color, ...statusPayload(room), ...opponentInfo(room, color) });
   }
+}
+
+async function maybeBotMove(room) {
+  if (!room.vsBot || !room.engine) return;
+  if (room.chess.game_over()) return;
+  if (colorFromChessTurn(room.chess) !== room.botColor) return;
+
+  let mv;
+  try {
+    mv = await room.engine.bestMove(room.chess.fen(), BOT_DEPTH);
+  } catch {
+    return;
+  }
+  if (!mv) return;
+  // The room may have been reset/deleted/resigned while the engine was thinking.
+  if (!rooms.has(room.code) || room.chess.game_over()) return;
+
+  const moveResult = room.chess.move({ from: mv.from, to: mv.to, promotion: mv.promotion || 'q' });
+  if (!moveResult) return;
+
+  room.lastActivity = Date.now();
+  broadcast(room, {
+    type: 'move',
+    from: moveResult.from,
+    to: moveResult.to,
+    promotion: moveResult.promotion || null,
+    san: moveResult.san,
+    ...statusPayload(room),
+  });
 }
 
 function sweepStaleRooms() {
@@ -99,6 +172,7 @@ function sweepStaleRooms() {
   for (const [code, room] of rooms) {
     if (now - room.lastActivity > ROOM_TTL_MS) {
       broadcast(room, { type: 'error', message: 'La partie a expiré par inactivité.' });
+      if (room.engine) room.engine.destroy();
       rooms.delete(code);
     }
   }
@@ -119,6 +193,7 @@ const wss = new WebSocketServer({ server: httpServer, path: WS_PATH });
 
 wss.on('connection', (ws) => {
   ws.isAlive = true;
+  ws.clientId = nextClientId++;
   ws.on('pong', () => {
     ws.isAlive = true;
   });
@@ -140,6 +215,10 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
+    if (clients.has(ws)) {
+      clients.delete(ws);
+      broadcastPresence();
+    }
     const room = rooms.get(ws.roomCode);
     if (!room) return;
     if (ws.color && room.players[ws.color] === ws) {
@@ -162,8 +241,21 @@ const heartbeat = setInterval(() => {
 }, HEARTBEAT_INTERVAL_MS);
 heartbeat.unref();
 
+function handleSetPseudo(ws, rawPseudo) {
+  const pseudo = sanitizePseudo(rawPseudo);
+  if (!pseudo) return;
+  clients.set(ws, { id: ws.clientId, pseudo });
+  broadcastPresence();
+}
+
 function handleMessage(ws, msg) {
   switch (msg.type) {
+    case 'hello':
+    case 'set-pseudo': {
+      handleSetPseudo(ws, msg.pseudo);
+      break;
+    }
+
     case 'create': {
       const code = generateCode();
       const room = makeRoom(code);
@@ -172,7 +264,25 @@ function handleMessage(ws, msg) {
       rooms.set(code, room);
       ws.roomCode = code;
       ws.color = color;
-      send(ws, { type: 'created', code, color, ...statusPayload(room) });
+      send(ws, { type: 'created', code, color, ...statusPayload(room), ...opponentInfo(room, color) });
+      break;
+    }
+
+    case 'create-ai': {
+      const code = generateCode();
+      const room = makeRoom(code);
+      room.vsBot = true;
+      const humanColor = msg.color === 'white' || msg.color === 'black'
+        ? msg.color
+        : (Math.random() < 0.5 ? 'white' : 'black');
+      room.botColor = opponentColor(humanColor);
+      room.players[humanColor] = ws;
+      room.engine = new StockfishEngine();
+      rooms.set(code, room);
+      ws.roomCode = code;
+      ws.color = humanColor;
+      send(ws, { type: 'created', code, color: humanColor, ...statusPayload(room), ...opponentInfo(room, humanColor) });
+      maybeBotMove(room);
       break;
     }
 
@@ -180,6 +290,7 @@ function handleMessage(ws, msg) {
       const code = normalizeCode(msg.code);
       const room = rooms.get(code);
       if (!room) return send(ws, { type: 'error', message: 'Code de partie introuvable.' });
+      if (room.vsBot) return send(ws, { type: 'error', message: 'Cette partie est déjà complète.' });
 
       let color = null;
       if (!room.players.white) color = 'white';
@@ -191,7 +302,7 @@ function handleMessage(ws, msg) {
       ws.color = color;
       room.lastActivity = Date.now();
 
-      send(ws, { type: 'joined', code, color, ...statusPayload(room) });
+      send(ws, { type: 'joined', code, color, ...statusPayload(room), ...opponentInfo(room, color) });
       if (room.players.white && room.players.black) {
         sendStartToEach(room);
       }
@@ -210,16 +321,16 @@ function handleMessage(ws, msg) {
       ws.roomCode = code;
       ws.color = color;
       room.lastActivity = Date.now();
-      send(ws, { type: 'start', color, ...statusPayload(room) });
+      send(ws, { type: 'start', color, ...statusPayload(room), ...opponentInfo(room, color) });
       const opp = room.players[opponentColor(color)];
-      if (opp) send(opp, { type: 'opponent-joined', ...statusPayload(room) });
+      if (opp) send(opp, { type: 'opponent-joined', ...statusPayload(room), ...opponentInfo(room, opponentColor(color)) });
       break;
     }
 
     case 'move': {
       const room = rooms.get(ws.roomCode);
       if (!room || !ws.color) return send(ws, { type: 'error', message: 'Vous n’êtes dans aucune partie.' });
-      if (!room.players.white || !room.players.black) {
+      if (!room.vsBot && (!room.players.white || !room.players.black)) {
         return send(ws, { type: 'error', message: 'En attente de l’adversaire.' });
       }
       if (room.chess.game_over()) {
@@ -248,6 +359,8 @@ function handleMessage(ws, msg) {
         san: moveResult.san,
         ...statusPayload(room),
       });
+
+      if (room.vsBot) maybeBotMove(room);
       break;
     }
 
@@ -263,6 +376,20 @@ function handleMessage(ws, msg) {
       const room = rooms.get(ws.roomCode);
       if (!room || !ws.color) return;
       room.lastActivity = Date.now();
+
+      if (room.vsBot) {
+        const newHumanColor = opponentColor(ws.color);
+        room.chess.reset();
+        room.players.white = null;
+        room.players.black = null;
+        room.players[newHumanColor] = ws;
+        room.botColor = ws.color;
+        ws.color = newHumanColor;
+        sendStartToEach(room);
+        maybeBotMove(room);
+        break;
+      }
+
       room.rematch[ws.color] = true;
 
       if (room.rematch.white && room.rematch.black) {
@@ -287,7 +414,7 @@ function handleMessage(ws, msg) {
     case 'resync': {
       const room = rooms.get(ws.roomCode);
       if (!room || !ws.color) return send(ws, { type: 'error', message: 'Partie introuvable.' });
-      send(ws, { type: 'state', color: ws.color, ...statusPayload(room) });
+      send(ws, { type: 'state', color: ws.color, ...statusPayload(room), ...opponentInfo(room, ws.color) });
       break;
     }
 

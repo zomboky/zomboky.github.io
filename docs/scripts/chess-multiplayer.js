@@ -10,6 +10,7 @@
     lobbyError: document.getElementById('lobby-error'),
     board: document.getElementById('board'),
     roomCode: document.getElementById('room-code'),
+    roomCodeRow: document.getElementById('room-code-row'),
     copyLinkBtn: document.getElementById('copy-link-btn'),
     connStatus: document.getElementById('conn-status'),
     myColor: document.getElementById('my-color'),
@@ -23,9 +24,24 @@
     endMessage: document.getElementById('end-message'),
     endRematchBtn: document.getElementById('end-rematch-btn'),
     endQuitBtn: document.getElementById('end-quit-btn'),
+    themeToggle: document.getElementById('theme-toggle'),
+    pseudoDisplay: document.getElementById('pseudo-display'),
+    editPseudoBtn: document.getElementById('edit-pseudo-btn'),
+    pseudoModal: document.getElementById('pseudo-modal'),
+    pseudoInput: document.getElementById('pseudo-input'),
+    pseudoError: document.getElementById('pseudo-error'),
+    pseudoConfirmBtn: document.getElementById('pseudo-confirm-btn'),
+    presenceList: document.getElementById('presence-list'),
+    playAiBtn: document.getElementById('play-ai-btn'),
+    opponentBar: document.getElementById('opponent-bar'),
+    opponentBadge: document.getElementById('opponent-badge'),
+    opponentName: document.getElementById('opponent-name'),
+    owlLogo: document.getElementById('owl-logo'),
   };
 
   const SESSION_KEY = 'chess-mp-session';
+  const PSEUDO_KEY = 'chess-mp-pseudo';
+  const THEME_KEY = 'chess-theme';
   const PIECE_NAMES = { q: 'Dame', r: 'Tour', b: 'Fou', n: 'Cavalier' };
 
   const game = new Chess();
@@ -38,6 +54,8 @@
   let pendingPromotion = null;
   let reconnectAttempts = 0;
   let reconnectTimer = null;
+  let pseudo = null;
+  let vsBot = false;
 
   // ---------- session persistence (survives page reloads) ----------
 
@@ -66,9 +84,126 @@
     }
   }
 
+  // ---------- pseudo ----------
+
+  function loadPseudo() {
+    try {
+      return localStorage.getItem(PSEUDO_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  function savePseudo(value) {
+    pseudo = value;
+    try {
+      localStorage.setItem(PSEUDO_KEY, value);
+    } catch {
+      /* ignore */
+    }
+    if (els.pseudoDisplay) els.pseudoDisplay.textContent = pseudo;
+    sendHello();
+  }
+
+  function sendHello() {
+    if (pseudo) send({ type: 'hello', pseudo });
+  }
+
+  function openPseudoModal() {
+    if (!els.pseudoModal) return;
+    if (els.pseudoInput) els.pseudoInput.value = pseudo || '';
+    if (els.pseudoError) els.pseudoError.textContent = '';
+    els.pseudoModal.classList.remove('hidden');
+    if (els.pseudoInput) els.pseudoInput.focus();
+  }
+
+  function closePseudoModal() {
+    if (els.pseudoModal) els.pseudoModal.classList.add('hidden');
+  }
+
+  function confirmPseudo() {
+    const value = (els.pseudoInput && els.pseudoInput.value || '').trim().slice(0, 24);
+    if (!value) {
+      if (els.pseudoError) els.pseudoError.textContent = 'Choisissez un pseudo.';
+      return;
+    }
+    savePseudo(value);
+    closePseudoModal();
+  }
+
+  if (els.pseudoConfirmBtn) els.pseudoConfirmBtn.addEventListener('click', confirmPseudo);
+  if (els.editPseudoBtn) els.editPseudoBtn.addEventListener('click', openPseudoModal);
+  if (els.pseudoInput) {
+    els.pseudoInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') confirmPseudo();
+    });
+  }
+
+  pseudo = loadPseudo();
+  if (pseudo && els.pseudoDisplay) {
+    els.pseudoDisplay.textContent = pseudo;
+  } else {
+    openPseudoModal();
+  }
+
+  // ---------- theme ----------
+
+  function applyTheme(dark) {
+    document.documentElement.classList.toggle('theme-dark', dark);
+    if (els.themeToggle) els.themeToggle.checked = dark;
+    try {
+      localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light');
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (els.themeToggle) {
+    els.themeToggle.checked = document.documentElement.classList.contains('theme-dark');
+    els.themeToggle.addEventListener('change', () => applyTheme(els.themeToggle.checked));
+  }
+
+  // ---------- presence ----------
+
+  function renderPresence(users) {
+    if (!els.presenceList) return;
+    els.presenceList.innerHTML = '';
+    (users || []).forEach((user) => {
+      const li = document.createElement('li');
+      li.textContent = user.pseudo;
+      els.presenceList.appendChild(li);
+    });
+  }
+
+  // ---------- opponent bar (human name or GM Hibou Chess) ----------
+
+  function updateOpponentBar(opponentPseudo) {
+    if (!els.opponentBar) return;
+    if (vsBot) {
+      els.opponentBar.classList.remove('hidden');
+      if (els.opponentBadge) els.opponentBadge.classList.remove('hidden');
+      if (els.owlLogo) els.owlLogo.classList.remove('hidden');
+      if (els.opponentName) els.opponentName.textContent = 'Hibou Chess';
+    } else if (opponentPseudo) {
+      els.opponentBar.classList.remove('hidden');
+      if (els.opponentBadge) els.opponentBadge.classList.add('hidden');
+      if (els.owlLogo) els.owlLogo.classList.add('hidden');
+      if (els.opponentName) els.opponentName.textContent = opponentPseudo;
+    } else {
+      els.opponentBar.classList.add('hidden');
+    }
+    if (els.roomCodeRow) els.roomCodeRow.classList.toggle('hidden', vsBot);
+    if (els.copyLinkBtn) els.copyLinkBtn.classList.toggle('hidden', vsBot);
+  }
+
   // ---------- websocket plumbing ----------
 
-  const PRODUCTION_WS_URL = 'wss://bear.servebeer.com/chess-ws';
+  // The relay only speaks plain ws:// (no TLS in front of it — the Oracle
+  // Cloud security list blocks inbound 443, so wss:// just times out).
+  // That means this page must itself be loaded over http:// to reach it:
+  // a page served over https (e.g. GitHub Pages) is not allowed by
+  // browsers to open an insecure ws:// connection (mixed content).
+  const PRODUCTION_WS_URL = 'ws://bear.servebeer.com/chess-ws';
 
   function wsUrl() {
     const override = new URLSearchParams(location.search).get('ws');
@@ -83,7 +218,18 @@
     return PRODUCTION_WS_URL;
   }
 
+  function warnIfMixedContent() {
+    if (location.protocol !== 'https:') return false;
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return false;
+    if (new URLSearchParams(location.search).get('ws')) return false;
+    const banner = document.getElementById('https-warning');
+    if (banner) banner.classList.remove('hidden');
+    setConnStatus('Multijoueur indisponible en HTTPS.');
+    return true;
+  }
+
   function connect() {
+    if (warnIfMixedContent()) return;
     setConnStatus('Connexion au serveur...');
     ws = new WebSocket(wsUrl());
     ws.addEventListener('open', onOpen);
@@ -94,6 +240,7 @@
   function onOpen() {
     reconnectAttempts = 0;
     setConnStatus('Connecté');
+    sendHello();
     const saved = loadSession();
     if (saved && saved.code && saved.color) {
       roomCode = saved.code;
@@ -138,29 +285,34 @@
       case 'created':
         roomCode = msg.code;
         myColor = msg.color;
-        opponentPresent = false;
+        vsBot = !!msg.vsBot;
+        opponentPresent = vsBot;
         saveSession(msg.code, msg.color);
         enterGameView();
         ensureBoard();
         game.load(msg.fen);
+        updateOpponentBar(msg.opponentPseudo);
         refreshBoard(msg);
-        setStatus('Partie créée : partagez le code ci-dessus avec votre adversaire.');
+        setStatus(vsBot ? 'Partie lancée contre GM Hibou Chess.' : 'Partie créée : partagez le code ci-dessus avec votre adversaire.');
         break;
 
       case 'joined':
         roomCode = msg.code;
         myColor = msg.color;
+        vsBot = false;
         opponentPresent = false;
         saveSession(msg.code, msg.color);
         enterGameView();
         ensureBoard();
         game.load(msg.fen);
+        updateOpponentBar(msg.opponentPseudo);
         refreshBoard(msg);
         setStatus('En attente du démarrage de la partie...');
         break;
 
       case 'start':
         myColor = msg.color;
+        vsBot = !!msg.vsBot;
         saveSession(roomCode, msg.color);
         opponentPresent = true;
         gameFinished = false;
@@ -170,13 +322,19 @@
         game.load(msg.fen);
         ground.set({ orientation: myColor });
         hideEndOverlay();
+        updateOpponentBar(msg.opponentPseudo);
         refreshBoard(msg);
         break;
 
       case 'opponent-joined':
         opponentPresent = true;
         game.load(msg.fen);
+        updateOpponentBar(msg.opponentPseudo);
         refreshBoard(msg);
+        break;
+
+      case 'presence':
+        renderPresence(msg.users);
         break;
 
       case 'opponent-left':
@@ -416,11 +574,15 @@
     clearSession();
     roomCode = null;
     myColor = null;
+    vsBot = false;
     opponentPresent = false;
     gameFinished = false;
     game.reset();
     clearMovesList();
     hideEndOverlay();
+    if (els.opponentBar) els.opponentBar.classList.add('hidden');
+    if (els.roomCodeRow) els.roomCodeRow.classList.remove('hidden');
+    if (els.copyLinkBtn) els.copyLinkBtn.classList.remove('hidden');
     if (ground) {
       ground.destroy();
       ground = null;
@@ -493,6 +655,15 @@
   if (els.joinInput) {
     els.joinInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') els.joinBtn.click();
+    });
+  }
+
+  if (els.playAiBtn) {
+    els.playAiBtn.addEventListener('click', () => {
+      if (els.lobbyError) els.lobbyError.textContent = '';
+      const choice = document.querySelector('input[name="ai-color"]:checked');
+      const color = choice ? choice.value : 'random';
+      send({ type: 'create-ai', color });
     });
   }
 
