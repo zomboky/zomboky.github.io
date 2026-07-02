@@ -8,6 +8,7 @@ import { EffectComposer } from '../three/examples/jsm/postprocessing/EffectCompo
 import { RenderPass } from '../three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from '../three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OBJLoader } from '../three/examples/jsm/loaders/OBJLoader.js';
+import { planets } from './planets-data.js';
 
 
 
@@ -401,61 +402,95 @@ mercury.rotation.y = THREE.MathUtils.degToRad(0);
 
 
 
-// position initiale de la caméra
+// ══════════════════════════════════════════════════
+//  CAMÉRA GUIDÉE PAR LE SCROLL
+//  La caméra suit la planète actuellement affichée par planet-text.js
+//  (mêmes plages de scroll, définies dans planets-data.js), pour que le
+//  nom affiché à l'écran corresponde toujours à la planète réellement
+//  visible. Entre deux planètes, la position cible est interpolée pour
+//  un mouvement fluide.
+// ══════════════════════════════════════════════════
 
-const basePos = new THREE.Vector3(2, 5, 7); // position initiale caméra
-camera.position.copy(basePos);
-camera.lookAt(0,0,0); // Camera scroll
+const planetMeshes = {
+  Neptune: neptune,
+  Uranus: uranus,
+  Saturne: saturn,
+  Jupiter: jupiter,
+  Mars: mars,
+  Terre: earth,
+  Vénus: venus,
+  Mercure: mercury,
+};
 
+const planetSequence = planets.map(p => ({
+  name: p.name,
+  start: p.start,
+  end: p.end,
+  position: planetMeshes[p.name].position,
+}));
 
-controls.update();
+const cameraOffset = new THREE.Vector3(2, 1.5, 7); // décalage caméra / planète actuelle
 
-// Caméra fluide 
-let targetPos = basePos.clone(); // copie de basePos pour pas changer sa valeur initiale
-                                //  stocke la position vers laquelle la caméra doit aller
-
- 
-
-
-
-// Move Camera 
-
-function MoveCamera() {
-
-
-
-  const t = document.body.getBoundingClientRect().top;
-  targetPos.set(
-    basePos.x + t * -0.01, // X
-    basePos.y + t * -0.2,  // Y
-    basePos.z + t * -0.01  // Z
-  );
-
-
-  camera.lookAt(0, 0, 0);
+function getScrollPercent() {
+  const max = document.body.scrollHeight - window.innerHeight;
+  return max > 0 ? (window.scrollY / max) * 100 : 0;
 }
 
+// Renvoie la position 3D de la planète "active" pour un % de scroll donné,
+// en interpolant entre deux planètes pendant les transitions.
+function getFocusPosition(scrollPercent) {
+  const first = planetSequence[0];
+  const last = planetSequence[planetSequence.length - 1];
+
+  if (scrollPercent <= first.start) return first.position;
+  if (scrollPercent >= last.end) return last.position;
+
+  for (let i = 0; i < planetSequence.length; i++) {
+    const current = planetSequence[i];
+    if (scrollPercent >= current.start && scrollPercent <= current.end) {
+      return current.position;
+    }
+
+    const next = planetSequence[i + 1];
+    if (next && scrollPercent > current.end && scrollPercent < next.start) {
+      const fraction = (scrollPercent - current.end) / (next.start - current.end);
+      return current.position.clone().lerp(next.position, fraction);
+    }
+  }
+
+  return last.position;
+}
+
+// Caméra fluide
+const targetPos = new THREE.Vector3();
+const lookAtTarget = new THREE.Vector3();
+const currentLookAt = new THREE.Vector3();
+
+function MoveCamera() {
+  const focus = getFocusPosition(getScrollPercent());
+  lookAtTarget.copy(focus);
+  targetPos.copy(focus).add(cameraOffset);
+}
+
+MoveCamera();
+camera.position.copy(targetPos);
+currentLookAt.copy(lookAtTarget);
+camera.lookAt(currentLookAt);
+controls.target.copy(currentLookAt);
+controls.update();
 
 document.body.onscroll = MoveCamera;
-MoveCamera();
-
-
-
 
 function animate(){
 
-
     requestAnimationFrame( animate );
 
-
-
-    controls.update();
     camera.position.lerp(targetPos, 0.05); // 0.05 = vitesse de lissage
-    camera.lookAt(0, 0, 0);
+    currentLookAt.lerp(lookAtTarget, 0.05);
+    camera.lookAt(currentLookAt);
+    controls.target.copy(currentLookAt);
+    controls.update();
 
-
-
-    //renderer.render( scene, camera);
     composer.render();
 }
 
