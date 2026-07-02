@@ -197,36 +197,68 @@ const PALETTE = {
   blush:      0xffd9c2
 };
 
+// ── Silhouette du corps (vue de face), dessinée dans le plan XY puis extrudée.
+//    Reproduit la forme caractéristique du hibou Duolingo : deux pointes d'ailes
+//    qui dépassent sur les flancs à mi-hauteur, et deux aigrettes pointues au
+//    sommet du crâne séparées par une encoche en "V" — d'après les captures
+//    d'écran du modèle original (face, dos, profils, dessus/dessous).
+function buildOwlSilhouette() {
+  const s = new THREE.Shape();
+  s.moveTo(0, 0);
+  s.lineTo(0.24, 0.05);
+  s.quadraticCurveTo(0.34, 0.16, 0.40, 0.32);
+  s.quadraticCurveTo(0.52, 0.50, 0.62, 0.66);
+  s.lineTo(1.05, 0.90);                          // approche de la pointe d'aile droite
+  s.quadraticCurveTo(1.20, 1.02, 0.98, 1.18);     // pointe d'aile arrondie (pas un pic acéré)
+  s.quadraticCurveTo(0.82, 1.32, 0.66, 1.40);
+  s.quadraticCurveTo(0.80, 1.54, 0.78, 1.70);
+  s.quadraticCurveTo(0.74, 1.86, 0.60, 1.95);
+  s.lineTo(0.30, 2.30);   // pointe de l'aigrette droite (plus courte, plus trapue)
+  s.lineTo(0.20, 1.90);   // creux du "V" central (côté droit)
+  s.quadraticCurveTo(0.08, 1.85, 0, 1.82); // centre du V
+  s.quadraticCurveTo(-0.08, 1.85, -0.20, 1.90);
+  s.lineTo(-0.30, 2.30);  // pointe de l'aigrette gauche
+  s.lineTo(-0.60, 1.95);
+  s.quadraticCurveTo(-0.74, 1.86, -0.78, 1.70);
+  s.quadraticCurveTo(-0.80, 1.54, -0.66, 1.40);
+  s.quadraticCurveTo(-0.82, 1.32, -0.98, 1.18);
+  s.quadraticCurveTo(-1.20, 1.02, -1.05, 0.90);  // pointe d'aile gauche arrondie
+  s.lineTo(-0.62, 0.66);
+  s.quadraticCurveTo(-0.52, 0.50, -0.40, 0.32);
+  s.quadraticCurveTo(-0.34, 0.16, -0.24, 0.05);
+  s.lineTo(0, 0);
+  return s;
+}
+
 function buildDuoOwl() {
   const g = new THREE.Group();
   const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.02, ...opts });
 
-  // ── Corps : sphère étirée en "goutte", légèrement aplatie devant/derrière ──
+  // ── Corps : silhouette extrudée + biseau (aspect "peluche" arrondie et épaisse) ──
   const bodyMat = mat(PALETTE.green);
-  const body = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 28), bodyMat);
-  body.scale.set(1.05, 1.28, 0.98);
-  body.position.y = 1.28;
+  const depth = 1.35; // corps épais : évite l'effet "plaque plate" vu de profil
+  const bodyGeo = new THREE.ExtrudeGeometry(buildOwlSilhouette(), {
+    depth,
+    bevelEnabled: true,
+    bevelThickness: 0.22,
+    bevelSize: 0.18,
+    bevelSegments: 8,
+    curveSegments: 16
+  });
+  bodyGeo.translate(0, 0, -depth / 2); // centre le corps sur Z : face avant vers +Z
+  bodyGeo.computeVertexNormals();
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
   body.castShadow = body.receiveShadow = true;
   g.add(body);
+  const frontZ = depth / 2 + 0.22; // approx. profondeur de la face avant après biseau
 
-  // ── Ventre clair : disque bombé plaqué sur l'avant du corps ──
+  // ── Ventre clair : plaque bombée sur l'avant du corps ──
   const bellyMat = mat(PALETTE.belly, { roughness: 0.7 });
   const belly = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 20), bellyMat);
-  belly.scale.set(0.62, 0.92, 0.32);
-  belly.position.set(0, 1.12, -0.86);
+  belly.scale.set(0.5, 0.72, 0.34);
+  belly.position.set(0, 0.85, frontZ - 0.2);
   belly.castShadow = true;
   g.add(belly);
-
-  // ── Aigrettes (petites touffes en pointe sur le sommet du crâne) ──
-  const tuftMat = mat(PALETTE.greenWing);
-  [-1, 1].forEach(side => {
-    const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.42, 8), tuftMat);
-    tuft.position.set(side * 0.32, 2.42, -0.25);
-    tuft.rotation.z = side * -0.35;
-    tuft.rotation.x = -0.25;
-    tuft.castShadow = true;
-    g.add(tuft);
-  });
 
   // ── Yeux : grands disques blancs + pupilles noires + reflet ──
   const eyeWhiteMat = mat(PALETTE.eyeWhite, { roughness: 0.25 });
@@ -235,106 +267,66 @@ function buildDuoOwl() {
   const eyes = [];
   [-1, 1].forEach(side => {
     const eyeGroup = new THREE.Group();
-    const white = new THREE.Mesh(new THREE.SphereGeometry(0.46, 24, 20), eyeWhiteMat);
+    const white = new THREE.Mesh(new THREE.SphereGeometry(0.42, 24, 20), eyeWhiteMat);
     white.scale.set(1, 1, 0.55);
     eyeGroup.add(white);
 
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 14), pupilMat);
-    pupil.position.set(side * -0.04, -0.03, -0.28);
+    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 14), pupilMat);
+    pupil.position.set(side * -0.05, -0.02, 0.26);
     eyeGroup.add(pupil);
 
-    const glint = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), glintMat);
-    glint.position.set(side * -0.04 + 0.06, 0.06, -0.35);
+    const glint = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), glintMat);
+    glint.position.set(side * -0.05 + 0.07, 0.08, 0.34);
     eyeGroup.add(glint);
 
-    eyeGroup.position.set(side * 0.46, 1.72, -1.08);
-    eyeGroup.rotation.y = side * -0.1;
+    eyeGroup.position.set(side * 0.42, 1.72, frontZ - 0.08);
+    eyeGroup.rotation.y = side * 0.12;
     eyeGroup.traverse(o => { if (o.isMesh) o.castShadow = true; });
     g.add(eyeGroup);
     eyes.push(eyeGroup);
   });
 
-  // ── Bec : petit losange orange entre/sous les yeux ──
+  // ── Bec : petit cône orange sous les yeux, incliné vers le bas ──
   const beakMat = mat(PALETTE.beak, { roughness: 0.4 });
-  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.42, 4), beakMat);
-  beak.rotation.x = -Math.PI / 2;
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.4, 6), beakMat);
+  beak.rotation.x = Math.PI / 2 + 0.3;
   beak.rotation.y = Math.PI / 4;
-  beak.position.set(0, 1.48, -1.28);
+  beak.position.set(0, 1.42, frontZ + 0.05);
   beak.castShadow = true;
   g.add(beak);
-
-  // ── Joues roses (petite touche mignonne) ──
-  const blushMat = mat(PALETTE.blush, { roughness: 0.9 });
-  [-1, 1].forEach(side => {
-    const blush = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 10), blushMat);
-    blush.scale.set(1, 0.7, 0.3);
-    blush.position.set(side * 0.72, 1.32, -0.72);
-    g.add(blush);
-  });
-
-  // ── Ailes : formes arrondies aplaties sur les flancs ──
-  const wingMat = mat(PALETTE.greenWing);
-  const wings = [];
-  [-1, 1].forEach(side => {
-    const pivot = new THREE.Group();
-    pivot.position.set(side * 0.78, 1.32, 0.15);
-    const wing = new THREE.Mesh(new THREE.SphereGeometry(0.55, 20, 16), wingMat);
-    wing.scale.set(0.36, 0.88, 0.6);
-    wing.position.set(side * 0.1, -0.08, 0);
-    wing.rotation.z = side * 0.3;
-    wing.rotation.y = side * 0.5;
-    wing.castShadow = true;
-    pivot.add(wing);
-    g.add(pivot);
-    wings.push(pivot);
-  });
-
-  // ── Queue : petite forme aplatie à l'arrière ──
-  const tailMat = mat(PALETTE.greenWing);
-  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.5, 4), tailMat);
-  tail.rotation.x = Math.PI / 2.4;
-  tail.rotation.y = Math.PI / 4;
-  tail.position.set(0, 0.85, 0.95);
-  tail.castShadow = true;
-  g.add(tail);
 
   // ── Pattes : petits cylindres + pieds orange ──
   const legMat = mat(PALETTE.foot, { roughness: 0.5 });
   const feet = [];
   [-1, 1].forEach(side => {
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.22, 10), legMat);
-    leg.position.set(side * 0.32, 0.14, -0.05);
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.16, 10), legMat);
+    leg.position.set(side * 0.22, 0.08, frontZ - 0.75);
     leg.castShadow = true;
     g.add(leg);
 
     const foot = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 10), legMat);
     foot.scale.set(1, 0.5, 1.3);
-    foot.position.set(side * 0.32, 0.05, -0.14);
+    foot.position.set(side * 0.22, 0.02, frontZ - 0.68);
     foot.castShadow = foot.receiveShadow = true;
     g.add(foot);
     feet.push(foot);
   });
 
-  return { group: g, eyes, wings, body, tuftMat };
+  return { group: g, eyes, body };
 }
 
 const owl = buildDuoOwl();
-owl.group.rotation.y = Math.PI; // la face avant du modèle (-Z) doit regarder la caméra (+Z)
 scene.add(owl.group);
 
 // ══════════════════════════════════════════════════
-//  ANIMATION IDLE — léger balancement + battements d'ailes occasionnels
+//  ANIMATION IDLE — léger balancement + clignement occasionnel des yeux
 // ══════════════════════════════════════════════════
 const clock = new THREE.Clock();
 function animate() {
   const t = clock.getElapsedTime();
 
   owl.group.position.y = Math.sin(t * 1.1) * 0.045;
-  owl.body.rotation.z = Math.sin(t * 0.7) * 0.02;
-
-  const flap = Math.sin(t * 1.6) * 0.12;
-  owl.wings[0].rotation.z = -0.1 - flap;
-  owl.wings[1].rotation.z = 0.1 + flap;
+  owl.group.rotation.z = Math.sin(t * 0.7) * 0.015;
 
   const blink = Math.max(0, Math.sin(t * 0.5)) > 0.985 ? 0.08 : 1;
   owl.eyes.forEach(e => { e.scale.y = THREE.MathUtils.lerp(e.scale.y, blink, 0.5); });
