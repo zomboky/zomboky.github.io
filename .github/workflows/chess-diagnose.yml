@@ -42,43 +42,44 @@ jobs:
             echo "== chess-ws.conf deployed? =="
             ls -la /etc/httpd/conf.d/chess-ws.conf || true
             cat /etc/httpd/conf.d/chess-ws.conf || true
-            echo
-            echo "== apache vhost summary =="
-            sudo apachectl -S || true
-            echo
-            echo "== selinux =="
-            getenforce || true
-            sudo getsebool httpd_can_network_connect || true
-            echo
-            echo "== httpd service status =="
-            sudo systemctl status httpd --no-pager || true
-            echo
-            echo "== ports listening (80/443) =="
-            sudo ss -ltnp | grep -E ':(80|443)\b' || echo "neither 80 nor 443 listening"
-            echo
-            echo "== apache ssl module loaded =="
-            httpd -M 2>&1 | grep -i ssl || echo "no ssl module found"
-            echo
-            echo "== apache ssl/le vhost conf files =="
-            ls -la /etc/httpd/conf.d/*ssl* /etc/httpd/conf.d/*le-ssl* 2>/dev/null || echo "no ssl vhost conf files found"
-            echo
-            echo "== certbot / letsencrypt certs =="
-            sudo ls -la /etc/letsencrypt/live/ 2>/dev/null || echo "no letsencrypt directory"
-            echo
-            echo "== os firewall (firewalld) =="
-            sudo firewall-cmd --state 2>&1 || echo "firewalld not active/installed"
-            sudo firewall-cmd --list-all 2>&1 || true
-            echo
-            echo "== os firewall (iptables, if firewalld absent) =="
-            sudo iptables -L -n 2>&1 | head -40 || true
 
-      - name: Probe the public site from the internet
+      - name: Test the actual WebSocket relay from the public internet
         run: |
-          echo "== chess.html over HTTPS (by IP, best effort) =="
-          curl -sk --connect-timeout 8 -o /dev/null -w 'http_code=%{http_code} time=%{time_total}s\n' "https://${{ secrets.REMOTE_HOST }}/chess.html" || true
-          echo "== chess.html over HTTP (by IP, best effort) =="
-          curl -s --connect-timeout 8 -o /dev/null -w 'http_code=%{http_code} time=%{time_total}s\n' "http://${{ secrets.REMOTE_HOST }}/chess.html" || true
-          echo "== raw TCP connect to port 443 =="
-          timeout 8 bash -c "cat < /dev/null > /dev/tcp/${{ secrets.REMOTE_HOST }}/443" && echo "port 443: OPEN" || echo "port 443: CLOSED or FILTERED"
-          echo "== raw TCP connect to port 80 =="
-          timeout 8 bash -c "cat < /dev/null > /dev/tcp/${{ secrets.REMOTE_HOST }}/80" && echo "port 80: OPEN" || echo "port 80: CLOSED or FILTERED"
+          npm install ws --no-audit --no-fund --silent
+          node -e "
+          const WebSocket = require('ws');
+          const url = 'ws://${{ secrets.REMOTE_HOST }}/chess-ws';
+          console.log('Connecting to', url);
+          const a = new WebSocket(url);
+          const b = new WebSocket(url);
+          let code;
+          const timer = setTimeout(() => { console.log('TIMEOUT waiting for full handshake'); process.exit(1); }, 15000);
+
+          a.on('open', () => a.send(JSON.stringify({type:'create'})));
+          a.on('error', (e) => console.log('A error:', e.message));
+          b.on('error', (e) => console.log('B error:', e.message));
+
+          a.on('message', (raw) => {
+            const m = JSON.parse(raw);
+            console.log('A <-', m.type, m.color || '');
+            if (m.type === 'created') {
+              code = m.code;
+              b.send(JSON.stringify({type:'join', code}));
+            }
+          });
+
+          b.on('message', (raw) => {
+            const m = JSON.parse(raw);
+            console.log('B <-', m.type, m.color || '');
+            if (m.type === 'start') {
+              const mover = m.turn === 'white' ? (m.color === 'white' ? b : a) : (m.color === 'black' ? b : a);
+              mover.send(JSON.stringify({type:'move', from:'e2', to:'e4'}));
+            }
+            if (m.type === 'move') {
+              console.log('SUCCESS: full create/join/move round-trip works over the public WS relay');
+              clearTimeout(timer);
+              a.close(); b.close();
+              process.exit(0);
+            }
+          });
+          "
