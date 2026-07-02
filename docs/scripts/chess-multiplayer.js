@@ -68,11 +68,19 @@
 
   // ---------- websocket plumbing ----------
 
+  const PRODUCTION_WS_URL = 'wss://bear.servebeer.com/chess-ws';
+
   function wsUrl() {
     const override = new URLSearchParams(location.search).get('ws');
     if (override) return override;
-    const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
-    return proto + location.host + '/chess-ws';
+    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+      const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+      return proto + location.host + '/chess-ws';
+    }
+    // Always point at the Oracle-hosted relay, regardless of which copy of
+    // the static files served this page (GitHub Pages or the Oracle host
+    // itself) — GitHub Pages has no backend of its own.
+    return PRODUCTION_WS_URL;
   }
 
   function connect() {

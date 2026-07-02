@@ -2,53 +2,84 @@ name: Diagnose chess-server on Oracle Cloud
 
 on:
   workflow_dispatch:
+    inputs:
+      setup_tls:
+        description: 'Also (idempotently) provision/renew the Let\'s Encrypt cert for bear.servebeer.com'
+        type: boolean
+        default: false
 
 jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Run read-only diagnostics over SSH
+      - name: Run diagnostics (and optional TLS setup) over SSH
+        env:
+          SETUP_TLS: ${{ inputs.setup_tls }}
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.REMOTE_HOST }}
           username: ${{ secrets.REMOTE_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: SETUP_TLS
           script: |
+            if [ "$SETUP_TLS" = "true" ]; then
+              echo "== installing certbot =="
+              sudo dnf install -y certbot python3-certbot-apache
+
+              echo "== requesting/renewing certificate for bear.servebeer.com =="
+              sudo certbot --apache -d bear.servebeer.com --non-interactive --agree-tos \
+                -m remi.tournie@gmail.com --redirect
+
+              echo "== opening https in firewalld (idempotent) =="
+              sudo firewall-cmd --permanent --add-service=https || true
+              sudo firewall-cmd --reload || true
+
+              SSL_CONF=$(sudo grep -rl "ServerName bear.servebeer.com" /etc/httpd/conf.d/ | xargs -r sudo grep -l "VirtualHost \*:443" | head -n1)
+              echo "== ssl vhost file: $SSL_CONF =="
+              if [ -n "$SSL_CONF" ] && ! sudo grep -q "chess-ws" "$SSL_CONF"; then
+                echo "== adding chess-ws ProxyPass to ssl vhost =="
+                sudo cp /opt/chess-server/deploy/chess-ws.conf /tmp/chess-ws-snippet.conf
+                sudo sed -i '/<\/VirtualHost>/i\
+    ProxyPass "/chess-ws" "ws://127.0.0.1:8095/chess-ws"\
+    ProxyPassReverse "/chess-ws" "ws://127.0.0.1:8095/chess-ws"' "$SSL_CONF"
+              fi
+
+              sudo apachectl configtest
+              sudo systemctl reload httpd
+            fi
+
             echo "== chess-server service =="
             sudo systemctl status chess-server --no-pager || true
             echo
-            echo "== chess-server recent logs (last 80 lines) =="
-            sudo journalctl -u chess-server --no-pager -n 80 || true
-            echo
             echo "== local health check (127.0.0.1:8095) =="
             curl -s -o /dev/null -w 'http_code=%{http_code}\n' http://127.0.0.1:8095/health || true
-            curl -s http://127.0.0.1:8095/health || true
             echo
-            echo "== node version =="
-            node -v || echo "node not found"
+            echo "== ports listening (80/443) =="
+            sudo ss -ltnp | grep -E ':(80|443)\b' || echo "neither 80 nor 443 listening"
             echo
-            echo "== /opt/chess-server contents =="
-            ls -la /opt/chess-server || true
+            echo "== apache ssl module loaded =="
+            httpd -M 2>&1 | grep -i ssl || echo "no ssl module found"
             echo
-            echo "== port 8095 listening? =="
-            sudo ss -ltnp | grep 8095 || echo "NOT LISTENING on 8095"
-            echo
-            echo "== apache proxy modules loaded =="
-            httpd -M 2>&1 | grep -i proxy || echo "no proxy modules found"
+            echo "== letsencrypt certs =="
+            sudo ls -la /etc/letsencrypt/live/ 2>/dev/null || echo "no letsencrypt directory"
             echo
             echo "== apache config test =="
             sudo apachectl configtest || true
             echo
-            echo "== chess-ws.conf deployed? =="
-            ls -la /etc/httpd/conf.d/chess-ws.conf || true
-            cat /etc/httpd/conf.d/chess-ws.conf || true
+            echo "== all conf.d files mentioning chess-ws =="
+            sudo grep -rl "chess-ws" /etc/httpd/conf.d/ || echo "none found"
 
-      - name: Test the actual WebSocket relay from the public internet
+      - name: Test HTTPS + WSS from the public internet
         run: |
+          echo "== chess.html over HTTPS (real domain) =="
+          curl -s --connect-timeout 8 -o /dev/null -w 'http_code=%{http_code} time=%{time_total}s\n' "https://bear.servebeer.com/chess.html" || true
+          echo "== HTTP -> HTTPS redirect check =="
+          curl -s --connect-timeout 8 -o /dev/null -w 'http_code=%{http_code}\n' "http://bear.servebeer.com/chess.html" || true
+          echo
           npm install ws --no-audit --no-fund --silent
           node -e "
           const WebSocket = require('ws');
-          const url = 'ws://${{ secrets.REMOTE_HOST }}/chess-ws';
+          const url = 'wss://bear.servebeer.com/chess-ws';
           console.log('Connecting to', url);
           const a = new WebSocket(url);
           const b = new WebSocket(url);
@@ -76,7 +107,7 @@ jobs:
               mover.send(JSON.stringify({type:'move', from:'e2', to:'e4'}));
             }
             if (m.type === 'move') {
-              console.log('SUCCESS: full create/join/move round-trip works over the public WS relay');
+              console.log('SUCCESS: full create/join/move round-trip works over wss://bear.servebeer.com/chess-ws');
               clearTimeout(timer);
               a.close(); b.close();
               process.exit(0);
