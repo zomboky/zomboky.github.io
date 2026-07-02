@@ -1,0 +1,61 @@
+name: Diagnose chess-server on Oracle Cloud
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run read-only diagnostics over SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "== chess-server service =="
+            sudo systemctl status chess-server --no-pager || true
+            echo
+            echo "== chess-server recent logs (last 80 lines) =="
+            sudo journalctl -u chess-server --no-pager -n 80 || true
+            echo
+            echo "== local health check (127.0.0.1:8095) =="
+            curl -s -o /dev/null -w 'http_code=%{http_code}\n' http://127.0.0.1:8095/health || true
+            curl -s http://127.0.0.1:8095/health || true
+            echo
+            echo "== node version =="
+            node -v || echo "node not found"
+            echo
+            echo "== /opt/chess-server contents =="
+            ls -la /opt/chess-server || true
+            echo
+            echo "== port 8095 listening? =="
+            sudo ss -ltnp | grep 8095 || echo "NOT LISTENING on 8095"
+            echo
+            echo "== apache proxy modules loaded =="
+            httpd -M 2>&1 | grep -i proxy || echo "no proxy modules found"
+            echo
+            echo "== apache config test =="
+            sudo apachectl configtest || true
+            echo
+            echo "== chess-ws.conf deployed? =="
+            ls -la /etc/httpd/conf.d/chess-ws.conf || true
+            cat /etc/httpd/conf.d/chess-ws.conf || true
+            echo
+            echo "== apache vhost summary =="
+            sudo apachectl -S || true
+            echo
+            echo "== selinux =="
+            getenforce || true
+            sudo getsebool httpd_can_network_connect || true
+            echo
+            echo "== httpd service status =="
+            sudo systemctl status httpd --no-pager || true
+
+      - name: Probe the public site from the internet
+        run: |
+          echo "== chess.html over HTTPS (by IP, best effort) =="
+          curl -sk -o /dev/null -w 'http_code=%{http_code}\n' "https://${{ secrets.REMOTE_HOST }}/chess.html" || true
+          echo "== chess.html over HTTP (by IP, best effort) =="
+          curl -s -o /dev/null -w 'http_code=%{http_code}\n' "http://${{ secrets.REMOTE_HOST }}/chess.html" || true
