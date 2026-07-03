@@ -53,6 +53,11 @@ jobs:
               sudo firewall-cmd --reload || true
 
               echo "== writing ssl vhost for bear.servebeer.com =="
+              # Inclut les mêmes fichiers conf.d que le vhost HTTP (chess-ws,
+              # orange-api) au lieu de dupliquer leurs directives ProxyPass :
+              # ils sont réinstallés à chaque déploiement (deploy.yml), donc
+              # ce vhost HTTPS reste à jour automatiquement sans avoir à
+              # relancer ce workflow.
               SSL_CONF=/etc/httpd/conf.d/bear-servebeer-ssl.conf
               printf '%s\n' \
                 '<VirtualHost *:443>' \
@@ -65,8 +70,8 @@ jobs:
                 '' \
                 '    ProxyRequests Off' \
                 '    ProxyTimeout 3600' \
-                '    ProxyPass "/chess-ws" "ws://127.0.0.1:8095/chess-ws"' \
-                '    ProxyPassReverse "/chess-ws" "ws://127.0.0.1:8095/chess-ws"' \
+                '    Include conf.d/chess-ws.conf' \
+                '    Include conf.d/orange-api.conf' \
                 '</VirtualHost>' \
                 | sudo tee "$SSL_CONF" > /dev/null
 
