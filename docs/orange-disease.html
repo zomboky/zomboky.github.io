@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maladies des orangers — monitoring &amp; prédiction</title>
+<link rel="stylesheet" href="styles/orange-disease.css">
+<link rel="shortcut icon" type="image/x-icon" href="assets/icons/ours.png">
+</head>
+<body class="od-root">
+
+<header class="od-header">
+  <h1>🍊 Monitoring &amp; prédiction — maladies des orangers</h1>
+  <p>
+    Suivi par satellite (Sentinel-2 + fluorescence) de vergers d'orangers au
+    Brésil et en Espagne, et score de risque interactif basé sur des
+    anomalies de vigueur / stress hydrique / activité photosynthétique.
+    <strong>Ceci n'est pas un outil phytosanitaire officiel</strong> — voir
+    les limites en bas de page.
+  </p>
+  <p id="od-status" class="od-card-sub">Chargement…</p>
+
+  <div class="od-framing">
+    <div class="od-framing-card">
+      <b>🇧🇷 Brésil — maladie endémique établie</b>
+      Le HLB (Huanglongbing) touche environ 44-47% des arbres de la Cinturão
+      Citrícola (Fundecitrus, 2024-2025). Ici on suit la <em>progression</em>
+      d'une maladie déjà présente.
+    </div>
+    <div class="od-framing-card">
+      <b>🇪🇸 Espagne — biosécurité / alerte précoce</b>
+      Le HLB n'est pas confirmé en Espagne (EPPO). On y surveille plutôt le
+      CTV (endémique) et la progression du psylle vecteur <em>Trioza
+      erytreae</em>, établi depuis 2014 sur la côte atlantique. Comparer
+      "la même maladie" aux deux pays n'aurait pas de sens biologique.
+    </div>
+  </div>
+</header>
+
+<main class="od-main">
+
+  <section class="od-filters">
+    <label>Période
+      <select id="od-range-select">
+        <option value="12">12 mois</option>
+        <option value="24" selected>24 mois</option>
+        <option value="36">36 mois</option>
+      </select>
+    </label>
+    <div id="od-region-toggles"></div>
+  </section>
+
+  <section class="od-card" id="od-card-ndvi">
+    <h2>NDVI — vigueur de la végétation</h2>
+    <p class="od-card-sub">(NIR − Rouge) / (NIR + Rouge), Sentinel-2, moyenne par zone.</p>
+    <div class="od-chart-wrap">
+      <svg class="od-chart-svg"></svg>
+      <div class="od-tooltip"></div>
+      <div class="od-empty"></div>
+    </div>
+    <div class="od-legend"></div>
+  </section>
+
+  <section class="od-card" id="od-card-ndmi">
+    <h2>NDMI — stress hydrique de la canopée</h2>
+    <p class="od-card-sub">(NIR − SWIR1) / (NIR + SWIR1) — plus pertinent que le NDWI pour le stress hydrique lié à la maladie.</p>
+    <div class="od-chart-wrap">
+      <svg class="od-chart-svg"></svg>
+      <div class="od-tooltip"></div>
+      <div class="od-empty"></div>
+    </div>
+    <div class="od-legend"></div>
+  </section>
+
+  <details class="od-card">
+    <summary style="cursor:pointer; font-weight:600;">Autres indices (EVI, NDWI)</summary>
+    <div id="od-card-evi" style="margin-top:12px;">
+      <h2>EVI</h2>
+      <p class="od-card-sub">Indice de végétation amélioré, moins saturé que le NDVI sur canopée dense.</p>
+      <div class="od-chart-wrap">
+        <svg class="od-chart-svg"></svg>
+        <div class="od-tooltip"></div>
+        <div class="od-empty"></div>
+      </div>
+      <div class="od-legend"></div>
+    </div>
+    <div id="od-card-ndwi" style="margin-top:16px;">
+      <h2>NDWI</h2>
+      <p class="od-card-sub">(Vert − NIR) / (Vert + NIR) — détecte les plans d'eau de surface, pas le stress hydrique de la canopée.</p>
+      <div class="od-chart-wrap">
+        <svg class="od-chart-svg"></svg>
+        <div class="od-tooltip"></div>
+        <div class="od-empty"></div>
+      </div>
+      <div class="od-legend"></div>
+    </div>
+  </details>
+
+  <section class="od-card" id="od-card-sif">
+    <h2>Fluorescence solaire induite (SIF)<span class="od-badge" style="display:none;"></span></h2>
+    <p class="od-card-sub">Proxy satellite de l'activité photosynthétique réelle (pas seulement de la couleur/structure du couvert).</p>
+    <div class="od-chart-wrap">
+      <svg class="od-chart-svg"></svg>
+      <div class="od-tooltip"></div>
+      <div class="od-empty"></div>
+    </div>
+    <div class="od-legend"></div>
+  </section>
+
+  <section class="od-card">
+    <h2>Paramètres du score de risque</h2>
+    <p class="od-card-sub">Joue sur les poids et les seuils — tout se recalcule instantanément, sans re-requête serveur.</p>
+    <div class="od-sliders">
+      <div class="od-slider">
+        <div class="od-slider-head"><span>Poids NDVI (vigueur)</span><b id="od-slider-ndvi-value"></b></div>
+        <input type="range" id="od-slider-ndvi" min="0" max="1" step="0.05" value="0.4">
+      </div>
+      <div class="od-slider">
+        <div class="od-slider-head"><span>Poids NDMI (stress hydrique)</span><b id="od-slider-ndmi-value"></b></div>
+        <input type="range" id="od-slider-ndmi" min="0" max="1" step="0.05" value="0.4">
+      </div>
+      <div class="od-slider">
+        <div class="od-slider-head"><span>Poids SIF (activité photosynthétique)</span><b id="od-slider-sif-value"></b></div>
+        <input type="range" id="od-slider-sif" min="0" max="1" step="0.05" value="0.2">
+      </div>
+      <div class="od-slider">
+        <div class="od-slider-head"><span>Lissage</span><b id="od-slider-smoothing-value"></b></div>
+        <input type="range" id="od-slider-smoothing" min="1" max="12" step="1" value="4" data-suffix=" sem.">
+      </div>
+      <div class="od-slider">
+        <div class="od-slider-head"><span>Seuil d'alerte (z-score)</span><b id="od-slider-threshold-value"></b></div>
+        <input type="range" id="od-slider-threshold" min="0.5" max="3" step="0.1" value="1.5">
+      </div>
+    </div>
+  </section>
+
+  <section class="od-card" id="od-card-risk">
+    <h2>Score de risque composite &amp; tendance projetée</h2>
+    <p class="od-card-sub">
+      Anomalie pondérée (z-score, positif = signal de stress) lissée dans le
+      temps, avec une tendance projetée à 6 semaines par régression linéaire
+      sur les dernières observations. C'est une extrapolation statistique
+      transparente, pas un diagnostic — voir les limites en bas de page.
+    </p>
+    <div id="od-risk-tiles" class="od-risk-grid" style="margin-bottom:14px;"></div>
+    <div class="od-chart-wrap">
+      <svg class="od-chart-svg"></svg>
+      <div class="od-tooltip"></div>
+      <div class="od-empty"></div>
+    </div>
+    <div class="od-legend"></div>
+  </section>
+
+  <section class="od-card">
+    <h2>Front du vecteur (Espagne)<span id="od-vector-badge" class="od-badge" style="display:none;"></span></h2>
+    <p class="od-card-sub">
+      Distance approximative entre chaque zone de production et l'occurrence
+      connue la plus proche de <em>Trioza erytreae</em> (psylle vecteur du
+      HLB), d'après GBIF.
+    </p>
+    <div id="od-vector-list" class="od-vector-list"></div>
+  </section>
+
+</main>
+
+<footer class="od-footer">
+  <p><strong>Sources</strong></p>
+  <ul>
+    <li>Sentinel-2 (bandes &amp; indices) — Copernicus / Google Earth Engine, agrégé par zone.</li>
+    <li>Incidence HLB Brésil — <a href="https://www.fundecitrus.com.br/pes/pesquisar/" target="_blank" rel="noopener">Fundecitrus, portail PES</a>.</li>
+    <li>Statut phytosanitaire Espagne — <a href="https://gd.eppo.int/taxon/TRIZER" target="_blank" rel="noopener">EPPO Global Database</a>, <a href="https://portalagrari.gva.es/es/agricultura/plagas-con-medidas-especiales-de-control" target="_blank" rel="noopener">Portal Agrari (Generalitat Valenciana)</a>.</li>
+    <li>Occurrences <em>Trioza erytreae</em> — <a href="https://www.gbif.org/species/5153544" target="_blank" rel="noopener">GBIF.org</a> (CC BY-NC 4.0).</li>
+  </ul>
+  <p><strong>Limites</strong> — Le score de risque est une anomalie statistique sur indices de télédétection, pas un diagnostic de maladie confirmé (pas de labels terrain intégrés). La fluorescence (SIF) affichée peut être une donnée d'exemple tant que l'ingestion réelle (TROPOSIF/GOSIF) n'a pas tourné — un badge l'indique le cas échéant. Résolution SIF réelle (~5x7 km) bien plus grossière que Sentinel-2 (agrégée ici par grande zone). Comparer le Brésil et l'Espagne ne compare pas "la même maladie" : cadres différents (maladie endémique vs biosécurité), voir l'encart en haut de page.</p>
+</footer>
+
+<script src="scripts/orange-disease.js"></script>
+</body>
+</html>
