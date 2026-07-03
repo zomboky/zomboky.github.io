@@ -12,11 +12,12 @@ jobs:
         uses: appleboy/ssh-action@master
         env:
           GEE_SERVICE_ACCOUNT_KEY: ${{ secrets.GEE_SERVICE_ACCOUNT_KEY }}
+          ORANGE_DASHBOARD_PASSWORD: ${{ secrets.ORANGE_DASHBOARD_PASSWORD }}
         with:
           host: ${{ secrets.REMOTE_HOST }}
           username: ${{ secrets.REMOTE_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GEE_SERVICE_ACCOUNT_KEY
+          envs: GEE_SERVICE_ACCOUNT_KEY,ORANGE_DASHBOARD_PASSWORD
           script: |
             set -e
             sudo git config --global --add safe.directory /var/www/html
@@ -38,8 +39,8 @@ jobs:
             sudo chown -R chessd:chessd /opt/chess-server
             cd /var/www/html
 
-            # --- Orange-disease API (chemin secondaire, voir
-            # server/orange-server/README.md § Deux chemins de données) ---
+            # --- Orange-disease API (seule source de données, protégée par
+            # mot de passe — voir server/orange-server/README.md) ---
             id -u oranged >/dev/null 2>&1 || sudo useradd -r -s /sbin/nologin oranged
 
             sudo rm -rf /opt/orange-server
@@ -52,6 +53,12 @@ jobs:
               sudo chmod 600 gee-key.json
             else
               echo "GEE_SERVICE_ACCOUNT_KEY absent : orange-server démarrera sans accès Earth Engine (/api/timeseries répondra 502)."
+            fi
+            if [ -n "$ORANGE_DASHBOARD_PASSWORD" ]; then
+              printf 'ORANGE_DASHBOARD_PASSWORD=%s\n' "$ORANGE_DASHBOARD_PASSWORD" | sudo tee orange-dashboard-password.env > /dev/null
+              sudo chmod 600 orange-dashboard-password.env
+            else
+              echo "ORANGE_DASHBOARD_PASSWORD absent : /api/login refusera toute connexion (dashboard inaccessible)."
             fi
             sudo chown -R oranged:oranged /opt/orange-server
             cd /var/www/html

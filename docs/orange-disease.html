@@ -3,11 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>Maladies des orangers — monitoring &amp; prédiction</title>
 <link rel="stylesheet" href="styles/orange-disease.css">
 <link rel="shortcut icon" type="image/x-icon" href="assets/icons/ours.png">
 </head>
-<body class="od-root">
+<body class="od-root od-locked">
+
+<div id="od-lock">
+  <form id="od-lock-form">
+    <p id="od-lock-title">🔒 ACCÈS RESTREINT</p>
+    <label for="od-lock-input">Mot de passe</label>
+    <input type="password" id="od-lock-input" autocomplete="off" autofocus>
+    <button type="submit">Valider</button>
+    <p id="od-lock-error">Mot de passe incorrect.</p>
+  </form>
+</div>
 
 <header class="od-header">
   <h1>🍊 Monitoring &amp; prédiction — maladies des orangers</h1>
@@ -175,5 +186,6 @@
 </footer>
 
 <script src="scripts/orange-disease.js"></script>
+<script src="scripts/orange-disease-lock.js"></script>
 </body>
 </html>
