@@ -1,4 +1,5 @@
 body {
+  position: relative; /* sert de repère pour .main-frame, sinon son "bottom" se cale sur la hauteur de l'écran et non sur celle de la page */
   cursor : url('../assets/cursors/real_hand_cursor.cur'), auto; /* curseur personnalisé */
   background-image: url('../assets/gif/space_wallpaper_hd.gif');
   background-repeat: repeat; /* motif répété */

@@ -58,6 +58,78 @@
 
 .od-root * { box-sizing: border-box; }
 
+/* écran de verrouillage façon terminal rétro */
+#od-lock {
+  display: none;
+}
+
+.od-locked #od-lock {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: #000;
+}
+
+.od-locked .od-header,
+.od-locked .od-main,
+.od-locked .od-footer {
+  display: none;
+}
+
+#od-lock-form {
+  font-family: monospace;
+  color: #0f0;
+  background: #000;
+  border: 2px solid #0f0;
+  box-shadow: 0 0 12px #0f0;
+  padding: 2rem 2.5rem;
+  text-align: center;
+  width: min(90vw, 340px);
+}
+
+#od-lock-title {
+  font-size: 1.1rem;
+  font-weight: bold;
+  margin: 0 0 1.2rem;
+}
+
+#od-lock-form label {
+  display: block;
+  text-align: left;
+  margin-bottom: 0.4rem;
+}
+
+#od-lock-input {
+  width: 100%;
+  font-family: monospace;
+  background: #000;
+  color: #0f0;
+  border: 1px solid #0f0;
+  padding: 0.5rem;
+  margin-bottom: 1rem;
+  outline: none;
+}
+
+#od-lock-form button {
+  width: 100%;
+  font-family: monospace;
+  font-weight: bold;
+  text-transform: uppercase;
+  color: #000;
+  background: #0f0;
+  border: none;
+  padding: 0.6rem;
+  cursor: pointer;
+}
+
+#od-lock-error {
+  display: none;
+  color: #f55;
+  margin: 1rem 0 0;
+  font-size: 0.85rem;
+}
+
 .od-header {
   padding: 20px 16px 12px;
   max-width: 900px;

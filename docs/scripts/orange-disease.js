@@ -560,5 +560,5 @@
     window.addEventListener('resize', renderAll);
   }
 
-  document.addEventListener('DOMContentLoaded', init);
+  window.__odInit = init;
 })();
