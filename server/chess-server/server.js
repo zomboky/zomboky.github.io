@@ -92,16 +92,18 @@ function pseudoOf(ws) {
 }
 
 function opponentInfo(room, color) {
-  if (room.vsBot) return { vsBot: true, opponentPseudo: null };
+  if (room.vsBot) return { vsBot: true, opponentPseudo: null, opponentAway: false };
   const oppWs = room.players[opponentColor(color)];
-  return { vsBot: false, opponentPseudo: oppWs ? pseudoOf(oppWs) : null };
+  const info = oppWs ? clients.get(oppWs) : null;
+  return { vsBot: false, opponentPseudo: info ? info.pseudo : null, opponentAway: info ? !!info.away : false };
 }
 
 function broadcastPresence() {
-  const users = Array.from(clients.values()).map((c) => ({ id: c.id, pseudo: c.pseudo }));
-  const message = JSON.stringify({ type: 'presence', users });
+  const list = Array.from(clients.entries()).map(([ws, c]) => ({ ws, id: c.id, pseudo: c.pseudo, away: !!c.away }));
   for (const ws of clients.keys()) {
-    if (ws.readyState === ws.OPEN) ws.send(message);
+    if (ws.readyState !== ws.OPEN) continue;
+    const users = list.map(({ ws: uws, ...rest }) => ({ ...rest, you: uws === ws }));
+    ws.send(JSON.stringify({ type: 'presence', users }));
   }
 }
 
@@ -244,8 +246,22 @@ heartbeat.unref();
 function handleSetPseudo(ws, rawPseudo) {
   const pseudo = sanitizePseudo(rawPseudo);
   if (!pseudo) return;
-  clients.set(ws, { id: ws.clientId, pseudo });
+  const existing = clients.get(ws);
+  clients.set(ws, { id: ws.clientId, pseudo, away: existing ? existing.away : false });
   broadcastPresence();
+}
+
+function handleAwayStatus(ws, away) {
+  const info = clients.get(ws);
+  if (!info) return;
+  info.away = !!away;
+  broadcastPresence();
+
+  const room = rooms.get(ws.roomCode);
+  if (room && ws.color) {
+    const opp = room.players[opponentColor(ws.color)];
+    if (opp) send(opp, { type: 'opponent-status', away: info.away });
+  }
 }
 
 function handleMessage(ws, msg) {
@@ -253,6 +269,11 @@ function handleMessage(ws, msg) {
     case 'hello':
     case 'set-pseudo': {
       handleSetPseudo(ws, msg.pseudo);
+      break;
+    }
+
+    case 'away-status': {
+      handleAwayStatus(ws, msg.away);
       break;
     }
 
