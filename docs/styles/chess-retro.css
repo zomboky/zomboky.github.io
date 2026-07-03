@@ -1,0 +1,195 @@
+/* Habillage "vieux web" pour la page échecs — voir docs/styles/welcome.css
+   pour les patterns d'origine (index.html). Fichier séparé pour ne pas
+   dupliquer/écraser chess-multiplayer.css. */
+
+body.chess-page {
+  cursor: url('../assets/cursors/real_hand_cursor.cur'), auto;
+  background-image: url('../assets/gif/space_wallpaper_hd.gif');
+  background-repeat: repeat;
+  background-size: 128px 128px;
+  image-rendering: pixelated;
+  font-family: monospace;
+}
+
+.chess-page h1 {
+  font-family: monospace;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #f4e9d2;
+  text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+}
+
+/* le pseudo est posé directement sur la pierre, pas sur une carte : besoin de contraste */
+.chess-frame > .pseudo-row {
+  color: #f4e9d2;
+  text-shadow: 1px 1px 2px #000;
+}
+
+.chess-frame > .pseudo-row #pseudo-display {
+  color: #ffe08a;
+}
+
+/* petites étoiles pixel qui clignotent près du titre */
+.pixel-stars {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.pixel-stars i {
+  width: 4px;
+  height: 4px;
+  background: #ff0;
+  box-shadow: 0 0 4px #ff0;
+  image-rendering: pixelated;
+  animation: chess-blink 1.4s steps(1) infinite;
+}
+
+.pixel-stars i:nth-child(2) { animation-delay: 0.3s; }
+.pixel-stars i:nth-child(3) { animation-delay: 0.6s; }
+.pixel-stars i:nth-child(4) { animation-delay: 0.9s; }
+
+/* grand cadre texturé qui englobe toute l'interface, façon "main-frame" */
+.chess-frame {
+  width: 100%;
+  max-width: 760px;
+  box-sizing: border-box;
+  background: url('../assets/textures/rockwall8/rockwall8.png') repeat;
+  border: 2px solid #ccc;
+  outline: 4px solid #000;
+  box-shadow: 0 0 0 6px #ccc;
+  padding: 1.5rem;
+  margin: 0 auto 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.chess-frame > * {
+  width: 100%;
+  max-width: 700px;
+}
+
+/* bandeau under construction, sous la top-bar */
+#chess-under-construction {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+#chess-blurtext {
+  width: min(90vw, 500px);
+  margin: 0 0 16px;
+  padding: 0.5rem 1rem;
+  background: #333333;
+  color: #fff;
+  text-shadow: -9px -7px 11px #EDEDED;
+  text-align: center;
+  border: 2px solid #000;
+  outline: 2px solid #ccc;
+  font-family: monospace;
+  box-sizing: border-box;
+}
+
+#chess-blurtext marquee {
+  display: block;
+  margin-top: 0.3rem;
+}
+
+@keyframes chess-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+#chess-blurtext .blink {
+  animation: chess-blink 1s steps(1) infinite;
+  color: #ff0;
+  font-weight: bold;
+}
+
+/* bouton retour façon vieux bouton Windows 3D */
+#back-btn.retro-button {
+  font-family: monospace;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #000;
+  background: #c0c0c0;
+  border: 3px solid;
+  border-color: #fff #808080 #808080 #fff;
+  padding: 0.4rem 0.8rem;
+  box-shadow: 3px 3px 0 #000;
+  image-rendering: pixelated;
+  border-radius: 0;
+}
+
+#back-btn.retro-button:hover {
+  background: #d8d8d8;
+}
+
+#back-btn.retro-button:active {
+  border-color: #808080 #fff #fff #808080;
+  box-shadow: none;
+  transform: translate(3px, 3px);
+}
+
+/* cadre autour du lobby */
+#lobby.frame {
+  border: 2px solid #ccc;
+  outline: 4px solid #000;
+  box-shadow: 0 0 0 6px #ccc, 0 4px 14px var(--card-shadow);
+}
+
+/* compteur de visiteurs façon LCD, en bas de page */
+.chess-visitor-counter {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 2rem auto 0;
+  font-family: monospace;
+  color: #eee;
+}
+
+#visitor-counter-digits {
+  background: #000;
+  color: #0f0;
+  padding: 0.3rem 0.6rem;
+  border: 2px solid #444;
+  letter-spacing: 3px;
+  font-weight: bold;
+  text-shadow: 0 0 5px #0f0;
+}
+
+.chess-footer-widgets {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 1.2rem;
+}
+
+.lavalamp-widget {
+  width: 90px;
+  height: auto;
+  border: 2px solid #000;
+  outline: 2px solid #ccc;
+  image-rendering: pixelated;
+}
+
+/* mascotte de l'ours, posée dans le flux normal pour ne jamais gêner un bouton */
+#chess-mascot {
+  width: 70px;
+  height: auto;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+#chess-mascot:hover {
+  transform: scale(1.1) rotate(-3deg);
+  filter: drop-shadow(0 0 12px #ffcc33) drop-shadow(0 0 20px #ff6600);
+}
