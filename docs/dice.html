@@ -101,9 +101,8 @@ function resize() {
   renderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  updatePlayArea();
 }
-window.addEventListener('resize', resize);
-resize();
 
 // ══════════════════════════════════════════════════
 //  PLATEAU (tapis circulaire + rebord) — délimite l'aire de jeu
@@ -125,6 +124,39 @@ const rim = new THREE.Mesh(
 rim.rotation.x = Math.PI / 2;
 rim.position.y = 0.02;
 scene.add(rim);
+
+// Rayon de jeu effectif : recalculé pour tenir dans le cadre visible (quel que soit l'écran/orientation),
+// pour que le dé ne puisse jamais physiquement sortir de la zone visible à l'écran.
+let PLAY_RADIUS = TRAY_RADIUS;
+const frustumRay = new THREE.Raycaster();
+const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+function distOriginToSegmentXZ(a, b) {
+  const abx = b.x - a.x, abz = b.z - a.z;
+  const denom = (abx * abx + abz * abz) || 1;
+  const t = Math.max(0, Math.min(1, -(a.x * abx + a.z * abz) / denom));
+  const cx = a.x + abx * t, cz = a.z + abz * t;
+  return Math.hypot(cx, cz);
+}
+
+function updatePlayArea() {
+  camera.updateMatrixWorld(true); // le rendu n'a pas encore tourné : la matrice monde n'est pas à jour
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+  const pts = [];
+  for (const [nx, ny] of corners) {
+    frustumRay.setFromCamera(new THREE.Vector2(nx, ny), camera);
+    const p = new THREE.Vector3();
+    if (!frustumRay.ray.intersectPlane(groundPlane, p)) return; // rayon parallèle au sol : on garde le rayon précédent
+    pts.push(p);
+  }
+  let minDist = Infinity;
+  for (let i = 0; i < 4; i++) minDist = Math.min(minDist, distOriginToSegmentXZ(pts[i], pts[(i + 1) % 4]));
+
+  PLAY_RADIUS = THREE.MathUtils.clamp(minDist * 0.86 - R, 2.4, TRAY_RADIUS);
+  const s = PLAY_RADIUS / TRAY_RADIUS;
+  tray.scale.set(s, 1, s);
+  rim.scale.set(s, s, 1); // torus tourné à plat : les 2 axes de l'anneau sont locaux X/Y, pas X/Z
+}
 
 // ══════════════════════════════════════════════════
 //  GÉOMÉTRIE DE L'ICOSAÈDRE (D20) — 12 sommets, 20 faces triangulaires
@@ -205,10 +237,13 @@ const INRADIUS = Math.abs(faceCentroidLocal[0].dot(faceNormalLocal[0]));
 // ══════════════════════════════════════════════════
 const disp = localVerts.map(() => new THREE.Vector3());
 const dispVel = localVerts.map(() => new THREE.Vector3());
-const JELLY_K = 46;      // raideur volontairement très faible → dé "mou"
-const JELLY_C = 3.6;     // amortissement (freine sans étouffer le rebond liquide)
-const JELLY_MAX = R * 0.32;
+const JELLY_K = 30;      // raideur volontairement très faible → dé "mou"
+const JELLY_C = 3.1;     // amortissement (freine sans étouffer le jiggle liquide)
+const JELLY_MAX = R * 0.34;
 const JELLY_SIGMA = R * 0.85;
+const JELLY_IDLE = 2.2;       // agitation de fond, même immobile : jamais parfaitement rigide
+const JELLY_SPIN_GAIN = 0.85; // plus le dé vole/tourne vite, plus il gigote
+let jellyPhase = 0;
 
 function registerImpact(vertIndex, impulseMag) {
   const amount = Math.min(impulseMag * 0.55, JELLY_MAX * 1.6);
@@ -221,7 +256,22 @@ function registerImpact(vertIndex, impulseMag) {
   }
 }
 
+// Agitation continue (vol, roulement, et même à l'arrêt) : le dé ne redevient jamais parfaitement rigide,
+// comme de la gélatine qui tremble toujours un peu — pas seulement un "boing" au moment de l'impact.
+function driveJelly(dt) {
+  const spin = angVel.length();
+  jellyPhase += dt * (1.8 + Math.min(spin, 10) * 0.5);
+  const amp = JELLY_IDLE + Math.min(spin, 10) * JELLY_SPIN_GAIN;
+  for (let i = 0; i < 12; i++) {
+    const dirIn = localVerts[i].clone().normalize();
+    const phase = jellyPhase + i * 2.4;
+    const wobble = Math.sin(phase) * 0.6 + Math.sin(phase * 1.73 + i) * 0.4;
+    dispVel[i].addScaledVector(dirIn, wobble * amp * dt);
+  }
+}
+
 function updateJelly(dt) {
+  driveJelly(dt);
   for (let i = 0; i < 12; i++) {
     const force = disp[i].clone().multiplyScalar(-JELLY_K).addScaledVector(dispVel[i], -JELLY_C);
     dispVel[i].addScaledVector(force, dt);
@@ -388,9 +438,9 @@ function resolveCollisions() {
   for (let i = 0; i < 12; i++) {
     const worldV = localVerts[i].clone().applyQuaternion(quat).add(pos);
     const radial = Math.hypot(worldV.x, worldV.z);
-    if (radial > TRAY_RADIUS) {
+    if (radial > PLAY_RADIUS) {
       const normal = new THREE.Vector3(-worldV.x / radial, 0, -worldV.z / radial);
-      const j = resolveContact(worldV, normal, radial - TRAY_RADIUS);
+      const j = resolveContact(worldV, normal, radial - PLAY_RADIUS);
       if (j > 0.4) registerImpact(i, j);
     }
   }
@@ -561,6 +611,9 @@ function setStatus(kind) {
   }
 }
 resultEl.textContent = String(currentTopNumber());
+
+window.addEventListener('resize', resize);
+resize();
 
 // ══════════════════════════════════════════════════
 //  BOUCLE D'ANIMATION
