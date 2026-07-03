@@ -23,9 +23,11 @@
 </head>
 <body class="chess-page">
 
+    <div class="chess-frame">
+
     <div class="top-bar">
         <a id="back-btn" class="retro-button" href="index.html">← Menu principal</a>
-        <h1>Échecs en ligne</h1>
+        <h1>Échecs en ligne<span class="pixel-stars" aria-hidden="true"><i></i><i></i><i></i><i></i></span></h1>
         <label class="theme-switch" title="Thème clair / sombre">
             <span class="theme-icon">☀️</span>
             <input type="checkbox" id="theme-toggle">
@@ -130,6 +132,8 @@
         </aside>
     </div>
 
+    </div><!-- /.chess-frame -->
+
     <div id="pseudo-modal" class="overlay hidden">
         <div class="overlay-box">
             <p>Choisissez un pseudo pour jouer :</p>
@@ -163,9 +167,13 @@
         </div>
     </div>
 
-    <div class="visitor-counter chess-visitor-counter">
-        <span class="visitor-counter-label">Visiteur n°</span>
-        <span id="visitor-counter-digits" class="visitor-counter-digits">000000</span>
+    <div class="chess-footer-widgets">
+        <img id="chess-mascot" src="assets/images/ours.png" alt="Ours mascotte du site" title="Grrr, joue !">
+        <img class="lavalamp-widget" src="assets/gif/ours_biere_lavalamp.gif" alt="Un ours qui a trop bu en attendant votre coup" title="Il vous attend...">
+        <div class="visitor-counter chess-visitor-counter">
+            <span class="visitor-counter-label">Visiteur n°</span>
+            <span id="visitor-counter-digits" class="visitor-counter-digits">000000</span>
+        </div>
     </div>
 
     <script src="scripts/visitor-counter.js"></script>
