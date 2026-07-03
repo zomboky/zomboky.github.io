@@ -23,6 +23,7 @@
 <body class="chess-page">
 
     <div class="top-bar">
+        <a id="back-btn" class="btn secondary small" href="index.html">← Menu principal</a>
         <h1>Échecs en ligne</h1>
         <label class="theme-switch" title="Thème clair / sombre">
             <span class="theme-icon">☀️</span>
@@ -45,6 +46,10 @@
     <div class="chess-layout">
         <div class="chess-main">
             <div id="lobby" class="card">
+                <div id="resume-banner" class="lobby-section hidden">
+                    <h2>Partie en cours</h2>
+                    <button id="resume-btn" class="btn">Reprendre la partie</button>
+                </div>
                 <div class="lobby-section">
                     <h2>Créer une partie</h2>
                     <button id="create-btn" class="btn">Créer une partie</button>
@@ -76,6 +81,7 @@
                 <div id="opponent-bar" class="opponent-bar hidden">
                     <span id="opponent-badge" class="gm-badge hidden">GM</span>
                     <span class="opponent-name" id="opponent-name">Adversaire</span>
+                    <span id="opponent-status" class="presence-dot hidden"></span>
                     <svg id="owl-logo" class="owl-logo hidden" viewBox="0 0 64 64" aria-hidden="true">
                         <ellipse cx="32" cy="36" rx="22" ry="24" fill="#7a5230"/>
                         <circle cx="22" cy="28" r="11" fill="#fff"/>
@@ -90,6 +96,7 @@
 
                 <div class="game-info">
                     <div id="status"></div>
+                    <div id="premove-badge" class="hidden">Pré-coup programmé</div>
                     <div>Vous jouez : <span id="my-color"></span></div>
                 </div>
 
