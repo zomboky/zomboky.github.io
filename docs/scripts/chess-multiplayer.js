@@ -36,7 +36,11 @@
     opponentBar: document.getElementById('opponent-bar'),
     opponentBadge: document.getElementById('opponent-badge'),
     opponentName: document.getElementById('opponent-name'),
+    opponentStatus: document.getElementById('opponent-status'),
     owlLogo: document.getElementById('owl-logo'),
+    premoveBadge: document.getElementById('premove-badge'),
+    resumeBanner: document.getElementById('resume-banner'),
+    resumeBtn: document.getElementById('resume-btn'),
   };
 
   const SESSION_KEY = 'chess-mp-session';
@@ -56,6 +60,10 @@
   let reconnectTimer = null;
   let pseudo = null;
   let vsBot = false;
+  let inGame = false; // becomes true once the player has actually entered a game this page-load
+  let opponentAway = false;
+  let premoveOrig = null;
+  let premoveDest = null;
 
   // ---------- session persistence (survives page reloads) ----------
 
@@ -170,14 +178,47 @@
     els.presenceList.innerHTML = '';
     (users || []).forEach((user) => {
       const li = document.createElement('li');
-      li.textContent = user.pseudo;
+      li.className = 'presence-item';
+
+      const dot = document.createElement('span');
+      dot.className = 'presence-dot' + (user.away ? ' away' : ' present');
+      dot.title = user.away ? 'Absent' : 'Présent';
+      li.appendChild(dot);
+
+      const name = document.createElement('span');
+      name.className = 'presence-name';
+      name.textContent = user.pseudo + (user.you ? ' (vous)' : '');
+      li.appendChild(name);
+
       els.presenceList.appendChild(li);
     });
   }
 
+  // ---------- presence: present / away via the Page Visibility API ----------
+
+  function sendAwayStatus(away) {
+    send({ type: 'away-status', away: !!away });
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    sendAwayStatus(document.hidden);
+  });
+
   // ---------- opponent bar (human name or GM Hibou Chess) ----------
 
-  function updateOpponentBar(opponentPseudo) {
+  function renderOpponentStatus() {
+    if (!els.opponentStatus) return;
+    if (vsBot || !opponentPresent) {
+      els.opponentStatus.classList.add('hidden');
+      return;
+    }
+    els.opponentStatus.classList.remove('hidden');
+    els.opponentStatus.className = 'presence-dot ' + (opponentAway ? 'away' : 'present');
+    els.opponentStatus.title = opponentAway ? 'Absent' : 'Présent';
+  }
+
+  function updateOpponentBar(opponentPseudo, away) {
+    opponentAway = !!away;
     if (!els.opponentBar) return;
     if (vsBot) {
       els.opponentBar.classList.remove('hidden');
@@ -194,6 +235,7 @@
     }
     if (els.roomCodeRow) els.roomCodeRow.classList.toggle('hidden', vsBot);
     if (els.copyLinkBtn) els.copyLinkBtn.classList.toggle('hidden', vsBot);
+    renderOpponentStatus();
   }
 
   // ---------- websocket plumbing ----------
@@ -241,8 +283,14 @@
     reconnectAttempts = 0;
     setConnStatus('Connecté');
     sendHello();
+    sendAwayStatus(document.hidden);
+    // Only auto-rejoin the saved game across a *reconnect* while we're
+    // already sitting in the game view (network blip, tab woken up after
+    // being backgrounded, ...). On a fresh page load we always land on the
+    // lobby — resuming a past game is then an explicit click, see
+    // updateResumeBanner()/resumeBtn.
     const saved = loadSession();
-    if (saved && saved.code && saved.color) {
+    if (inGame && saved && saved.code && saved.color) {
       roomCode = saved.code;
       send({ type: 'rejoin', code: saved.code, color: saved.color });
     }
@@ -291,7 +339,7 @@
         enterGameView();
         ensureBoard();
         game.load(msg.fen);
-        updateOpponentBar(msg.opponentPseudo);
+        updateOpponentBar(msg.opponentPseudo, msg.opponentAway);
         refreshBoard(msg);
         setStatus(vsBot ? 'Partie lancée contre GM Hibou Chess.' : 'Partie créée : partagez le code ci-dessus avec votre adversaire.');
         break;
@@ -305,7 +353,7 @@
         enterGameView();
         ensureBoard();
         game.load(msg.fen);
-        updateOpponentBar(msg.opponentPseudo);
+        updateOpponentBar(msg.opponentPseudo, msg.opponentAway);
         refreshBoard(msg);
         setStatus('En attente du démarrage de la partie...');
         break;
@@ -322,14 +370,14 @@
         game.load(msg.fen);
         ground.set({ orientation: myColor });
         hideEndOverlay();
-        updateOpponentBar(msg.opponentPseudo);
+        updateOpponentBar(msg.opponentPseudo, msg.opponentAway);
         refreshBoard(msg);
         break;
 
       case 'opponent-joined':
         opponentPresent = true;
         game.load(msg.fen);
-        updateOpponentBar(msg.opponentPseudo);
+        updateOpponentBar(msg.opponentPseudo, msg.opponentAway);
         refreshBoard(msg);
         break;
 
@@ -337,8 +385,14 @@
         renderPresence(msg.users);
         break;
 
+      case 'opponent-status':
+        opponentAway = !!msg.away;
+        renderOpponentStatus();
+        break;
+
       case 'opponent-left':
         opponentPresent = false;
+        renderOpponentStatus();
         setStatus('Votre adversaire s’est déconnecté. En attente de reconnexion...');
         lockBoard();
         break;
@@ -380,13 +434,23 @@
   }
 
   function handleServerError(message) {
-    if (!roomCode || els.lobby.classList.contains('hidden') === false) {
+    const inLobby = !els.lobby || !els.lobby.classList.contains('hidden');
+    if (inLobby) {
       if (els.lobbyError) els.lobbyError.textContent = message || 'Une erreur est survenue.';
+      if (roomCode) {
+        // A create/join/resume attempt failed before the game view even
+        // opened (e.g. the saved game expired) — drop it instead of
+        // resyncing forever against a room that no longer exists.
+        clearSession();
+        roomCode = null;
+        myColor = null;
+        inGame = false;
+        updateResumeBanner();
+      }
+      return;
     }
-    if (roomCode) {
-      setStatus(message || 'Une erreur est survenue.');
-      send({ type: 'resync', code: roomCode });
-    }
+    setStatus(message || 'Une erreur est survenue.');
+    send({ type: 'resync', code: roomCode });
   }
 
   // ---------- board rendering ----------
@@ -412,6 +476,8 @@
       fen: game.fen(),
       orientation: myColor || 'white',
       movable: { free: false, color: undefined, dests: new Map(), events: { after: onUserMove } },
+      premovable: { enabled: false, showDests: true, events: { set: onSetPremove, unset: onUnsetPremove } },
+      events: { select: onSquareSelect },
       highlight: { lastMove: true, check: true },
       animation: { enabled: true },
     });
@@ -423,8 +489,10 @@
 
   function refreshBoard(msg, lastMove) {
     ensureBoard();
-    const movableConfig = canMove(msg)
-      ? { color: myColor, dests: getDests() }
+    const active = opponentPresent && !msg.gameOver;
+    const isMyTurn = canMove(msg);
+    const movableConfig = active
+      ? { color: myColor, dests: isMyTurn ? getDests() : new Map() }
       : { color: undefined, dests: new Map() };
 
     ground.set({
@@ -433,9 +501,15 @@
       check: !!msg.check,
       lastMove: lastMove ? [lastMove.from, lastMove.to] : undefined,
       movable: movableConfig,
+      premovable: { enabled: active },
     });
 
-    updateStatusText(msg);
+    // A queued premove becomes playable the instant it's our turn again —
+    // chessground validates it against the fresh dests set just above and,
+    // if still legal, fires onUserMove exactly like a manual move.
+    const premovePlayed = isMyTurn && ground.playPremove();
+
+    if (!premovePlayed) updateStatusText(msg);
 
     if (msg.gameOver && msg.result) {
       gameFinished = true;
@@ -445,7 +519,9 @@
   }
 
   function lockBoard() {
-    if (ground) ground.set({ movable: { color: undefined, dests: new Map() } });
+    if (!ground) return;
+    ground.cancelPremove();
+    ground.set({ movable: { color: undefined, dests: new Map() }, premovable: { enabled: false } });
   }
 
   function onUserMove(orig, dest) {
@@ -456,6 +532,33 @@
     }
     submitMove(orig, dest, null);
   }
+
+  // ---------- premoves ----------
+
+  function onSetPremove(orig, dest) {
+    premoveOrig = orig;
+    premoveDest = dest;
+    if (els.premoveBadge) els.premoveBadge.classList.remove('hidden');
+  }
+
+  function onUnsetPremove() {
+    premoveOrig = null;
+    premoveDest = null;
+    if (els.premoveBadge) els.premoveBadge.classList.add('hidden');
+  }
+
+  // Clicking a second, unrelated empty square cancels the pending premove
+  // (chessground only replaces/clears it on a fresh drag by itself).
+  function onSquareSelect(key) {
+    if (!ground || !premoveDest) return;
+    if (!ground.state.pieces.get(key)) ground.cancelPremove();
+  }
+
+  // Clicking anywhere outside the board also cancels the pending premove.
+  document.addEventListener('pointerdown', (e) => {
+    if (!premoveDest || !ground) return;
+    if (els.board && !els.board.contains(e.target)) ground.cancelPremove();
+  });
 
   function submitMove(from, to, promotion) {
     send({ type: 'move', code: roomCode, from, to, promotion: promotion || undefined });
@@ -564,6 +667,7 @@
   // ---------- lobby wiring ----------
 
   function enterGameView() {
+    inGame = true;
     if (els.lobby) els.lobby.classList.add('hidden');
     if (els.game) els.game.classList.remove('hidden');
     if (els.roomCode) els.roomCode.textContent = roomCode;
@@ -577,6 +681,10 @@
     vsBot = false;
     opponentPresent = false;
     gameFinished = false;
+    inGame = false;
+    premoveOrig = null;
+    premoveDest = null;
+    if (els.premoveBadge) els.premoveBadge.classList.add('hidden');
     game.reset();
     clearMovesList();
     hideEndOverlay();
@@ -590,8 +698,33 @@
     if (els.game) els.game.classList.add('hidden');
     if (els.lobby) els.lobby.classList.remove('hidden');
     if (els.lobbyError) els.lobbyError.textContent = '';
+    updateResumeBanner();
     history.replaceState(null, '', location.pathname);
   }
+
+  // ---------- resume banner (return to a game left running server-side) ----------
+
+  function updateResumeBanner() {
+    if (!els.resumeBanner) return;
+    const saved = loadSession();
+    els.resumeBanner.classList.toggle('hidden', !saved || !saved.code || !saved.color);
+  }
+
+  if (els.resumeBtn) {
+    els.resumeBtn.addEventListener('click', () => {
+      const saved = loadSession();
+      if (!saved || !saved.code || !saved.color) {
+        updateResumeBanner();
+        return;
+      }
+      if (els.lobbyError) els.lobbyError.textContent = '';
+      roomCode = saved.code;
+      inGame = true;
+      send({ type: 'rejoin', code: saved.code, color: saved.color });
+    });
+  }
+
+  updateResumeBanner();
 
   function updateInviteUrl() {
     if (!roomCode) return;
