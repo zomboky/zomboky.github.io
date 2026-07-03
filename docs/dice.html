@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>🎲 Dice</title>
+
+<!-- importmap : mappe 'three' vers le build local (docs/three/), même convention que hibou-3d.html / space.html -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "./three/build/three.module.min.js"
+  }
+}
+</script>
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; -webkit-user-select: none; user-select: none; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a1512; font-family: 'Segoe UI', Arial, sans-serif; }
+  canvas { position: fixed; top: 0; left: 0; display: block; }
+
+  #hud {
+    position: fixed; top: 0; left: 0; width: 100%;
+    display: flex; flex-direction: column; align-items: center;
+    padding-top: 22px; pointer-events: none;
+  }
+  #result {
+    font-size: 64px; font-weight: 800; color: #ffe9b0;
+    text-shadow: 0 0 18px rgba(255, 210, 120, 0.55), 0 2px 6px rgba(0,0,0,0.6);
+    min-width: 90px; text-align: center; line-height: 1;
+    transition: transform 0.15s ease;
+  }
+  #status {
+    margin-top: 8px; font-size: 15px; color: #bcd9cd; opacity: 0.85;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  }
+  #rerollBtn {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    pointer-events: auto; cursor: pointer;
+    padding: 12px 26px; font-size: 17px; font-weight: 600;
+    color: #eafff2; background: linear-gradient(160deg, #1f7a5c, #145240);
+    border: 1px solid rgba(255,255,255,0.18); border-radius: 999px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+    transition: transform 0.08s ease, filter 0.15s ease;
+  }
+  #rerollBtn:hover { filter: brightness(1.15); }
+  #rerollBtn:active { transform: translateX(-50%) scale(0.94); }
+
+  #back {
+    position: fixed; top: 18px; left: 18px; pointer-events: auto;
+    color: #bcd9cd; text-decoration: none; font-size: 14px; opacity: 0.75;
+    padding: 6px 10px; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
+  }
+  #back:hover { opacity: 1; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="hud">
+  <div id="result">–</div>
+  <div id="status">Glisse rapidement le dé pour le lancer</div>
+</div>
+<a id="back" href="index.html">← retour</a>
+<button id="rerollBtn">🔁 Reroll</button>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ══════════════════════════════════════════════════
+//  SCÈNE / CAMÉRA / RENDU
+// ══════════════════════════════════════════════════
+const glCanvas = document.getElementById('gl');
+const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a1512);
+scene.fog = new THREE.Fog(0x0a1512, 14, 30);
+
+const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 100);
+camera.position.set(0, 9.2, 8.6);
+camera.lookAt(0, 0, 0);
+
+scene.add(new THREE.AmbientLight(0xbfd9cf, 0.55));
+const keyLight = new THREE.DirectionalLight(0xfff2d8, 1.05);
+keyLight.position.set(-6, 12, 5);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(1024, 1024);
+keyLight.shadow.camera.left = -10; keyLight.shadow.camera.right = 10;
+keyLight.shadow.camera.top = 10; keyLight.shadow.camera.bottom = -10;
+scene.add(keyLight);
+const fillLight = new THREE.PointLight(0x6fe3c6, 0.4, 20);
+fillLight.position.set(5, 4, -4);
+scene.add(fillLight);
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ══════════════════════════════════════════════════
+//  PLATEAU (tapis circulaire + rebord) — délimite l'aire de jeu
+// ══════════════════════════════════════════════════
+const TRAY_RADIUS = 6.2;
+
+const tray = new THREE.Mesh(
+  new THREE.CylinderGeometry(TRAY_RADIUS, TRAY_RADIUS, 0.3, 64),
+  new THREE.MeshStandardMaterial({ color: 0x0e3d2a, roughness: 0.95 })
+);
+tray.position.y = -0.15;
+tray.receiveShadow = true;
+scene.add(tray);
+
+const rim = new THREE.Mesh(
+  new THREE.TorusGeometry(TRAY_RADIUS, 0.08, 12, 64),
+  new THREE.MeshStandardMaterial({ color: 0x2fa876, roughness: 0.6, metalness: 0.15 })
+);
+rim.rotation.x = Math.PI / 2;
+rim.position.y = 0.02;
+scene.add(rim);
+
+// ══════════════════════════════════════════════════
+//  GÉOMÉTRIE DE L'ICOSAÈDRE (D20) — 12 sommets, 20 faces triangulaires
+// ══════════════════════════════════════════════════
+const R = 1.15; // rayon (circonrayon) du dé
+const PHI = (1 + Math.sqrt(5)) / 2;
+
+const rawVerts = [
+  [-1, PHI, 0], [1, PHI, 0], [-1, -PHI, 0], [1, -PHI, 0],
+  [0, -1, PHI], [0, 1, PHI], [0, -1, -PHI], [0, 1, -PHI],
+  [PHI, 0, -1], [PHI, 0, 1], [-PHI, 0, -1], [-PHI, 0, 1]
+];
+const faceIdx = [
+  [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11],
+  [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
+  [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
+  [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]
+];
+
+const vertScale = R / Math.hypot(1, PHI);
+const localVerts = rawVerts.map(v => new THREE.Vector3(v[0], v[1], v[2]).multiplyScalar(vertScale));
+
+// Sommet antipodal de chaque sommet (l'icosaèdre est centro-symétrique)
+const antipode = rawVerts.map(([x, y, z]) => {
+  for (let j = 0; j < rawVerts.length; j++) {
+    const [x2, y2, z2] = rawVerts[j];
+    if (Math.abs(x2 + x) < 1e-6 && Math.abs(y2 + y) < 1e-6 && Math.abs(z2 + z) < 1e-6) return j;
+  }
+  throw new Error('sommet antipodal introuvable');
+});
+
+// Face opposée à chaque face (même principe, via les sommets antipodaux)
+const oppositeFace = new Array(faceIdx.length).fill(-1);
+for (let i = 0; i < faceIdx.length; i++) {
+  if (oppositeFace[i] !== -1) continue;
+  const target = new Set(faceIdx[i].map(v => antipode[v]));
+  for (let j = 0; j < faceIdx.length; j++) {
+    if (j === i) continue;
+    const s = faceIdx[j];
+    if (target.has(s[0]) && target.has(s[1]) && target.has(s[2])) {
+      oppositeFace[i] = j; oppositeFace[j] = i; break;
+    }
+  }
+}
+
+// Numérotation 1-20 : faces opposées totalisent toujours 21 (comme un vrai D20)
+const faceNumber = new Array(20).fill(0);
+{
+  let lo = 1, hi = 20;
+  const used = new Array(20).fill(false);
+  for (let i = 0; i < 20; i++) {
+    if (used[i]) continue;
+    const j = oppositeFace[i];
+    faceNumber[i] = lo; faceNumber[j] = hi;
+    used[i] = true; used[j] = true;
+    lo++; hi--;
+  }
+}
+
+// Normale et centroïde locaux de chaque face (repère "au repos", non déformé)
+const faceNormalLocal = [];
+const faceCentroidLocal = [];
+for (const [a, b, c] of faceIdx) {
+  const vA = localVerts[a], vB = localVerts[b], vC = localVerts[c];
+  const centroid = vA.clone().add(vB).add(vC).multiplyScalar(1 / 3);
+  const normal = new THREE.Vector3().crossVectors(
+    vB.clone().sub(vA), vC.clone().sub(vA)
+  ).normalize();
+  if (normal.dot(centroid) < 0) normal.negate();
+  faceNormalLocal.push(normal);
+  faceCentroidLocal.push(centroid);
+}
+// Distance du centre à une face = hauteur de repos du dé quand cette face touche le sol
+const INRADIUS = Math.abs(faceCentroidLocal[0].dot(faceNormalLocal[0]));
+
+// ══════════════════════════════════════════════════
+//  CORPS "GÉLATINEUX" — géométrie déformable (faible raideur, aspect liquide)
+// ══════════════════════════════════════════════════
+const disp = localVerts.map(() => new THREE.Vector3());
+const dispVel = localVerts.map(() => new THREE.Vector3());
+const JELLY_K = 46;      // raideur volontairement très faible → dé "mou"
+const JELLY_C = 3.6;     // amortissement (freine sans étouffer le rebond liquide)
+const JELLY_MAX = R * 0.32;
+const JELLY_SIGMA = R * 0.85;
+
+function registerImpact(vertIndex, impulseMag) {
+  const amount = Math.min(impulseMag * 0.55, JELLY_MAX * 1.6);
+  const center = localVerts[vertIndex];
+  for (let i = 0; i < 12; i++) {
+    const d = center.distanceTo(localVerts[i]);
+    const falloff = Math.exp(-(d * d) / (2 * JELLY_SIGMA * JELLY_SIGMA));
+    const inward = localVerts[i].clone().normalize().multiplyScalar(-1);
+    dispVel[i].addScaledVector(inward, amount * falloff);
+  }
+}
+
+function updateJelly(dt) {
+  for (let i = 0; i < 12; i++) {
+    const force = disp[i].clone().multiplyScalar(-JELLY_K).addScaledVector(dispVel[i], -JELLY_C);
+    dispVel[i].addScaledVector(force, dt);
+    disp[i].addScaledVector(dispVel[i], dt);
+    if (disp[i].length() > JELLY_MAX) disp[i].setLength(JELLY_MAX);
+  }
+}
+
+// Géométrie de rendu : non-indexée (60 sommets, 3 par face) pour un ombrage plat façon dé,
+// chaque sommet de rendu est mappé vers l'un des 12 sommets uniques déformables.
+const renderVertMap = [];
+for (const face of faceIdx) for (const v of face) renderVertMap.push(v);
+
+const dieGeometry = new THREE.BufferGeometry();
+dieGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(renderVertMap.length * 3), 3));
+dieGeometry.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(renderVertMap.length * 3), 3));
+
+function updateDieGeometry() {
+  const posAttr = dieGeometry.attributes.position;
+  for (let i = 0; i < renderVertMap.length; i++) {
+    const idx = renderVertMap[i];
+    const p = localVerts[idx].clone().add(disp[idx]);
+    posAttr.setXYZ(i, p.x, p.y, p.z);
+  }
+  posAttr.needsUpdate = true;
+  dieGeometry.computeVertexNormals();
+}
+updateDieGeometry();
+
+const dieMaterial = new THREE.MeshPhysicalMaterial({
+  color: 0x8f4fd1, roughness: 0.28, metalness: 0.05,
+  clearcoat: 1, clearcoatRoughness: 0.18, sheen: 1, sheenColor: 0xd9a8ff
+});
+const dieMesh = new THREE.Mesh(dieGeometry, dieMaterial);
+dieMesh.castShadow = true;
+
+// ── Numéros des faces : petits plans texturés, orientés selon la normale de repos ──
+function makeNumberTexture(n) {
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, size, size);
+  ctx.font = 'bold ' + Math.floor(size * 0.58) + 'px "Segoe UI", Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(20,10,26,0.92)';
+  ctx.fillText(String(n), size / 2, size / 2 + size * 0.04);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+const edgeLen = localVerts[faceIdx[0][0]].distanceTo(localVerts[faceIdx[0][1]]);
+const labelGroup = new THREE.Group();
+for (let f = 0; f < 20; f++) {
+  const normal = faceNormalLocal[f];
+  const centroid = faceCentroidLocal[f];
+  const tex = makeNumberTexture(faceNumber[f]);
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex, transparent: true, depthTest: true,
+    polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3
+  });
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(edgeLen * 0.52, edgeLen * 0.52), mat);
+  plane.position.copy(centroid).addScaledVector(normal, 0.015);
+  plane.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
+  labelGroup.add(plane);
+}
+
+const dieRigid = new THREE.Group();
+dieRigid.add(dieMesh);
+dieRigid.add(labelGroup);
+scene.add(dieRigid);
+
+// ══════════════════════════════════════════════════
+//  CORPS RIGIDE — physique (gravité, rebond, roulement, sommeil)
+// ══════════════════════════════════════════════════
+const GRAVITY = 24;
+const MASS = 1, INV_MASS = 1 / MASS;
+const INERTIA = 0.4 * MASS * R * R; // approximation sphère pleine
+const INV_INERTIA = 1 / INERTIA;
+const RESTITUTION = 0.32;
+const FRICTION = 0.55;
+const LINEAR_DAMPING = 0.18;
+const ANGULAR_DAMPING = 0.55;
+const SLEEP_LIN = 0.12, SLEEP_ANG = 0.15, SLEEP_TIME = 0.35;
+const MAX_FLIGHT_TIME = 9;
+
+const pos = new THREE.Vector3();
+const quat = new THREE.Quaternion();
+const vel = new THREE.Vector3();
+const angVel = new THREE.Vector3();
+let asleep = true;
+let stillTimer = 0;
+let flightTimer = 0;
+
+function randomRestPose() {
+  const faceI = Math.floor(Math.random() * 20);
+  const align = new THREE.Quaternion().setFromUnitVectors(faceNormalLocal[faceI], new THREE.Vector3(0, 1, 0));
+  const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * Math.PI * 2);
+  quat.multiplyQuaternions(yaw, align);
+  pos.set(0, INRADIUS, 0);
+  vel.set(0, 0, 0);
+  angVel.set(0, 0, 0);
+  asleep = true;
+  stillTimer = 0;
+}
+randomRestPose();
+
+function currentTopNumber() {
+  let best = -1, bestDot = -Infinity;
+  for (let f = 0; f < 20; f++) {
+    const worldN = faceNormalLocal[f].clone().applyQuaternion(quat);
+    const d = worldN.y;
+    if (d > bestDot) { bestDot = d; best = f; }
+  }
+  return faceNumber[best];
+}
+
+function resolveContact(worldPoint, normal, penetration) {
+  const r = worldPoint.clone().sub(pos);
+  const contactVel = vel.clone().add(new THREE.Vector3().crossVectors(angVel, r));
+  const vn = contactVel.dot(normal);
+  if (vn < 0) {
+    const rxn = new THREE.Vector3().crossVectors(r, normal);
+    const angTerm = new THREE.Vector3().crossVectors(rxn, r).multiplyScalar(INV_INERTIA);
+    const k = INV_MASS + normal.dot(angTerm);
+    const jImpulse = -(1 + RESTITUTION) * vn / k;
+    const impulse = normal.clone().multiplyScalar(jImpulse);
+    vel.addScaledVector(impulse, INV_MASS);
+    angVel.addScaledVector(new THREE.Vector3().crossVectors(r, impulse), INV_INERTIA);
+
+    const tangentVel = contactVel.clone().sub(normal.clone().multiplyScalar(vn));
+    const tLen = tangentVel.length();
+    if (tLen > 1e-5) {
+      const tangentDir = tangentVel.multiplyScalar(-1 / tLen);
+      const rxt = new THREE.Vector3().crossVectors(r, tangentDir);
+      const angTermT = new THREE.Vector3().crossVectors(rxt, r).multiplyScalar(INV_INERTIA);
+      const kt = INV_MASS + tangentDir.dot(angTermT);
+      let jtMag = tLen / kt;
+      jtMag = Math.min(jtMag, FRICTION * Math.abs(jImpulse));
+      const frictionImpulse = tangentDir.multiplyScalar(jtMag);
+      vel.addScaledVector(frictionImpulse, INV_MASS);
+      angVel.addScaledVector(new THREE.Vector3().crossVectors(r, frictionImpulse), INV_INERTIA);
+    }
+
+    pos.addScaledVector(normal, penetration * 0.6);
+    return Math.abs(jImpulse);
+  } else if (penetration > 0) {
+    pos.addScaledVector(normal, penetration * 0.3);
+  }
+  return 0;
+}
+
+function resolveCollisions() {
+  for (let i = 0; i < 12; i++) {
+    const worldV = localVerts[i].clone().applyQuaternion(quat).add(pos);
+    if (worldV.y < 0) {
+      const j = resolveContact(worldV, UP, -worldV.y);
+      if (j > 0.4) registerImpact(i, j);
+    }
+  }
+  for (let i = 0; i < 12; i++) {
+    const worldV = localVerts[i].clone().applyQuaternion(quat).add(pos);
+    const radial = Math.hypot(worldV.x, worldV.z);
+    if (radial > TRAY_RADIUS) {
+      const normal = new THREE.Vector3(-worldV.x / radial, 0, -worldV.z / radial);
+      const j = resolveContact(worldV, normal, radial - TRAY_RADIUS);
+      if (j > 0.4) registerImpact(i, j);
+    }
+  }
+}
+const UP = new THREE.Vector3(0, 1, 0);
+
+function stepPhysics(dt) {
+  vel.y -= GRAVITY * dt;
+  vel.multiplyScalar(Math.exp(-LINEAR_DAMPING * dt));
+  angVel.multiplyScalar(Math.exp(-ANGULAR_DAMPING * dt));
+
+  pos.addScaledVector(vel, dt);
+  const omegaQuat = new THREE.Quaternion(angVel.x * dt, angVel.y * dt, angVel.z * dt, 0);
+  const dq = new THREE.Quaternion().multiplyQuaternions(omegaQuat, quat);
+  quat.x += 0.5 * dq.x; quat.y += 0.5 * dq.y; quat.z += 0.5 * dq.z; quat.w += 0.5 * dq.w;
+  quat.normalize();
+
+  for (let iter = 0; iter < 4; iter++) resolveCollisions();
+
+  if (vel.length() > 30) vel.setLength(30);
+  if (angVel.length() > 30) angVel.setLength(30);
+
+  flightTimer += dt;
+  const settling = vel.length() < SLEEP_LIN && angVel.length() < SLEEP_ANG;
+  if (settling) stillTimer += dt; else stillTimer = 0;
+  if (stillTimer > SLEEP_TIME || flightTimer > MAX_FLIGHT_TIME) {
+    asleep = true;
+    vel.set(0, 0, 0);
+    angVel.set(0, 0, 0);
+    setStatus('settled');
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  LANCER — vitesse initiale calculée à partir d'un flick, jamais d'un placement direct
+// ══════════════════════════════════════════════════
+const MAX_THROW_SPEED = 11;
+const SPEED_SCALE = 0.012;
+
+function throwDie(vxWorld, vzWorld) {
+  const horiz = new THREE.Vector3(vxWorld, 0, vzWorld);
+  let speed = horiz.length();
+  speed = Math.min(speed, MAX_THROW_SPEED);
+  if (speed > 1e-4) horiz.setLength(speed); else horiz.set(0.001, 0, 0);
+
+  vel.copy(horiz);
+  vel.y = Math.min(2.2 + speed * 0.55, 9);
+  angVel.set(
+    (Math.random() * 2 - 1) * (4 + speed * 1.3),
+    (Math.random() * 2 - 1) * (4 + speed * 1.3),
+    (Math.random() * 2 - 1) * (4 + speed * 1.3)
+  );
+
+  asleep = false;
+  stillTimer = 0;
+  flightTimer = 0;
+  setStatus('rolling');
+}
+
+function rerollRandom() {
+  const angle = Math.random() * Math.PI * 2;
+  const speed = THREE.MathUtils.randFloat(5, 9);
+  throwDie(Math.cos(angle) * speed, Math.sin(angle) * speed);
+}
+
+// ══════════════════════════════════════════════════
+//  INTERACTION — drag-and-drop RAPIDE uniquement (pas de guidage du dé à la souris)
+// ══════════════════════════════════════════════════
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+let dragging = false;
+let dragHistory = [];
+let lastPulse = 0;
+
+function toNDC(e) {
+  ndc.x = (e.clientX / innerWidth) * 2 - 1;
+  ndc.y = -(e.clientY / innerHeight) * 2 + 1;
+}
+
+function dragScreenToWorldDir(dx, dy) {
+  const forward = new THREE.Vector3();
+  camera.getWorldDirection(forward);
+  forward.y = 0; forward.normalize();
+  const right = new THREE.Vector3().crossVectors(forward, UP).normalize().multiplyScalar(-1);
+  return right.multiplyScalar(dx).add(forward.multiplyScalar(-dy));
+}
+
+glCanvas.addEventListener('pointerdown', e => {
+  if (!asleep) return;
+  toNDC(e);
+  raycaster.setFromCamera(ndc, camera);
+  const hit = raycaster.intersectObject(dieMesh, false);
+  if (hit.length === 0) return;
+  dragging = true;
+  dragHistory = [{ x: e.clientX, y: e.clientY, t: performance.now() }];
+  glCanvas.setPointerCapture(e.pointerId);
+  setStatus('aiming');
+});
+
+window.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  const now = performance.now();
+  dragHistory.push({ x: e.clientX, y: e.clientY, t: now });
+  while (dragHistory.length > 2 && now - dragHistory[0].t > 150) dragHistory.shift();
+
+  if (now - lastPulse > 45) {
+    lastPulse = now;
+    const first = dragHistory[0];
+    const dir3 = dragScreenToWorldDir(e.clientX - first.x, e.clientY - first.y);
+    if (dir3.lengthSq() > 1e-6) {
+      dir3.normalize();
+      let best = 0, bestDot = -Infinity;
+      for (let i = 0; i < 12; i++) {
+        const worldDir = localVerts[i].clone().applyQuaternion(quat).normalize();
+        const d = worldDir.dot(dir3);
+        if (d > bestDot) { bestDot = d; best = i; }
+      }
+      registerImpact(best, 0.6);
+    }
+  }
+});
+
+function endDrag(e) {
+  if (!dragging) return;
+  dragging = false;
+  const now = performance.now();
+  const first = dragHistory[0];
+  const dt = Math.max((now - first.t) / 1000, 1 / 60);
+  const dx = e.clientX - first.x, dy = e.clientY - first.y;
+  const dist = Math.hypot(dx, dy);
+  const speedPxS = dist / dt;
+
+  const MIN_DIST = 18, MIN_SPEED = 350;
+  if (dist < MIN_DIST || speedPxS < MIN_SPEED) {
+    setStatus('idle');
+    return;
+  }
+  const dir3 = dragScreenToWorldDir(dx / dt, dy / dt);
+  throwDie(dir3.x * SPEED_SCALE, dir3.z * SPEED_SCALE);
+}
+window.addEventListener('pointerup', endDrag);
+window.addEventListener('pointercancel', endDrag);
+
+document.getElementById('rerollBtn').addEventListener('click', () => {
+  dragging = false;
+  rerollRandom();
+});
+
+// ══════════════════════════════════════════════════
+//  HUD
+// ══════════════════════════════════════════════════
+const resultEl = document.getElementById('result');
+const statusEl = document.getElementById('status');
+
+function setStatus(kind) {
+  if (kind === 'aiming') {
+    statusEl.textContent = 'Fais un flick rapide pour lancer…';
+  } else if (kind === 'rolling') {
+    resultEl.textContent = '🎲';
+    statusEl.textContent = 'Le dé roule...';
+  } else if (kind === 'settled') {
+    resultEl.textContent = String(currentTopNumber());
+    resultEl.style.transform = 'scale(1.25)';
+    setTimeout(() => { resultEl.style.transform = 'scale(1)'; }, 150);
+    statusEl.textContent = 'Glisse rapidement le dé pour le relancer';
+  } else {
+    statusEl.textContent = 'Glisse rapidement le dé pour le lancer';
+  }
+}
+resultEl.textContent = String(currentTopNumber());
+
+// ══════════════════════════════════════════════════
+//  BOUCLE D'ANIMATION
+// ══════════════════════════════════════════════════
+let lastTime = performance.now();
+function animate() {
+  requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt = Math.min((now - lastTime) / 1000, 1 / 30);
+  lastTime = now;
+
+  if (!asleep) stepPhysics(dt);
+  updateJelly(dt);
+  updateDieGeometry();
+
+  dieRigid.position.copy(pos);
+  dieRigid.quaternion.copy(quat);
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
