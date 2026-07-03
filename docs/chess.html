@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="chessground/chessground.brown.css">
     <link rel="stylesheet" href="chessground/chessground.cburnett.css">
     <link rel="stylesheet" href="styles/chess-multiplayer.css">
+    <link rel="stylesheet" href="styles/chess-retro.css">
     <script>
       // Applied before first paint to avoid a flash of the wrong theme.
       (function () {
@@ -22,15 +23,26 @@
 </head>
 <body class="chess-page">
 
+    <div class="chess-frame">
+
     <div class="top-bar">
-        <a id="back-btn" class="btn secondary small" href="index.html">← Menu principal</a>
-        <h1>Échecs en ligne</h1>
+        <a id="back-btn" class="retro-button" href="index.html">← Menu principal</a>
+        <h1>Échecs en ligne<span class="pixel-stars" aria-hidden="true"><i></i><i></i><i></i><i></i></span></h1>
         <label class="theme-switch" title="Thème clair / sombre">
             <span class="theme-icon">☀️</span>
             <input type="checkbox" id="theme-toggle">
             <span class="theme-slider"></span>
             <span class="theme-icon">🌙</span>
         </label>
+    </div>
+
+    <div id="chess-under-construction">
+      <div id="chess-blurtext">
+        <span class="blink">⚠ ÉCHECS EN CHANTIER ⚠</span>
+        <marquee behavior="scroll" direction="left" scrollamount="4">
+          Le GM Hibou Chess vous attend... nouveaux modes bientôt... bonne partie !
+        </marquee>
+      </div>
     </div>
 
     <p id="https-warning" class="warning-banner hidden">
@@ -45,7 +57,7 @@
 
     <div class="chess-layout">
         <div class="chess-main">
-            <div id="lobby" class="card">
+            <div id="lobby" class="card frame">
                 <div id="resume-banner" class="lobby-section hidden">
                     <h2>Partie en cours</h2>
                     <button id="resume-btn" class="btn">Reprendre la partie</button>
@@ -120,6 +132,8 @@
         </aside>
     </div>
 
+    </div><!-- /.chess-frame -->
+
     <div id="pseudo-modal" class="overlay hidden">
         <div class="overlay-box">
             <p>Choisissez un pseudo pour jouer :</p>
@@ -153,6 +167,16 @@
         </div>
     </div>
 
+    <div class="chess-footer-widgets">
+        <img id="chess-mascot" src="assets/images/ours.png" alt="Ours mascotte du site" title="Grrr, joue !">
+        <img class="lavalamp-widget" src="assets/gif/ours_biere_lavalamp.gif" alt="Un ours qui a trop bu en attendant votre coup" title="Il vous attend...">
+        <div class="visitor-counter chess-visitor-counter">
+            <span class="visitor-counter-label">Visiteur n°</span>
+            <span id="visitor-counter-digits" class="visitor-counter-digits">000000</span>
+        </div>
+    </div>
+
+    <script src="scripts/visitor-counter.js"></script>
     <script src="chess/chess.min.js"></script>
     <script src="chessground/chessground.min.js"></script>
     <script src="scripts/chess-multiplayer.js"></script>
