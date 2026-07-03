@@ -29,41 +29,51 @@ front du vecteur.
 ## Architecture
 
 ```
-lib/regions.js          définitions des 5 zones (bbox, contexte maladie)
+lib/regions.js           définitions des 5 zones (bbox, contexte maladie)
 lib/earthengine.js       auth + requêtes Earth Engine (Sentinel-2, indices)
-lib/gbif.js               requête GBIF (occurrences Trioza erytreae)
-server.js                 API Express optionnelle (voir "Deux chemins de données")
-scripts/refresh-dashboard-data.js   génère docs/data/orange-disease/dashboard.json
+lib/gbif.js              requête GBIF (occurrences Trioza erytreae)
+lib/buildDashboard.js    assemble le JSON complet du tableau de bord
+server.js                API Express protégée par mot de passe (seule source de données)
+scripts/refresh-dashboard-data.js   snapshot JSON pour inspection en dev local uniquement
 scripts/fetch-gbif-occurrences.js   rafraîchit data/trioza_occurrences.json
-deploy/                   systemd + config Apache pour le déploiement Oracle Cloud
+deploy/                  systemd + config Apache pour le déploiement Oracle Cloud
 data/*.example.json, sif_demo.json   données de secours explicitement marquées "example"
 ```
 
-### Deux chemins de données (et pourquoi)
+### Page confidentielle, protégée par mot de passe
 
-1. **Chemin principal — fichier statique.** Un workflow GitHub Actions
-   planifié (`.github/workflows/orange-data-refresh.yml`) tourne sur un
-   runner `ubuntu-latest` (accès réseau normal à Earth Engine et GBIF),
-   régénère `docs/data/orange-disease/dashboard.json` et le commit
-   directement dans le repo. `docs/orange-disease.html` charge ce fichier
-   en `fetch()` same-origin — rapide, mobile-friendly, aucun souci CORS.
+`docs/orange-disease.html` n'est plus liée depuis le menu du site et n'est
+accessible qu'en connaissant son URL. Elle affiche un écran de
+verrouillage (`docs/scripts/orange-disease-lock.js`) qui échange le mot de
+passe contre un jeton de session auprès de `POST /api/login`, puis charge
+les données via `GET /api/dashboard` (en-tête `Authorization: Bearer
+<token>`). **Aucune donnée sensible n'est plus committée dans le dépôt** :
+`server.js` est la seule source, et le mot de passe n'existe que côté
+serveur (variable d'environnement `ORANGE_DASHBOARD_PASSWORD`, jamais dans
+le code).
 
-   **Pourquoi pas un appel direct au serveur Node depuis la page ?**
-   `docs/` est servi en HTTPS par GitHub Pages, alors que `orange-server`
-   tourne en HTTP simple sur `bear.servebeer.com` (port 443 bloqué côté
-   Oracle Cloud Security List — exactement la même contrainte déjà
-   documentée dans `server/chess-server/README.md` pour le WebSocket
-   d'échecs). Un navigateur interdit à une page HTTPS d'appeler du
-   contenu HTTP actif (mixed content) : un `fetch()` cross-origin vers
-   `http://bear.servebeer.com/...` échouerait silencieusement depuis
-   `https://zomboky.github.io/...`.
+**Contrainte HTTPS.** `docs/` est servi en HTTPS par GitHub Pages ; un
+navigateur interdit à une page HTTPS d'appeler un serveur en HTTP simple
+(mixed content). `bear.servebeer.com` doit donc répondre en HTTPS sur le
+port 443 pour que la page fonctionne. Le websocket d'échecs
+(`server/chess-server/README.md`) contourne ce problème en restant en HTTP
+pur ; ici on ne peut pas se permettre cette solution (le mot de passe et
+les données circuleraient en clair), donc il faut le vrai certificat :
 
-2. **Chemin secondaire — API live.** `server.js` reste déployé sur
-   `bear.servebeer.com` (`/orange-api/...`) pour des requêtes ponctuelles
-   en accès direct (`http://bear.servebeer.com/orange-api/timeseries?...`),
-   utile pour explorer des plages de dates personnalisées hors du tableau
-   de bord par défaut. Il n'est **pas** utilisé par la page HTTPS pour la
-   même raison de mixed content.
+1. Le vhost Apache HTTPS + certificat Let's Encrypt sont provisionnés par
+   `.github/workflows/chess-diagnose.yml` (`workflow_dispatch` avec
+   `setup_tls: true`) — il inclut désormais aussi `orange-api.conf`.
+2. **Action manuelle obligatoire, une fois** : ouvrir le port 443 en
+   entrée dans la *Security List* OCI de la VM (console Oracle Cloud →
+   Networking → Virtual Cloud Networks → votre VCN → Security Lists →
+   règle d'ingress TCP 443 depuis 0.0.0.0/0). Sans ça, le port reste
+   injoignable depuis Internet même si Apache l'écoute localement — c'est
+   documenté comme le blocage actuel dans `server/chess-server/README.md`.
+   Cette étape ne peut être faite que depuis le compte Oracle Cloud du
+   propriétaire du site.
+
+Tant que le port 443 n'est pas ouvert, la page affiche simplement une
+erreur de chargement — rien de cassé, juste indisponible.
 
 ## Mettre en place l'accès Earth Engine (à faire une fois)
 
@@ -78,15 +88,20 @@ data/*.example.json, sif_demo.json   données de secours explicitement marquées
    automatiquement accès à Earth Engine.
 5. Ajouter le contenu du JSON comme secret GitHub Actions
    `GEE_SERVICE_ACCOUNT_KEY` (Settings → Secrets and variables → Actions)
-   du repo `zomboky/zomboky.github.io`. Utilisé par :
-   - `orange-data-refresh.yml` (chemin principal, écrit dans un fichier
-     temporaire sur le runner, jamais persisté) ;
-   - `deploy.yml` (écrit `/opt/orange-server/gee-key.json` sur la VM,
-     permissions 600, propriétaire `oranged`).
+   du repo `zomboky/zomboky.github.io`. Utilisé par `deploy.yml`, qui
+   écrit `/opt/orange-server/gee-key.json` sur la VM (permissions 600,
+   propriétaire `oranged`).
+6. Ajouter un second secret GitHub Actions `ORANGE_DASHBOARD_PASSWORD`
+   avec le mot de passe de ton choix pour accéder au tableau de bord.
+   `deploy.yml` l'écrit dans `/opt/orange-server/orange-dashboard-password.env`
+   (permissions 600), lu par le service systemd au démarrage. Change ce
+   secret à tout moment pour changer le mot de passe — il suffit de
+   redéployer (push sur `master`) pour qu'il prenne effet.
 
-Sans ce secret, `orange-data-refresh.yml` échoue explicitement (message
-clair dans les logs Actions) et `docs/orange-disease.html` continue
-d'afficher son état "en attente du premier rafraîchissement".
+Sans `GEE_SERVICE_ACCOUNT_KEY`, `/api/dashboard` et `/api/timeseries`
+répondent 502. Sans `ORANGE_DASHBOARD_PASSWORD`, `/api/login` répond 503 :
+personne ne peut se connecter, la page reste bloquée sur l'écran de
+verrouillage.
 
 ## Fluorescence (SIF) — état actuel
 
@@ -130,11 +145,26 @@ npm install
 GEE_KEY_PATH=/chemin/vers/votre/cle.json node server.js
 ```
 
-Puis `curl http://127.0.0.1:8096/api/regions` ou
-`.../api/timeseries?region=brazil_cinturao`.
+Puis `curl http://127.0.0.1:8096/api/regions` (public) ou, pour les routes
+protégées, récupère d'abord un jeton :
 
-Pour régénérer le fichier statique localement (nécessite aussi
-`GEE_KEY_PATH`) :
+```
+curl -X POST http://127.0.0.1:8096/api/login \
+  -H 'Content-Type: application/json' \
+  -d '{"password":"ton-mot-de-passe-local"}'
+# -> {"token": "...", "expiresIn": 43200000}
+
+curl http://127.0.0.1:8096/api/dashboard -H 'Authorization: Bearer <token>'
+```
+
+En local, définis `ORANGE_DASHBOARD_PASSWORD` avant de lancer le serveur :
+
+```
+ORANGE_DASHBOARD_PASSWORD=test GEE_KEY_PATH=/chemin/vers/votre/cle.json node server.js
+```
+
+Pour un instantané JSON sur disque à inspecter sans lancer le serveur
+(fichier local uniquement, jamais commité) :
 
 ```
 npm run refresh:dashboard
@@ -147,5 +177,4 @@ Oracle Cloud que `chess-server`, selon le même schéma : utilisateur
 système dédié (`oranged`), service systemd écoutant en local
 (`127.0.0.1:8096`), reverse-proxy Apache (`/orange-api/`). Le timer
 `orange-ingest.timer` rafraîchit `data/trioza_occurrences.json`
-hebdomadairement sur la VM (chemin secondaire uniquement — le chemin
-principal est le workflow planifié, indépendant de la VM).
+hebdomadairement sur la VM.

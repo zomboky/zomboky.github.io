@@ -1,15 +1,11 @@
-o<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
-<meta charset="utf-8">
-
-
-<!-- HEAD-->
 <head>
+<meta charset="utf-8">
 
   <title>acceuil</title>
   <link rel="stylesheet" href="styles/welcome.css">
   <link rel="shortcut icon" type="image/x-icon" href="assets/icons/ours.png">
-  <
 
 </head>
 
@@ -25,42 +21,41 @@ o<!DOCTYPE html>
 
 </div>
 
-<div id = "Under Construction" >
+<div id = "under-construction" >
 
-  <h1 id = "blurtext" >
-    Welcome to BearServeBeer !This site is till under construction
-  </h1>
-
-
+  <div id = "blurtext" >
+    <span class="blink">⚠ UNDER CONSTRUCTION ⚠</span>
+    <marquee behavior="scroll" direction="left" scrollamount="4">
+      Welcome to BearServeBeer ! This site is still under construction... more rooms coming soon... thanks for visiting !
+    </marquee>
+  </div>
 
 </div>
 
 <div class = "frame">
 
   <p> Visit the solar system</p>
-  <a id = "lien" href = "space.html" > Takeoff </a>
+  <a class = "retro-button" id = "lien" href = "space.html" >🚀 Takeoff</a>
 
 </div>
 
 <div class = "frame">
 
   <p> Jouer aux échecs en multijoueur</p>
-  <a class = "lien" href = "chess.html" > Jouer </a>
+  <a class = "retro-button lien" href = "chess.html" >♟ Jouer</a>
 
 </div>
 
 <div class = "frame">
 
   <p> Lancer un dé à 20 faces</p>
-  <a class = "lien" href = "dice.html" > Lancer </a>
+  <a class = "retro-button lien" href = "dice.html" >🎲 Lancer</a>
 
 </div>
 
-<div class = "frame">
-
-  <p> Maladies des orangers : Brésil vs Espagne</p>
-  <a class = "lien" href = "orange-disease.html" > Explorer </a>
-
+<div class = "visitor-counter">
+  <span class="visitor-counter-label">Visiteur n°</span>
+  <span id="visitor-counter-digits" class="visitor-counter-digits">000000</span>
 </div>
 
 <div class = "main-frame">
@@ -132,6 +127,7 @@ o<!DOCTYPE html>
   <!-- SCRIPT POUR RÉCUPÉRER LA POSITION DE LA SOURIS-->
 
 <script src="scripts/mouse-position.js"></script>
+<script src="scripts/visitor-counter.js"></script>
 
 
 </body> <!-- ---------------------------------------------------------------------------------------------------------------------------- -->

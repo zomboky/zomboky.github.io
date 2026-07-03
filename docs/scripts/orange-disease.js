@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const DATA_URL = 'data/orange-disease/dashboard.json';
+  const DATA_URL = 'https://bear.servebeer.com/orange-api/api/dashboard';
   const COLOR_VAR = { 1: '--series-1', 2: '--series-2', 3: '--series-3', 4: '--series-4', 5: '--series-5' };
   const svgNS = 'http://www.w3.org/2000/svg';
 
@@ -25,9 +25,13 @@
   // Chargement des données
   // ---------------------------------------------------------------------
 
-  async function loadDashboard() {
-    const res = await fetch(DATA_URL, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`dashboard.json : HTTP ${res.status}`);
+  async function loadDashboard(token) {
+    const res = await fetch(DATA_URL, {
+      cache: 'no-store',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.status === 401) throw Object.assign(new Error('authentification requise'), { code: 401 });
+    if (!res.ok) throw new Error(`dashboard : HTTP ${res.status}`);
     return res.json();
   }
 
@@ -541,11 +545,16 @@
     bindSlider('od-slider-threshold', 'alertThreshold', false);
   }
 
-  async function init() {
+  async function init(token) {
     const status = $('od-status');
     try {
-      state.dashboard = await loadDashboard();
+      state.dashboard = await loadDashboard(token);
     } catch (err) {
+      if (err.code === 401) {
+        status.textContent = '';
+        if (typeof window.__odRelock === 'function') window.__odRelock();
+        return;
+      }
       status.textContent = `Impossible de charger les données (${err.message}).`;
       return;
     }
@@ -560,5 +569,5 @@
     window.addEventListener('resize', renderAll);
   }
 
-  document.addEventListener('DOMContentLoaded', init);
+  window.__odInit = init;
 })();
