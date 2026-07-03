@@ -15,6 +15,63 @@ body.chess-page {
   font-family: monospace;
   text-transform: uppercase;
   letter-spacing: 1px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #f4e9d2;
+  text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+}
+
+/* le pseudo est posé directement sur la pierre, pas sur une carte : besoin de contraste */
+.chess-frame > .pseudo-row {
+  color: #f4e9d2;
+  text-shadow: 1px 1px 2px #000;
+}
+
+.chess-frame > .pseudo-row #pseudo-display {
+  color: #ffe08a;
+}
+
+/* petites étoiles pixel qui clignotent près du titre */
+.pixel-stars {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.pixel-stars i {
+  width: 4px;
+  height: 4px;
+  background: #ff0;
+  box-shadow: 0 0 4px #ff0;
+  image-rendering: pixelated;
+  animation: chess-blink 1.4s steps(1) infinite;
+}
+
+.pixel-stars i:nth-child(2) { animation-delay: 0.3s; }
+.pixel-stars i:nth-child(3) { animation-delay: 0.6s; }
+.pixel-stars i:nth-child(4) { animation-delay: 0.9s; }
+
+/* grand cadre texturé qui englobe toute l'interface, façon "main-frame" */
+.chess-frame {
+  width: 100%;
+  max-width: 760px;
+  box-sizing: border-box;
+  background: url('../assets/textures/rockwall8/rockwall8.png') repeat;
+  border: 2px solid #ccc;
+  outline: 4px solid #000;
+  box-shadow: 0 0 0 6px #ccc;
+  padding: 1.5rem;
+  margin: 0 auto 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.chess-frame > * {
+  width: 100%;
+  max-width: 700px;
 }
 
 /* bandeau under construction, sous la top-bar */
@@ -106,4 +163,33 @@ body.chess-page {
   letter-spacing: 3px;
   font-weight: bold;
   text-shadow: 0 0 5px #0f0;
+}
+
+.chess-footer-widgets {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 1.2rem;
+}
+
+.lavalamp-widget {
+  width: 90px;
+  height: auto;
+  border: 2px solid #000;
+  outline: 2px solid #ccc;
+  image-rendering: pixelated;
+}
+
+/* mascotte de l'ours, posée dans le flux normal pour ne jamais gêner un bouton */
+#chess-mascot {
+  width: 70px;
+  height: auto;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+#chess-mascot:hover {
+  transform: scale(1.1) rotate(-3deg);
+  filter: drop-shadow(0 0 12px #ffcc33) drop-shadow(0 0 20px #ff6600);
 }
