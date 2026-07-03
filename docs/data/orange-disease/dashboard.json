@@ -1,0 +1,115 @@
+{
+  "example": true,
+  "generatedAt": null,
+  "note": "Tableau de bord non encore rafraîchi. Ce fichier est régénéré automatiquement par le workflow GitHub Actions .github/workflows/orange-data-refresh.yml (voir server/orange-server/README.md). Tant qu'il n'a pas tourné (secret GEE_SERVICE_ACCOUNT_KEY requis + fusion sur la branche par défaut pour que le cron s'active), les graphiques affichent un message d'attente.",
+  "regions": {
+    "brazil_cinturao": {
+      "id": "brazil_cinturao",
+      "name": "Cinturão Citrícola (São Paulo / Triângulo Mineiro, Brésil)",
+      "country": "BR",
+      "kind": "endemic_disease",
+      "colorSlot": 1,
+      "diseaseContext": "HLB endémique : incidence passée de 24 % (2022) à environ 44-47 % des arbres (2024-2025) selon Fundecitrus.",
+      "referenceUrl": "https://www.fundecitrus.com.br/pes/pesquisar/",
+      "bbox": [-50.5, -23.0, -47.0, -19.3],
+      "centroid": { "lat": -21.15, "lon": -48.75 }
+    },
+    "spain_valencia": {
+      "id": "spain_valencia",
+      "name": "Comunidad Valenciana (Espagne)",
+      "country": "ES",
+      "kind": "biosecurity_watch",
+      "colorSlot": 2,
+      "diseaseContext": "Pas de HLB confirmé (EPPO). CTV endémique depuis 1957. Environ 56 % de la surface agrumicole espagnole.",
+      "referenceUrl": "https://portalagrari.gva.es/es/agricultura/plagas-con-medidas-especiales-de-control",
+      "bbox": [-0.8, 38.3, 0.3, 40.3],
+      "centroid": { "lat": 39.3, "lon": -0.25 }
+    },
+    "spain_murcia": {
+      "id": "spain_murcia",
+      "name": "Región de Murcia (Espagne)",
+      "country": "ES",
+      "kind": "biosecurity_watch",
+      "colorSlot": 3,
+      "diseaseContext": "Pas de HLB confirmé. CTV endémique. Deuxième bassin de production.",
+      "referenceUrl": "https://gd.eppo.int/taxon/TRIZER",
+      "bbox": [-1.7, 37.5, -0.7, 38.3],
+      "centroid": { "lat": 37.9, "lon": -1.2 }
+    },
+    "spain_andalucia": {
+      "id": "spain_andalucia",
+      "name": "Vallée du Guadalquivir (Andalousie, Espagne)",
+      "country": "ES",
+      "kind": "biosecurity_watch",
+      "colorSlot": 4,
+      "diseaseContext": "Pas de HLB confirmé. CTV endémique. Environ 27 % de la surface agrumicole espagnole.",
+      "referenceUrl": "https://gd.eppo.int/taxon/TRIZER",
+      "bbox": [-6.5, 37.0, -4.8, 38.2],
+      "centroid": { "lat": 37.6, "lon": -5.65 }
+    },
+    "spain_galicia_vector_front": {
+      "id": "spain_galicia_vector_front",
+      "name": "Front du vecteur (Galice / côte atlantique)",
+      "country": "ES",
+      "kind": "vector_front",
+      "colorSlot": 5,
+      "diseaseContext": "Pas une zone de production d'agrumes : Trioza erytreae (psylle vecteur du HLB) y est établie depuis 2014 et se propage vers l'est (Asturies, Cantabrie, Pays basque).",
+      "referenceUrl": "https://www.gbif.org/species/5153544",
+      "bbox": [-9.3, 41.8, -7.0, 43.8],
+      "centroid": { "lat": 42.8, "lon": -8.15 }
+    }
+  },
+  "timeseries": {},
+  "triozaOccurrences": {
+    "species": "Trioza erytreae",
+    "example": true,
+    "note": "Exemple provisoire — non issu d'une requête GBIF réelle. Le workflow planifié remplace ce bloc par les vraies occurrences GBIF (taxonKey 5153544, licence CC BY-NC 4.0).",
+    "sourceUrl": "https://www.gbif.org/species/5153544",
+    "points": [
+      { "lat": 42.9, "lon": -8.7, "date": null, "basis": "EXEMPLE" },
+      { "lat": 43.3, "lon": -8.4, "date": null, "basis": "EXEMPLE" },
+      { "lat": 43.5, "lon": -7.9, "date": null, "basis": "EXEMPLE" },
+      { "lat": 43.4, "lon": -6.5, "date": null, "basis": "EXEMPLE" },
+      { "lat": 43.5, "lon": -5.7, "date": null, "basis": "EXEMPLE" }
+    ]
+  },
+  "sif": {
+    "example": true,
+    "note": "Exemple de démonstration — pas une donnée satellite réelle. La fluorescence solaire induite (SIF) n'a pas de produit temps réel dans le catalogue Earth Engine standard. Sources réelles identifiées : TROPOSIF (S5P/TROPOMI, mai 2018 – mars 2021 uniquement) ou GOSIF (dérivé OCO-2 + MODIS, 0.05°, 8 jours, continu). Voir README.md.",
+    "unit": "mW/m2/sr/nm (SIF a 743nm, valeurs d'exemple)",
+    "series": {
+      "brazil_cinturao": [
+        { "date": "2025-01-15", "sif": 1.1 }, { "date": "2025-02-15", "sif": 1.053 },
+        { "date": "2025-03-15", "sif": 0.925 }, { "date": "2025-04-15", "sif": 0.75 },
+        { "date": "2025-05-15", "sif": 0.575 }, { "date": "2025-06-15", "sif": 0.447 },
+        { "date": "2025-07-15", "sif": 0.4 }, { "date": "2025-08-15", "sif": 0.447 },
+        { "date": "2025-09-15", "sif": 0.575 }, { "date": "2025-10-15", "sif": 0.75 },
+        { "date": "2025-11-15", "sif": 0.925 }, { "date": "2025-12-15", "sif": 1.053 }
+      ],
+      "spain_valencia": [
+        { "date": "2025-01-15", "sif": 0.35 }, { "date": "2025-02-15", "sif": 0.397 },
+        { "date": "2025-03-15", "sif": 0.525 }, { "date": "2025-04-15", "sif": 0.7 },
+        { "date": "2025-05-15", "sif": 0.875 }, { "date": "2025-06-15", "sif": 1.003 },
+        { "date": "2025-07-15", "sif": 1.05 }, { "date": "2025-08-15", "sif": 1.003 },
+        { "date": "2025-09-15", "sif": 0.875 }, { "date": "2025-10-15", "sif": 0.7 },
+        { "date": "2025-11-15", "sif": 0.525 }, { "date": "2025-12-15", "sif": 0.397 }
+      ],
+      "spain_murcia": [
+        { "date": "2025-01-15", "sif": 0.33 }, { "date": "2025-02-15", "sif": 0.373 },
+        { "date": "2025-03-15", "sif": 0.49 }, { "date": "2025-04-15", "sif": 0.65 },
+        { "date": "2025-05-15", "sif": 0.81 }, { "date": "2025-06-15", "sif": 0.927 },
+        { "date": "2025-07-15", "sif": 0.97 }, { "date": "2025-08-15", "sif": 0.927 },
+        { "date": "2025-09-15", "sif": 0.81 }, { "date": "2025-10-15", "sif": 0.65 },
+        { "date": "2025-11-15", "sif": 0.49 }, { "date": "2025-12-15", "sif": 0.373 }
+      ],
+      "spain_andalucia": [
+        { "date": "2025-01-15", "sif": 0.35 }, { "date": "2025-02-15", "sif": 0.394 },
+        { "date": "2025-03-15", "sif": 0.515 }, { "date": "2025-04-15", "sif": 0.68 },
+        { "date": "2025-05-15", "sif": 0.845 }, { "date": "2025-06-15", "sif": 0.966 },
+        { "date": "2025-07-15", "sif": 1.01 }, { "date": "2025-08-15", "sif": 0.966 },
+        { "date": "2025-09-15", "sif": 0.845 }, { "date": "2025-10-15", "sif": 0.68 },
+        { "date": "2025-11-15", "sif": 0.515 }, { "date": "2025-12-15", "sif": 0.394 }
+      ]
+    }
+  }
+}
