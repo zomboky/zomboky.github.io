@@ -16,7 +16,7 @@
   };
 
   function $(id) { return document.getElementById(id); }
-  function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  function cssVar(name) { return getComputedStyle(document.querySelector('.od-root') || document.body).getPropertyValue(name).trim(); }
   function dayMs(d) { return new Date(d + 'T00:00:00Z').getTime(); }
   function fmt2(v) { return v.toFixed(2); }
   function fmt3(v) { return v.toFixed(3); }
