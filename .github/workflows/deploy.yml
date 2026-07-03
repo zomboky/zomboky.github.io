@@ -2,7 +2,7 @@ name: Deploy to Oracle Cloud OCI
 on:
   push:
     branches:
-      - master  
+      - master
 
 jobs:
   deploy:
@@ -10,10 +10,13 @@ jobs:
     steps:
       - name: Deploy to Oracle Cloud
         uses: appleboy/ssh-action@master
+        env:
+          GEE_SERVICE_ACCOUNT_KEY: ${{ secrets.GEE_SERVICE_ACCOUNT_KEY }}
         with:
           host: ${{ secrets.REMOTE_HOST }}
           username: ${{ secrets.REMOTE_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: GEE_SERVICE_ACCOUNT_KEY
           script: |
             set -e
             sudo git config --global --add safe.directory /var/www/html
@@ -35,17 +38,40 @@ jobs:
             sudo chown -R chessd:chessd /opt/chess-server
             cd /var/www/html
 
+            # --- Orange-disease API (chemin secondaire, voir
+            # server/orange-server/README.md § Deux chemins de données) ---
+            id -u oranged >/dev/null 2>&1 || sudo useradd -r -s /sbin/nologin oranged
+
+            sudo rm -rf /opt/orange-server
+            sudo mkdir -p /opt/orange-server
+            sudo cp -R /var/www/html/server/orange-server/. /opt/orange-server/
+            cd /opt/orange-server
+            sudo npm install --omit=dev
+            if [ -n "$GEE_SERVICE_ACCOUNT_KEY" ]; then
+              echo "$GEE_SERVICE_ACCOUNT_KEY" | sudo tee gee-key.json > /dev/null
+              sudo chmod 600 gee-key.json
+            else
+              echo "GEE_SERVICE_ACCOUNT_KEY absent : orange-server démarrera sans accès Earth Engine (/api/timeseries répondra 502)."
+            fi
+            sudo chown -R oranged:oranged /opt/orange-server
+            cd /var/www/html
+
             sudo cp -R docs/* .
             sudo rm -rf server
             sudo chown -R apache:apache /var/www/html
             sudo restorecon -Rv /var/www/html
 
             sudo cp /opt/chess-server/deploy/chess-server.service /etc/systemd/system/chess-server.service
+            sudo cp /opt/orange-server/deploy/orange-server.service /etc/systemd/system/orange-server.service
+            sudo cp /opt/orange-server/deploy/orange-ingest.service /etc/systemd/system/orange-ingest.service
+            sudo cp /opt/orange-server/deploy/orange-ingest.timer /etc/systemd/system/orange-ingest.timer
             sudo systemctl daemon-reload
-            sudo systemctl enable chess-server
-            sudo systemctl restart chess-server
+            sudo systemctl enable chess-server orange-server orange-ingest.timer
+            sudo systemctl restart chess-server orange-server
+            sudo systemctl restart orange-ingest.timer
 
             sudo cp /opt/chess-server/deploy/chess-ws.conf /etc/httpd/conf.d/chess-ws.conf
+            sudo cp /opt/orange-server/deploy/orange-api.conf /etc/httpd/conf.d/orange-api.conf
             sudo setsebool -P httpd_can_network_connect 1 || true
             sudo apachectl configtest
             sudo systemctl reload httpd
