@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="chessground/chessground.brown.css">
     <link rel="stylesheet" href="chessground/chessground.cburnett.css">
     <link rel="stylesheet" href="styles/chess-multiplayer.css">
+    <link rel="stylesheet" href="styles/chess-retro.css">
     <script>
       // Applied before first paint to avoid a flash of the wrong theme.
       (function () {
@@ -23,7 +24,7 @@
 <body class="chess-page">
 
     <div class="top-bar">
-        <a id="back-btn" class="btn secondary small" href="index.html">← Menu principal</a>
+        <a id="back-btn" class="retro-button" href="index.html">← Menu principal</a>
         <h1>Échecs en ligne</h1>
         <label class="theme-switch" title="Thème clair / sombre">
             <span class="theme-icon">☀️</span>
@@ -31,6 +32,15 @@
             <span class="theme-slider"></span>
             <span class="theme-icon">🌙</span>
         </label>
+    </div>
+
+    <div id="chess-under-construction">
+      <div id="chess-blurtext">
+        <span class="blink">⚠ ÉCHECS EN CHANTIER ⚠</span>
+        <marquee behavior="scroll" direction="left" scrollamount="4">
+          Le GM Hibou Chess vous attend... nouveaux modes bientôt... bonne partie !
+        </marquee>
+      </div>
     </div>
 
     <p id="https-warning" class="warning-banner hidden">
@@ -45,7 +55,7 @@
 
     <div class="chess-layout">
         <div class="chess-main">
-            <div id="lobby" class="card">
+            <div id="lobby" class="card frame">
                 <div id="resume-banner" class="lobby-section hidden">
                     <h2>Partie en cours</h2>
                     <button id="resume-btn" class="btn">Reprendre la partie</button>
@@ -153,6 +163,12 @@
         </div>
     </div>
 
+    <div class="visitor-counter chess-visitor-counter">
+        <span class="visitor-counter-label">Visiteur n°</span>
+        <span id="visitor-counter-digits" class="visitor-counter-digits">000000</span>
+    </div>
+
+    <script src="scripts/visitor-counter.js"></script>
     <script src="chess/chess.min.js"></script>
     <script src="chessground/chessground.min.js"></script>
     <script src="scripts/chess-multiplayer.js"></script>
