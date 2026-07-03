@@ -78,6 +78,11 @@ body.chess-page {
   flex: 1;
 }
 
+#back-btn {
+  text-decoration: none;
+  white-space: nowrap;
+}
+
 .theme-switch {
   display: flex;
   align-items: center;
@@ -204,6 +209,35 @@ body.chess-page {
   padding: 4px 0;
   border-bottom: 1px solid var(--border-light);
   color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.presence-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-muted);
+}
+
+.presence-dot.present {
+  background: var(--gm-green);
+}
+
+.presence-dot.away {
+  background: var(--text-muted);
+}
+
+.opponent-bar .presence-dot {
+  margin-left: auto;
+}
+
+.presence-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 700px) {
@@ -233,6 +267,11 @@ body.chess-page {
 
 #lobby .lobby-section {
   margin-bottom: 20px;
+}
+
+#resume-banner {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-light);
 }
 
 #lobby h2 {
@@ -408,6 +447,13 @@ body.chess-page {
 #my-color {
   font-weight: normal;
   color: var(--text-secondary);
+}
+
+#premove-badge {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-top: 2px;
 }
 
 .game-controls {
