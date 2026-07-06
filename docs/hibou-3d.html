@@ -157,16 +157,17 @@ function makeSkyGradient() {
 
 const scene = new THREE.Scene();
 scene.background = makeSkyGradient();
-scene.fog = new THREE.FogExp2(0x0c1030, 0.00045); // densité /5 : même portée relative que l'ancienne arène malgré la zone x5
+// Brouillard configuré plus bas, une fois ARENA_RADIUS_XZ connu (doit estomper le terrain
+// juste après le mur invisible pour qu'on ne voie plus de sol "accessible" au-delà de la limite).
 
 const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 3200); // plan éloigné repoussé pour garder lune/étoiles visibles à leur nouvelle distance
 
 const ambientLight = new THREE.AmbientLight(0x8899ff, 0.9);
 scene.add(ambientLight);
-const moonLight = new THREE.DirectionalLight(0xccccff, 1.6);
+const moonLight = new THREE.DirectionalLight(0xccccff, 2.2);
 moonLight.position.set(-60, 90, 30);
 scene.add(moonLight);
-const fillLight = new THREE.HemisphereLight(0x9fb4ff, 0x24361f, 0.5);
+const fillLight = new THREE.HemisphereLight(0x9fb4ff, 0x24361f, 0.7);
 scene.add(fillLight);
 
 // Le sol plat d'origine est remplacé par un terrain procédural (voir section TERRAIN) :
@@ -181,7 +182,7 @@ let starGeo, starBaseColors, starPhases;
 const MOON_DISTANCE    = 2400;  // distance au centre de l'arène, bien au-delà d'ARENA_RADIUS_XZ/Y
 const MOON_RADIUS      = 225;   // rayon de base (mis à l'échelle avec MOON_DISTANCE pour garder la taille apparente)
 const MOON_FULL_SCALE  = 1.7;
-const MOON_BASE_LIGHT  = 1.6, MOON_FULL_LIGHT = 3.0; // la lune éclaire davantage le sol qu'auparavant
+const MOON_BASE_LIGHT  = 2.2, MOON_FULL_LIGHT = 3.6; // la lune éclaire davantage le sol qu'auparavant
 const MOON_COLOR_NORMAL = new THREE.Color(0xfff2d0);
 const MOON_COLOR_BLOOD  = new THREE.Color(0xff2a2a);
 
@@ -274,10 +275,11 @@ function makeSky() {
 //  PARTICULES DE VENT (tempête) — stries 3D disposées autour du hibou,
 //  visibles uniquement pendant storm.active, "infinies" (recyclées quand hors portée).
 // ══════════════════════════════════════════════════
-const WIND_PARTICLE_COUNT  = 110;
+const WIND_PARTICLE_COUNT  = 50;
 const WIND_RADIUS          = 34;   // rayon de la sphère de recyclage autour du hibou
 const WIND_STREAK_LEN      = 2.2;  // longueur du trait dans le sens du vent
 let windParticles, windParticleData = [];
+const _windRecycleTmp = new THREE.Vector3();
 
 function makeWindParticles() {
   const positions = new Float32Array(WIND_PARTICLE_COUNT * 2 * 3); // 2 points par trait
@@ -326,7 +328,14 @@ function updateWindParticles(dt) {
     d.pos.addScaledVector(dir, speedScale * d.speed * dt);
 
     if (d.pos.distanceTo(owlPos) > WIND_RADIUS) {
-      d.pos.copy(randomWindPoint(owlPos)).addScaledVector(dir, -WIND_RADIUS * 0.9);
+      // Repositionne sur le "plan amont" de la sphère de recyclage : on tire un point
+      // aléatoire dans la sphère, on annule sa composante le long du vent, puis on le
+      // recolle à une distance fixe en amont. Le point reste ainsi toujours contenu
+      // près du hibou (contrairement à l'ancien calcul qui pouvait le renvoyer jusqu'à
+      // ~2x WIND_RADIUS de distance — cause du nuage mal centré / dispersé).
+      const p = randomWindPoint(owlPos);
+      const along = _windRecycleTmp.copy(p).sub(owlPos).dot(dir);
+      d.pos.copy(p).addScaledVector(dir, -along - WIND_RADIUS * 0.9);
     }
 
     const tail = d.pos.clone().addScaledVector(dir, -WIND_STREAK_LEN);
@@ -347,12 +356,13 @@ function updateWindParticles(dt) {
 //  vent ci-dessus (liées à storm.active, un vent EXTÉRIEUR), celles-ci existent
 //  en permanence en vol et traduisent le flux d'air créé par le hibou lui-même.
 // ══════════════════════════════════════════════════
-const SPEED_PARTICLE_COUNT   = 80;
+const SPEED_PARTICLE_COUNT   = 40;
 const SPEED_PARTICLE_RADIUS  = 3.4;  // rayon du nuage de particules autour du hibou
 const SPEED_STREAK_LEN_MAX   = 3.2;  // longueur du trait à vitesse max
 const SPEED_PARTICLE_MIN     = 9;    // vitesse air en dessous de laquelle l'effet est invisible
 let speedParticles, speedParticleData = [];
 const _spdDir = new THREE.Vector3();
+const _spdRecycleTmp = new THREE.Vector3();
 
 function randomSpeedPoint() {
   let x, y, z;
@@ -402,7 +412,12 @@ function updateSpeedParticles(dt) {
     d.pos.addScaledVector(_spdDir, -scrollSpeed * dt);
 
     if (d.pos.distanceTo(owlPos) > SPEED_PARTICLE_RADIUS) {
-      d.pos.copy(randomSpeedPoint()).addScaledVector(_spdDir, SPEED_PARTICLE_RADIUS * 0.9);
+      // Même correction que pour les particules de tempête : on annule la composante
+      // du point aléatoire le long du flux avant de le replacer en amont, pour que le
+      // nuage reste bien centré et contenu autour du hibou au lieu de se disperser.
+      const p = randomSpeedPoint();
+      const along = _spdRecycleTmp.copy(p).sub(owlPos).dot(_spdDir);
+      d.pos.copy(p).addScaledVector(_spdDir, -along + SPEED_PARTICLE_RADIUS * 0.9);
     }
 
     const tail = d.pos.clone().addScaledVector(_spdDir, streakLen);
@@ -433,8 +448,15 @@ window.addEventListener('resize', resize);
 const ARENA_CENTER = new THREE.Vector3(0, 35, 0);
 const ARENA_RADIUS_XZ = 1400; // largeur x5
 const ARENA_RADIUS_Y  = 630;  // hauteur x3
-const OWL_GROUND_CLEAR = 1.2; // garde au sol : sous (terrain + marge) = crash
-const OWL_COLLIDE_RADIUS = 0.3;
+
+// Brouillard linéaire calé sur le mur invisible : le terrain (sol, lacs) doit être
+// bien estompé avant/juste après ARENA_RADIUS_XZ pour ne plus se voir "à volonté"
+// de l'autre côté de la limite (auparavant le FogExp2 était trop faible et laissait
+// deviner un sol qui continuait, ce qui cassait l'illusion du mur).
+scene.fog = new THREE.Fog(0x0c1030, ARENA_RADIUS_XZ * 0.6, ARENA_RADIUS_XZ * 1.25);
+
+let OWL_GROUND_CLEAR = 1.2; // garde au sol : sous (terrain + marge) = crash — recalculé sur le vrai modèle dans setupOwlVisual()
+let OWL_COLLIDE_RADIUS = 0.3; // rayon de collision décor — idem, affiné sur le vrai modèle
 const TREE_HIT_COOLDOWN  = 45;
 // Plafond d'altitude des branches/cadeaux : même proportion qu'avant (130 sur une
 // arène de hauteur 210) rapportée à la nouvelle ARENA_RADIUS_Y (x3).
@@ -583,7 +605,8 @@ function makeInstancedFromModel(root, matrices) {
 const TERRAIN_SIZE = 4500;  // x5 : couvre la nouvelle zone de jeu élargie (ARENA_RADIUS_XZ)
 const TERRAIN_SEGS = 128;
 const WATER_Y      = -3.0;  // niveau des lacs
-const HILL_AMP     = 9;     // amplitude des collines fBm (±)
+const HILL_AMP     = 15;    // amplitude des collines fBm (±) — relief de terrain plus marqué
+const GROUND_DETAIL_AMP = 3.5; // bosses fines superposées, visibles même loin des montagnes/lacs
 const SNOW_LINE    = 46;    // altitude d'enneigement
 const TREE_LINE    = 38;    // au-dessus : plus d'arbres
 
@@ -611,17 +634,18 @@ function fbm(x, z, octaves = 4) {
 }
 
 // Pics montagneux : bosses gaussiennes semées à l'intérieur de l'arène (jamais au centre).
+// Nombre, position, hauteur et rayon tirés au hasard à chaque run pour une silhouette différente à chaque partie.
 const mountainPeaks = [];
 {
-  const peakCount = 7;
+  const peakCount = Math.floor(rnd(5, 10));
   for (let i = 0; i < peakCount; i++) {
-    const angle = (i / peakCount) * Math.PI * 2 + rnd(-0.35, 0.35);
-    const dist = rnd(110, 250);
+    const angle = (i / peakCount) * Math.PI * 2 + rnd(-0.45, 0.45);
+    const dist = rnd(90, 270);
     mountainPeaks.push({
       x: Math.cos(angle) * dist,
       z: Math.sin(angle) * dist,
-      h: rnd(35, 72),
-      r: rnd(32, 62)
+      h: rnd(30, 78),
+      r: rnd(28, 66)
     });
   }
 }
@@ -629,6 +653,8 @@ const mountainPeaks = [];
 function terrainHeight(x, z) {
   // Collines fBm recentrées sur ±HILL_AMP (les creux sous WATER_Y deviennent des lacs)
   let h = (fbm(x * 0.008, z * 0.008) * 2 - 1) * HILL_AMP;
+  // Relief fin superposé (fréquence plus haute) : bosses au sol même loin des montagnes/lacs
+  h += (fbm(x * 0.035, z * 0.035, 3) * 2 - 1) * GROUND_DETAIL_AMP;
   // Montagnes gaussiennes
   for (const p of mountainPeaks) {
     const dx = x - p.x, dz = z - p.z;
@@ -843,7 +869,7 @@ function updateMoonVisual(dt) {
     mat.emissiveIntensity = THREE.MathUtils.lerp(MOON_BASE_LIGHT, MOON_FULL_LIGHT, t);
   }
 
-  moonLight.intensity = THREE.MathUtils.lerp(MOON_BASE_LIGHT, MOON_FULL_LIGHT * 0.6, t);
+  moonLight.intensity = THREE.MathUtils.lerp(MOON_BASE_LIGHT, MOON_FULL_LIGHT, t);
   moonLight.color.lerp(new THREE.Color(isBlood ? 0xff5a5a : 0xccccff), 0.05);
   ambientLight.color.lerp(new THREE.Color(isBlood ? 0xff6666 : 0x8899ff), 0.05);
 }
@@ -1039,7 +1065,8 @@ function makeTrees() {
     if (h > TREE_LINE) continue;                             // au-dessus : roche/neige
     const slope = Math.abs(terrainHeight(x + 2, z) - h) + Math.abs(terrainHeight(x, z + 2) - h);
     if (slope > 2.2) continue;                               // pentes raides : pas de forêt
-    if (forestDensity(x, z) < 0.42 && Math.random() > 0.15) continue; // masque de forêt (15% d'isolés)
+    const nearShore = h < WATER_Y + 5; // berge : rive d'un lac, quelques mètres au-dessus de l'eau
+    if (!nearShore && forestDensity(x, z) < 0.42 && Math.random() > 0.15) continue; // masque de forêt (15% d'isolés), sauf en bordure de lac
 
     // Tirage pondéré du type
     let pick = Math.random(), ti = 0;
@@ -1140,6 +1167,14 @@ function setupOwlVisual() {
     norm.rotation.x = -0.25; // légère assiette piquée : posture de vol plutôt que perché
     owlGroup.add(norm);
     owl = { wings: null, body: null, bob: norm };
+
+    // Gabarit de collision dérivé de la boîte englobante réelle du modèle (et non de son
+    // envergure, qui inclut les ailes déployées) : le corps qui touche vraiment le décor
+    // est bien plus étroit/bas que les 2.6 de large utilisés pour la normalisation visuelle.
+    const box = new THREE.Box3().setFromObject(norm);
+    const size = box.getSize(new THREE.Vector3());
+    OWL_GROUND_CLEAR   = size.y / 2 + 0.15;
+    OWL_COLLIDE_RADIUS = Math.min(size.y, size.z) / 2;
   } else {
     const built = buildOwl();
     owlGroup.add(built.group);
@@ -1472,7 +1507,7 @@ function updateFlight(dt) {
   owlGroup.rotateY(angRate.y * dt);
   owlGroup.rotateZ(angRate.z * dt);
   owlGroup.rotateY(mdx); // souris = pilotage fin, appliqué directement (crisp)
-  owlGroup.rotateX(mdy);
+  owlGroup.rotateX(-mdy); // tangage inversé : souris vers le bas = cabrer, comme un manche
 
   // ── 3. Repère local du hibou (nez / haut / droite) ──
   const q = owlGroup.quaternion;
