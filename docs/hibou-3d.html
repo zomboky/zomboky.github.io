@@ -94,19 +94,21 @@ function makeSkyGradient() {
 
 const scene = new THREE.Scene();
 scene.background = makeSkyGradient();
-scene.fog = new THREE.FogExp2(0x0c1030, 0.008);
+scene.fog = new THREE.FogExp2(0x0c1030, 0.0045);
 
 const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 500);
 
-const ambientLight = new THREE.AmbientLight(0x8899ff, 0.55);
+const ambientLight = new THREE.AmbientLight(0x8899ff, 0.9);
 scene.add(ambientLight);
-const moonLight = new THREE.DirectionalLight(0xccccff, 0.6);
+const moonLight = new THREE.DirectionalLight(0xccccff, 0.9);
 moonLight.position.set(-60, 90, 30);
 scene.add(moonLight);
+const fillLight = new THREE.HemisphereLight(0x9fb4ff, 0x24361f, 0.5);
+scene.add(fillLight);
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(500, 500),
-  new THREE.MeshStandardMaterial({ color: 0x0a1a12, roughness: 1 })
+  new THREE.MeshStandardMaterial({ color: 0x16321f, roughness: 1 })
 );
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
@@ -118,7 +120,7 @@ let moonMesh;
 let starGeo, starBaseColors, starPhases;
 const MOON_RADIUS      = 30;   // rayon de base (pleine lune = MOON_RADIUS * MOON_FULL_SCALE)
 const MOON_FULL_SCALE  = 1.7;
-const MOON_BASE_LIGHT  = 0.55, MOON_FULL_LIGHT = 2.4;
+const MOON_BASE_LIGHT  = 0.9, MOON_FULL_LIGHT = 2.4;
 const MOON_COLOR_NORMAL = new THREE.Color(0xfff2d0);
 const MOON_COLOR_BLOOD  = new THREE.Color(0xff2a2a);
 
@@ -531,16 +533,21 @@ function updateRocks(dt) {
 let treeColliders = [];
 function makeTrees() {
   const palettes = [
-    { trunk: 0x3a2a1e, leaf: [0x0e3d1e, 0x155226, 0x1f6b30] },
-    { trunk: 0x2e2118, leaf: [0x123318, 0x1a4a22, 0x26612c] },
-    { trunk: 0x332419, leaf: [0x173d24, 0x1f5230, 0x2a6b3a] }
+    { trunk: 0x6b4d38, leaf: [0x2a7a3e, 0x36994e, 0x48b563] },
+    { trunk: 0x5a4230, leaf: [0x2f6a30, 0x3d8542, 0x4faa4d] },
+    { trunk: 0x63432c, leaf: [0x397048, 0x459858, 0x57b56a] }
   ];
   const count = 600; // densité adaptée à l'arène agrandie
   treeColliders = [];
-  const trunkMat  = new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true });
-  const leafMat   = new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true });
-  const leaf2Mat  = new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true });
-  const capMat    = new THREE.MeshStandardMaterial({ roughness: 1, vertexColors: true });
+  // Pas de "vertexColors: true" ici : sur un InstancedMesh, la couleur par instance
+  // (setColorAt/instanceColor) est automatiquement prise en compte par three.js.
+  // Activer vertexColors en plus déclenche la lecture d'un attribut de couleur PAR SOMMET
+  // qui n'existe pas sur ces géométries ; cet attribut manquant vaut 0 et multipliait donc
+  // la couleur finale par zéro — c'est ce qui rendait tronc/feuillage/calotte tout noirs.
+  const trunkMat  = new THREE.MeshStandardMaterial({ roughness: 1 });
+  const leafMat   = new THREE.MeshStandardMaterial({ roughness: 1 });
+  const leaf2Mat  = new THREE.MeshStandardMaterial({ roughness: 1 });
+  const capMat    = new THREE.MeshStandardMaterial({ roughness: 1 });
 
   // Tronc : légèrement tronconique et irrégulier (segments radiaux réduits pour rester léger).
   const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.22, 0.4, 1, 6), trunkMat, count);
@@ -946,12 +953,15 @@ let speed = 0;
 function updateFlight(dt) {
   let yawIn   = (keys['q'] || keys['arrowleft']  ? 1 : 0) - (keys['d'] || keys['arrowright'] ? 1 : 0);
   let pitchIn = (keys['s'] || keys['arrowdown']  ? 1 : 0) - (keys['z'] || keys['arrowup']    ? 1 : 0);
-  const rollIn  = (keys['a'] ? 1 : 0) - (keys['e'] ? 1 : 0);
+  let rollIn  = (keys['a'] ? 1 : 0) - (keys['e'] ? 1 : 0);
 
-  // Joystick tactile (mobile) : contrôle proportionnel du lacet/tangage, remplace le clavier.
-  if (isMobile && joystick.active) {
-    yawIn   = THREE.MathUtils.clamp(-joystick.dx / JOYSTICK_RADIUS, -1, 1);
-    pitchIn = THREE.MathUtils.clamp( joystick.dy / JOYSTICK_RADIUS, -1, 1);
+  // Joystick tactile (mobile) : contrôle proportionnel du tangage/roulis, pas de lacet.
+  if (isMobile) {
+    yawIn = 0;
+    if (joystick.active) {
+      pitchIn = THREE.MathUtils.clamp( joystick.dy / JOYSTICK_RADIUS, -1, 1);
+      rollIn  = THREE.MathUtils.clamp(-joystick.dx / JOYSTICK_RADIUS, -1, 1);
+    }
   }
 
   let yawDelta   = yawIn * YAW_RATE * dt;
@@ -1471,7 +1481,7 @@ function drawStart() {
   hctx.fillText('HIBOU 3D', cx, cy - 100);
   hctx.fillStyle = '#cbc3dd'; hctx.font = '14px system-ui';
   if (isMobile) {
-    hctx.fillText('Joystick (bas gauche) = lacet / tangage', cx, cy - 50);
+    hctx.fillText('Joystick (bas gauche) = tangage / roulis', cx, cy - 50);
     hctx.fillText('⚡ = accélérer   ✋ = freiner', cx, cy - 28);
   } else {
     hctx.fillText('Q / D ou ← / → = lacet (yaw)', cx, cy - 50);
