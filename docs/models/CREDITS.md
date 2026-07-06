@@ -8,11 +8,16 @@ alléger le chargement — la géométrie est inchangée.
 
 | Fichier | Titre | Auteur | Source |
 |---|---|---|---|
-| `owl.glb` | Owl | Poly by Google | https://poly.pizza/m/eoAo21aoZHJ |
 | `bear.glb` | Bear | Poly by Google | https://poly.pizza/m/0PXWfxfb0Hu |
 | `moon.glb` | Moon | Poly by Google | https://poly.pizza/m/9OPocAqXM0u |
 
 Licence : [Creative Commons Attribution 3.0](https://creativecommons.org/licenses/by/3.0/)
+
+## Fourni par l'utilisateur (source/licence non précisée)
+
+| Fichier | Titre |
+|---|---|
+| `barnowl.glb` | Barn Owl (remplace l'ancien `owl.glb` de Poly by Google) |
 
 ## CC0 1.0 (domaine public)
 
