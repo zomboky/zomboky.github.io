@@ -36,6 +36,7 @@ let state = S.START;
 
 const MAX_COMBO_TIME = 120;
 let score = 0, nest = 0, combo = 1, comboTimer = 0, lives = 1, best = 0;
+let overReason = 'eaten'; // 'eaten' (ours) ou 'crash' (sol) — affiché par drawOver()
 let owlInvul = 0;
 let treeCooldown = 0;
 let rockInvul = 0; // invulnérabilité dédiée aux rochers de tempête, indépendante de celle des ours
@@ -946,27 +947,33 @@ document.addEventListener('pointerlockchange', () => {
 //  piqués et décrochages émergent de la physique, pas de règles ad hoc.
 // ══════════════════════════════════════════════════
 
-// Vitesses angulaires maximales commandées (rad/s) — la « barre », pas l'inertie
+// Vitesses angulaires maximales commandées (rad/s) — la « barre », pas l'inertie.
+// Les 3 axes sont des commandes en VITESSE : aucun ne revient au neutre tout seul
+// quand on relâche — comme un vrai avion, il faut contre-braquer pour revenir à plat.
 const YAW_RATE   = THREE.MathUtils.degToRad(70);
 const PITCH_RATE = THREE.MathUtils.degToRad(55);
-const MAX_BANK   = THREE.MathUtils.degToRad(60);  // inclinaison max commandée par A/E (bank-to-turn)
-const BANK_RESPONSE = 3.2;                         // rapidité pour atteindre l'inclinaison visée
+const ROLL_RATE  = THREE.MathUtils.degToRad(90);
 const MOUSE_MAX_DELTA = 0.05;
 
 // — Moteur —
-const THRUST_ACCEL    = 28;   // poussée max (u/s²) le long du nez
+const THRUST_ACCEL    = 28;   // poussée max (u/s²) le long du nez, rapportée à OWL_MASS
 const MAX_SPEED       = 34;   // repère HUD + amplitude du battement d'ailes
 const CRUISE_THROTTLE = 0.6;  // consigne fixée d'un simple appui sur ⚡ (0..1)
 
-// — Aérodynamique (masse = 1 → force = accélération) —
-const GRAVITY      = 15;      // pesanteur (u/s²)
+// — Masse & aérodynamique —
+// Toutes les forces ci-dessous sont calculées en newtons puis converties en
+// accélération par a = ΣF / OWL_MASS (2ᵉ loi de Newton, voir updateFlight §7).
+// Seule la pesanteur fait exception : son accélération ne dépend PAS de la masse
+// (un corps lourd et un corps léger tombent à la même vitesse) — c'est le POIDS
+// (P = OWL_MASS · GRAVITY) qui, lui, dépend de la masse.
+const OWL_MASS     = 1.6;     // kg — masse de référence du hibou
+const GRAVITY      = 9.8;     // pesanteur réelle (u/s²)
 const AIR_LIFT     = 0.05;    // portance dynamique de l'aile  ∝ v²·CL
 const AIR_DRAG     = 0.02;    // traînée parasite ∝ v² — cale la vitesse de croisière ~MAX_SPEED
 const INDUCED_DRAG = 0.03;    // traînée induite (prix de l'incidence/des virages) ∝ CL²·v
 const FLAP_LIFT    = 13;      // portance de battement d'ailes (basse vitesse, ∝ poussée)
 const FLAP_FADE    = 17;      // vitesse air au-delà de laquelle le battement ne porte plus
 const SIDE_GRIP    = 0.6;     // léger amortissement du dérapage latéral (ne doit pas tuer le virage)
-const WEATHERVANE  = 2.6;     // girouette : le nez se recale sur la trajectoire → vire en roulis
 const STALL_AOA    = THREE.MathUtils.degToRad(18); // incidence critique de décrochage
 const CL_MAX       = 1.5;     // portance dynamique max juste avant le décrochage
 const CTRL_MIN_SPEED  = 7;    // sous cette vitesse air : gouvernes molles (autorité réduite)
@@ -1013,29 +1020,25 @@ function updateFlight(dt) {
   const authority = THREE.MathUtils.clamp(
     (speed - CTRL_MIN_SPEED) / (CTRL_FULL_SPEED - CTRL_MIN_SPEED), 0.2, 1);
 
-  // Tangage & lacet : commande en VITESSE angulaire, avec inertie (le hibou n'est
-  // plus une girouette instantanée — il faut « emmancher » la rotation).
-  _tgtAng.set(pitchIn * PITCH_RATE, yawIn * YAW_RATE, 0).multiplyScalar(authority);
+  // Tangage, lacet & roulis : commande en VITESSE angulaire, avec inertie (le hibou
+  // n'est plus une girouette instantanée — il faut « emmancher » la rotation).
+  // Aucun axe ne « recentre » automatiquement quand on relâche : l'inclinaison
+  // tenue reste tenue, il faut contre-braquer pour revenir à plat, comme un vrai avion.
+  _tgtAng.set(pitchIn * PITCH_RATE, yawIn * YAW_RATE, rollIn * ROLL_RATE).multiplyScalar(authority);
   const kAng = 1 - Math.exp(-ANG_RESPONSE * dt); // lissage exponentiel, stable quel que soit dt
   angRate.lerp(_tgtAng, kAng);
   owlGroup.rotateX(angRate.x * dt);
   owlGroup.rotateY(angRate.y * dt);
+  owlGroup.rotateZ(angRate.z * dt);
   owlGroup.rotateY(mdx); // souris = pilotage fin, appliqué directement (crisp)
   owlGroup.rotateX(mdy);
-
-  // Roulis : commande en ANGLE d'inclinaison (« bank-to-turn »). Maintenir A/E
-  // incline vers un bank cible et l'y TIENT → virage stable ; relâcher ramène les
-  // ailes à plat. C'est ce qui empêche le tonneau involontaire et la spirale.
-  _right.set(1, 0, 0).applyQuaternion(owlGroup.quaternion);
-  const curBank = Math.asin(THREE.MathUtils.clamp(_right.y, -1, 1));
-  const tgtBank = rollIn * MAX_BANK * (0.4 + 0.6 * authority);
-  owlGroup.rotateZ((tgtBank - curBank) * Math.min(1, BANK_RESPONSE * dt));
 
   // ── 3. Repère local du hibou (nez / haut / droite) ──
   const q = owlGroup.quaternion;
   _fwd.set(0, 0, -1).applyQuaternion(q);
   _up.set(0, 1, 0).applyQuaternion(q);
   _right.set(1, 0, 0).applyQuaternion(q);
+  const curBank = Math.asin(THREE.MathUtils.clamp(_right.y, -1, 1)); // inclinaison réelle, lue depuis l'orientation
 
   // ── 4. Poussée moteur : ⚡ fixe la consigne, la maintenir la module finement ──
   const thrustHeld = keys[' '] || touchThrust;
@@ -1070,31 +1073,33 @@ function updateFlight(dt) {
     CL = Math.sign(aoa) * CL_MAX * (1 - 0.75 * over); // aile décrochée : la portance chute
   }
 
-  // ── 7. Bilan des forces (accélérations, masse = 1) ──
-  _acc.set(0, -GRAVITY, 0);              // pesanteur
-  _acc.addScaledVector(_fwd, thrust);    // poussée le long du nez
+  // ── 7. Bilan des forces, en newtons (2ᵉ loi de Newton : a = ΣF / masse) ──
+  _acc.set(0, -OWL_MASS * GRAVITY, 0);           // poids P = m·g (la pesanteur ne dépend pas de la masse)
+  _acc.addScaledVector(_fwd, thrust * OWL_MASS); // poussée le long du nez
 
   // Portance : dynamique (aile, ∝ v²·CL) + battement (basse vitesse, ∝ poussée)
   const dynLift  = AIR_LIFT * v * v * CL;
   const flapLift = FLAP_LIFT * (0.35 + 0.65 * throttle) * Math.max(0, 1 - v / FLAP_FADE);
-  _acc.addScaledVector(_up, dynLift + flapLift);
+  _acc.addScaledVector(_up, (dynLift + flapLift) * OWL_MASS);
 
   // Traînée : parasite (∝ v²) + induite (∝ CL²), opposée à la vitesse
   if (v > 1e-3) {
     const drag = AIR_DRAG * v * v + INDUCED_DRAG * CL * CL * v;
-    _acc.addScaledVector(velocity, -drag / v);
+    _acc.addScaledVector(velocity, (-drag / v) * OWL_MASS);
   }
 
   // Anti-dérapage : on gomme la glisse latérale → sensation « je vole », pas « je glisse »
-  _acc.addScaledVector(_right, -vRight * SIDE_GRIP);
+  _acc.addScaledVector(_right, -vRight * SIDE_GRIP * OWL_MASS);
 
   // ── 8. Vent de tempête : accélération latérale physique (pas un téléport) ──
   if (storm.active) {
-    const w = storm.windForce * WIND_ACCEL;
+    const w = storm.windForce * WIND_ACCEL * OWL_MASS;
     _acc.x += Math.cos(storm.windAngle) * w;
     _acc.z += Math.sin(storm.windAngle) * w;
     _acc.y += Math.sin(storm.gustPhase * 0.5) * w * 0.3;
   }
+
+  _acc.divideScalar(OWL_MASS); // a = ΣF / m — c'est ici que la masse (1.6 kg) intervient réellement
 
   // ── 9. Intégration semi-implicite du vecteur vitesse puis de la position ──
   velocity.addScaledVector(_acc, dt);
@@ -1116,19 +1121,6 @@ function updateFlight(dt) {
     owlGroup.rotateOnWorldAxis(_UP_AXIS, a);
   }
 
-  // Girouette : le nez se recale progressivement sur la trajectoire horizontale.
-  // C'est ce qui transforme un simple roulis en VIRAGE (la portance inclinée courbe
-  // la trajectoire, et le nez suit) — le pilotage « bank-to-turn » réaliste.
-  _tmp.copy(velocity); _tmp.y = 0;
-  if (_tmp.lengthSq() > 1) {
-    const velAng = Math.atan2(_tmp.x, _tmp.z);      // cap de la trajectoire
-    const fwdAng = Math.atan2(_fwd.x, _fwd.z);      // cap du nez
-    let dYaw = velAng - fwdAng;
-    while (dYaw >  Math.PI) dYaw -= 2 * Math.PI;
-    while (dYaw < -Math.PI) dYaw += 2 * Math.PI;
-    owlGroup.rotateY(dYaw * Math.min(1, WEATHERVANE * dt));
-  }
-
   // ── 10. Bordure ellipsoïde + plancher (on annule la vitesse « sortante ») ──
   const offset = _tmp.copy(owlGroup.position).sub(ARENA_CENTER);
   const f = ellipsoidFactor(owlGroup.position);
@@ -1140,7 +1132,7 @@ function updateFlight(dt) {
   }
   if (owlGroup.position.y < FLOOR_Y) {
     owlGroup.position.y = FLOOR_Y;
-    if (velocity.y < 0) velocity.y = 0; // le sol arrête la chute
+    onGroundCrash();
   }
 
   // ── 11. État de vol pour les instruments du HUD ──
@@ -1191,6 +1183,21 @@ function onTreeHit() {
   hitFlash = Math.max(hitFlash, 0.5);
   treeCooldown = TREE_HIT_COOLDOWN;
   spawnFX(owlGroup.position, 18, 'death', 'CRASH ! 🌳');
+}
+
+// Contact avec le sol (le sprite/modèle du hibou, pas la caméra) : crash fatal,
+// game over immédiat — contrairement aux arbres/ours, on ne relève pas de vie ici.
+function onGroundCrash() {
+  if (state !== S.PLAY) return;
+  best = Math.max(best, score);
+  state = S.OVER;
+  overReason = 'crash';
+  owlGroup.visible = false;
+  document.body.style.cursor = 'default';
+  if (document.pointerLockElement) document.exitPointerLock();
+  screenShake = Math.max(screenShake, 25);
+  hitFlash = Math.max(hitFlash, 0.6);
+  spawnFX(owlGroup.position, 24, 'death', '💥 CRASHÉ !');
 }
 
 // ══════════════════════════════════════════════════
@@ -1489,6 +1496,7 @@ function updateBears(dt) {
       if (lives <= 0) {
         best = Math.max(best, score);
         state = S.OVER;
+        overReason = 'eaten';
         owlGroup.visible = false;
         document.body.style.cursor = 'default';
         if (document.pointerLockElement) document.exitPointerLock();
@@ -1661,7 +1669,7 @@ function drawStart() {
   hctx.fillStyle = '#cbc3dd'; hctx.font = '14px system-ui';
   if (isMobile) {
     hctx.fillText('Joystick = tangage / inclinaison', cx, cy - 54);
-    hctx.fillText('Incline pour virer, relâche = à plat', cx, cy - 34);
+    hctx.fillText('Incline pour virer, contre-incline pour redresser', cx, cy - 34);
     hctx.fillText('⚡ = accélérer   ✋ = freiner', cx, cy - 14);
     hctx.fillStyle = '#ffb0a0'; hctx.font = '12px system-ui';
     hctx.fillText('Vitesse = portance : trop lent = décrochage !', cx, cy + 8);
@@ -1688,7 +1696,7 @@ function drawOver() {
   rrect(cx - 150, cy - 180, 300, 360, 28, 'rgba(22,8,30,0.97)', 'rgba(255,70,70,0.8)');
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
   hctx.fillStyle = '#ffaaaa'; hctx.font = '900 32px system-ui';
-  hctx.fillText('MANGÉ !', cx, cy - 100);
+  hctx.fillText(overReason === 'crash' ? 'CRASHÉ !' : 'MANGÉ !', cx, cy - 100);
   hctx.fillStyle = '#e8e5ff'; hctx.font = '18px system-ui';
   hctx.fillText('Score final : ' + score, cx, cy - 30);
   if (best > 0) {
@@ -1900,7 +1908,7 @@ function drawOverlay() {
 function beginGame() {
   state = S.PLAY;
   document.body.style.cursor = 'none';
-  score = 0; nest = 0; combo = 1; comboTimer = 0; lives = 1;
+  score = 0; nest = 0; combo = 1; comboTimer = 0; lives = 1; overReason = 'eaten';
   screenShake = 0; hitFlash = 0; owlInvul = 60; treeCooldown = 0;
   speed = MAX_SPEED * 0.55; // décolle déjà lancé
 
