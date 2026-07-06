@@ -944,11 +944,15 @@ const PITCH_RATE = THREE.MathUtils.degToRad(50);
 const ROLL_RATE  = THREE.MathUtils.degToRad(90);
 const MOUSE_MAX_DELTA  = 0.05;
 
-const THRUST_ACCEL = 18;
-const BRAKE_DECEL  = 24;
-const DRAG_PER_SEC  = 0.4;
-const MAX_SPEED    = 28;
+const THRUST_ACCEL  = 18;
+const BRAKE_DECEL   = 24;
+const MAX_SPEED     = 28;
+const CRUISE_SPEED  = 20;  // vitesse atteinte puis maintenue sur simple appui de ⚡ (pas besoin de rester appuyé)
+const GRAVITY_ACCEL = 14;  // bonus de vitesse (unités/s) en piqué complet, retiré en montée complète
 let speed = 0;
+let throttleTarget = 0;   // consigne de vitesse "moteur", changée seulement par un appui sur ⚡/✋
+let prevThrustHeld = false, prevBrakeHeld = false;
+const _tmpFwd = new THREE.Vector3(); // évite une allocation par frame dans updateFlight
 
 function updateFlight(dt) {
   let yawIn   = (keys['q'] || keys['arrowleft']  ? 1 : 0) - (keys['d'] || keys['arrowright'] ? 1 : 0);
@@ -983,10 +987,24 @@ function updateFlight(dt) {
   const effMaxSpeed = MAX_SPEED * speedBoost;
   const effAccel    = THRUST_ACCEL * speedBoost;
 
-  if (keys[' '] || touchThrust) speed = Math.min(effMaxSpeed, speed + effAccel * dt);
-  else if (keys['control'] || touchBrake) speed = Math.max(0, speed - BRAKE_DECEL * dt);
-  else speed = Math.max(0, speed * (1 - DRAG_PER_SEC * dt));
-  speed = Math.min(speed, effMaxSpeed);
+  // Consigne de vitesse "moteur" : un simple appui (front montant) sur ⚡ ou ✋ la fixe,
+  // pas besoin de rester appuyé — elle ne change que sur un nouvel appui.
+  const thrustHeld = keys[' '] || touchThrust;
+  const brakeHeld  = keys['control'] || touchBrake;
+  if (thrustHeld && !prevThrustHeld) throttleTarget = CRUISE_SPEED;
+  if (brakeHeld  && !prevBrakeHeld)  throttleTarget = 0;
+  prevThrustHeld = thrustHeld;
+  prevBrakeHeld  = brakeHeld;
+
+  // Gravité : piquer (nez vers le bas) relève la vitesse effective visée au-dessus de la
+  // consigne moteur (donc on accélère en piqué) ; grimper l'abaisse. À plat, elle revient
+  // exactement à la consigne moteur, qui reste alors constante comme demandé.
+  const fwdDir = _tmpFwd.set(0, 0, -1).applyQuaternion(owlGroup.quaternion);
+  const diveFactor = THREE.MathUtils.clamp(-fwdDir.y, -1, 1);
+  const effTarget = THREE.MathUtils.clamp(throttleTarget * speedBoost + diveFactor * GRAVITY_ACCEL, 0, effMaxSpeed);
+
+  if (speed < effTarget) speed = Math.min(effTarget, speed + effAccel * dt);
+  else                    speed = Math.max(effTarget, speed - BRAKE_DECEL * dt);
 
   owlGroup.translateZ(-speed * dt);
 
