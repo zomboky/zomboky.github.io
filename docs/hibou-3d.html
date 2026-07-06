@@ -809,34 +809,66 @@ function getBrakeButtonCenter() {
   const W = hudCanvas.width, H = hudCanvas.height;
   return { x: W - 74, y: H - 210, r: 34 };
 }
-function handleMobilePointerDown(e) {
+// Événements tactiles natifs (touchstart/move/end) : contrairement aux Pointer Events,
+// ils sont supportés par tous les navigateurs mobiles sans exception, y compris les
+// vieux WebViews Android et les navigateurs in-app — donc plus fiable pour le tactile.
+function handleMobileTouchBegin(id, x, y) {
   const thrust = getThrustButtonCenter();
-  if (Math.hypot(e.clientX - thrust.x, e.clientY - thrust.y) < thrust.r) {
-    touchThrust = true; touchThrustId = e.pointerId; return;
+  if (Math.hypot(x - thrust.x, y - thrust.y) < thrust.r) {
+    touchThrust = true; touchThrustId = id; return;
   }
   const brake = getBrakeButtonCenter();
-  if (Math.hypot(e.clientX - brake.x, e.clientY - brake.y) < brake.r) {
-    touchBrake = true; touchBrakeId = e.pointerId; return;
+  if (Math.hypot(x - brake.x, y - brake.y) < brake.r) {
+    touchBrake = true; touchBrakeId = id; return;
   }
-  if (!joystick.active && e.clientX < hudCanvas.width * 0.55) {
+  if (!joystick.active && x < hudCanvas.width * 0.55) {
     joystick.active = true;
-    joystick.id = e.pointerId;
-    joystick.baseX = e.clientX; joystick.baseY = e.clientY;
+    joystick.id = id;
+    joystick.baseX = x; joystick.baseY = y;
     joystick.dx = 0; joystick.dy = 0;
   }
 }
-function handleMobilePointerMove(e) {
-  if (joystick.active && e.pointerId === joystick.id) {
-    let dx = e.clientX - joystick.baseX, dy = e.clientY - joystick.baseY;
+function handleMobileTouchDrag(id, x, y) {
+  if (joystick.active && id === joystick.id) {
+    let dx = x - joystick.baseX, dy = y - joystick.baseY;
     const d = Math.hypot(dx, dy);
     if (d > JOYSTICK_RADIUS) { dx = dx / d * JOYSTICK_RADIUS; dy = dy / d * JOYSTICK_RADIUS; }
     joystick.dx = dx; joystick.dy = dy;
   }
 }
-function handleMobilePointerUp(e) {
-  if (joystick.active && e.pointerId === joystick.id) { joystick.active = false; joystick.dx = 0; joystick.dy = 0; }
-  if (touchThrust && e.pointerId === touchThrustId) touchThrust = false;
-  if (touchBrake  && e.pointerId === touchBrakeId)  touchBrake  = false;
+function handleMobileTouchRelease(id) {
+  if (joystick.active && id === joystick.id) { joystick.active = false; joystick.dx = 0; joystick.dy = 0; }
+  if (touchThrust && id === touchThrustId) touchThrust = false;
+  if (touchBrake  && id === touchBrakeId)  touchBrake  = false;
+}
+function handleTouchStart(e) {
+  if (state === S.START || state === S.OVER) { beginGame(); e.preventDefault(); return; }
+  if (state === S.PLAY) {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      const t = e.changedTouches[i];
+      handleMobileTouchBegin(t.identifier, t.clientX, t.clientY);
+    }
+  }
+  e.preventDefault();
+}
+function handleTouchMove(e) {
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    const t = e.changedTouches[i];
+    handleMobileTouchDrag(t.identifier, t.clientX, t.clientY);
+  }
+  e.preventDefault();
+}
+function handleTouchEnd(e) {
+  for (let i = 0; i < e.changedTouches.length; i++) {
+    handleMobileTouchRelease(e.changedTouches[i].identifier);
+  }
+  e.preventDefault();
+}
+if (isMobile) {
+  window.addEventListener('touchstart',  handleTouchStart, { passive: false });
+  window.addEventListener('touchmove',   handleTouchMove,  { passive: false });
+  window.addEventListener('touchend',    handleTouchEnd,   { passive: false });
+  window.addEventListener('touchcancel', handleTouchEnd,   { passive: false });
 }
 
 window.addEventListener('keydown', e => {
@@ -856,21 +888,17 @@ function requestFlightPointerLock() {
   if (!isMobile && glCanvas.requestPointerLock) glCanvas.requestPointerLock();
 }
 window.addEventListener('pointermove', e => {
-  if (isMobile) { handleMobilePointerMove(e); return; }
+  if (isMobile) return; // tactile géré par touchstart/touchmove/touchend natifs
   if (document.pointerLockElement === glCanvas) {
     mouseDX += e.movementX;
     mouseDY += e.movementY;
   }
   if (sliderDrag) handleSliderDrag(e.clientX);
 });
-window.addEventListener('pointerup',     e => { if (isMobile) handleMobilePointerUp(e); sliderDrag = false; });
-window.addEventListener('pointercancel', e => { if (isMobile) handleMobilePointerUp(e); sliderDrag = false; });
+window.addEventListener('pointerup',     e => { if (isMobile) return; sliderDrag = false; });
+window.addEventListener('pointercancel', e => { if (isMobile) return; sliderDrag = false; });
 window.addEventListener('pointerdown', e => {
-  if (isMobile) {
-    if (state === S.START || state === S.OVER) { beginGame(); return; }
-    if (state === S.PLAY) handleMobilePointerDown(e);
-    return;
-  }
+  if (isMobile) return; // tactile géré par touchstart/touchmove/touchend natifs
   if (settingsOpen) {
     const hit = getSliderHitArea();
     if (e.clientX >= hit.x && e.clientX <= hit.x + hit.w && e.clientY >= hit.y - 10 && e.clientY <= hit.y + hit.h + 10) {
