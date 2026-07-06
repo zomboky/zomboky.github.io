@@ -31,7 +31,7 @@ import * as THREE from 'three';
 // ══════════════════════════════════════════════════
 //  ÉTAT DU JEU
 // ══════════════════════════════════════════════════
-const S = { START: 0, PLAY: 1, OVER: 2 };
+const S = { START: 0, PLAY: 1, OVER: 2, PAUSED: 3 };
 let state = S.START;
 
 const MAX_COMBO_TIME = 120;
@@ -596,9 +596,39 @@ owlGroup.visible = false;
 scene.add(owlGroup);
 
 // Caméra rigidement attachée au hibou : elle hérite de TOUTE son orientation (roulis inclus).
-camera.position.set(0, 2, 6.5);
+const CAMERA_LOCAL_OFFSET = new THREE.Vector3(0, 2, 6.5);
+const CAMERA_MIN_DIST     = 2.5; // distance mini si un arbre bloque la vue arrière
+camera.position.copy(CAMERA_LOCAL_OFFSET);
 camera.rotation.set(0, 0, 0);
 owlGroup.add(camera);
+
+// ── Anti-clipping caméra : rapproche la caméra du hibou si un arbre se trouve
+//    sur le segment hibou→caméra, pour éviter qu'elle ne traverse le feuillage.
+const CAMERA_CLIP_SAMPLES = 10;
+function pointInsideAnyTree(p) {
+  for (const t of treeColliders) {
+    const dx = p.x - t.x, dz = p.z - t.z;
+    let r;
+    if (p.y < t.leafBase) r = t.trunkR;
+    else if (p.y <= t.leafTop) r = t.leafR * (1 - (p.y - t.leafBase) / (t.leafTop - t.leafBase));
+    else continue;
+    if (dx * dx + dz * dz < r * r) return true;
+  }
+  return false;
+}
+const camClipDir = new THREE.Vector3();
+const camClipPoint = new THREE.Vector3();
+function updateCameraClip() {
+  const maxDist = CAMERA_LOCAL_OFFSET.length();
+  camClipDir.copy(CAMERA_LOCAL_OFFSET).normalize().applyQuaternion(owlGroup.quaternion);
+  let safeDist = maxDist;
+  for (let i = 1; i <= CAMERA_CLIP_SAMPLES; i++) {
+    const t = (i / CAMERA_CLIP_SAMPLES) * maxDist;
+    camClipPoint.copy(owlGroup.position).addScaledVector(camClipDir, t);
+    if (pointInsideAnyTree(camClipPoint)) { safeDist = Math.max(CAMERA_MIN_DIST, t - 0.5); break; }
+  }
+  camera.position.copy(CAMERA_LOCAL_OFFSET).setLength(safeDist);
+}
 
 let flapPhase = 0;
 function updateFlap(dt, speedRatio) {
@@ -621,6 +651,7 @@ window.addEventListener('keydown', e => {
   keys[e.key.toLowerCase()] = true;
   if (e.key === ' ' || ARROW_KEYS.includes(e.key.toLowerCase())) e.preventDefault();
   if (state === S.START || state === S.OVER) beginGame();
+  else if (state === S.PAUSED) requestFlightPointerLock();
 });
 window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 
@@ -638,7 +669,22 @@ window.addEventListener('pointermove', e => {
 });
 window.addEventListener('pointerdown', () => {
   if (state === S.START || state === S.OVER) beginGame();
-  if (state === S.PLAY) requestFlightPointerLock();
+  else if (state === S.PLAY || state === S.PAUSED) requestFlightPointerLock();
+});
+
+// Perte du verrouillage souris (Échap navigateur, changement d'onglet…) : on met le jeu
+// en pause plutôt que de laisser le pilotage souris cesser silencieusement de répondre.
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement === glCanvas) {
+    if (state === S.PAUSED) {
+      state = S.PLAY;
+      mouseDX = 0; mouseDY = 0;
+      document.body.style.cursor = 'none';
+    }
+  } else if (state === S.PLAY) {
+    state = S.PAUSED;
+    document.body.style.cursor = 'default';
+  }
 });
 
 // Vitesses angulaires (rad/s) et sensibilité souris — ajustables en polish
@@ -1236,6 +1282,23 @@ function drawOver() {
   hctx.restore();
 }
 
+function drawPaused() {
+  const W = hudCanvas.width, H = hudCanvas.height;
+  hctx.save();
+  hctx.fillStyle = 'rgba(4,4,18,0.72)'; hctx.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2;
+  rrect(cx - 170, cy - 90, 340, 180, 24, 'rgba(12,12,48,0.96)', 'rgba(110,90,255,0.45)');
+  hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+  hctx.fillStyle = '#cbc3ff'; hctx.font = '900 24px system-ui';
+  hctx.fillText('PAUSE', cx, cy - 30);
+  hctx.fillStyle = '#fff'; hctx.font = 'bold 16px system-ui';
+  hctx.fillText('Clique ou appuie sur une touche', cx, cy + 10);
+  hctx.fillText('pour reprendre le pilotage', cx, cy + 32);
+  hctx.fillStyle = '#cbc3dd'; hctx.font = '13px system-ui';
+  hctx.fillText('(verrouillage souris relâché)', cx, cy + 58);
+  hctx.restore();
+}
+
 function drawOverlay() {
   hctx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
   hctx.save();
@@ -1260,6 +1323,7 @@ function drawOverlay() {
     }
     drawHUD();
     if (state === S.OVER) drawOver();
+    else if (state === S.PAUSED) drawPaused();
   }
 
   if (hitFlash > 0) {
@@ -1324,6 +1388,7 @@ function update() {
     updateGift(dt);
     updateBoundaryGrid();
     updateWindParticles(dt);
+    updateCameraClip();
     owlGroup.visible = !(owlInvul > 0 && Math.floor(Date.now() / 80) % 2 !== 0);
   } else {
     mouseDX = 0; mouseDY = 0;
