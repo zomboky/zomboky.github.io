@@ -13,11 +13,12 @@ jobs:
         env:
           GEE_SERVICE_ACCOUNT_KEY: ${{ secrets.GEE_SERVICE_ACCOUNT_KEY }}
           ORANGE_DASHBOARD_PASSWORD: ${{ secrets.ORANGE_DASHBOARD_PASSWORD }}
+          HIBOU3D_V6_PASSWORD: ${{ secrets.HIBOU3D_V6_PASSWORD }}
         with:
           host: ${{ secrets.REMOTE_HOST }}
           username: ${{ secrets.REMOTE_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GEE_SERVICE_ACCOUNT_KEY,ORANGE_DASHBOARD_PASSWORD
+          envs: GEE_SERVICE_ACCOUNT_KEY,ORANGE_DASHBOARD_PASSWORD,HIBOU3D_V6_PASSWORD
           script: |
             set -e
             sudo git config --global --add safe.directory /var/www/html
@@ -64,6 +65,17 @@ jobs:
             cd /var/www/html
 
             sudo cp -R docs/* .
+
+            # --- Verrou v6 prerelease du jeu Hibou 3D : seul le hash sha256 du
+            # mot de passe est injecté dans le fichier servi, jamais le mot de
+            # passe en clair (ni dans le dépôt, ni dans les fichiers déployés) ---
+            if [ -n "$HIBOU3D_V6_PASSWORD" ]; then
+              HIBOU3D_V6_HASH=$(printf '%s' "$HIBOU3D_V6_PASSWORD" | sha256sum | cut -d' ' -f1)
+              sudo sed -i "s/__HIBOU3D_V6_PASSWORD_HASH__/$HIBOU3D_V6_HASH/" scripts/hibou3d-lock.js
+            else
+              echo "HIBOU3D_V6_PASSWORD absent : le verrou v6 du hibou 3D restera fermé (aucun code ne le déverrouillera)."
+            fi
+
             sudo rm -rf server
             sudo chown -R apache:apache /var/www/html
             sudo restorecon -Rv /var/www/html
