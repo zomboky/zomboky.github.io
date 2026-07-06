@@ -19,11 +19,69 @@
   html, body { width: 100%; height: 100%; overflow: hidden; background: #04040e; }
   canvas { position: fixed; top: 0; left: 0; display: block; }
   #hud { pointer-events: none; }
+
+  /* ── Verrou d'accès v6 prerelease ── */
+  #hibou-lock { display: none; }
+  body.hibou-locked #hibou-lock {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: #04040e;
+  }
+  body.hibou-locked canvas { pointer-events: none; }
+  #hibou-lock-form {
+    font-family: monospace;
+    color: #ccccff;
+    background: #0c1030;
+    border: 2px solid #8899ff;
+    box-shadow: 0 0 20px #4455aa;
+    padding: 2rem 2.5rem;
+    text-align: center;
+    width: min(90vw, 360px);
+  }
+  #hibou-lock-title { font-size: 1.05rem; font-weight: bold; margin: 0 0 1.2rem; line-height: 1.4; }
+  #hibou-lock-form label { display: block; text-align: left; margin-bottom: 0.4rem; font-size: 0.85rem; }
+  #hibou-lock-input {
+    width: 100%;
+    font-family: monospace;
+    background: #04040e;
+    color: #ccccff;
+    border: 1px solid #8899ff;
+    padding: 0.5rem;
+    margin-bottom: 1rem;
+    outline: none;
+  }
+  #hibou-lock-form button {
+    width: 100%;
+    font-family: monospace;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #04040e;
+    background: #ccccff;
+    border: none;
+    padding: 0.6rem;
+    cursor: pointer;
+  }
+  #hibou-lock-error { display: none; color: #ff6666; margin: 1rem 0 0; font-size: 0.85rem; }
 </style>
 </head>
-<body>
+<body class="hibou-locked">
 <canvas id="gl"></canvas>
 <canvas id="hud"></canvas>
+
+<div id="hibou-lock">
+  <form id="hibou-lock-form">
+    <p id="hibou-lock-title">🦉 Accès à la v6 prerelease<br>Veuillez saisir votre code d'accès confidentiel (VIP only)</p>
+    <label for="hibou-lock-input">Code d'accès</label>
+    <input type="password" id="hibou-lock-input" autocomplete="off" autofocus>
+    <button type="submit">Valider</button>
+    <p id="hibou-lock-error">Code incorrect.</p>
+  </form>
+</div>
+<script src="scripts/hibou3d-lock.js"></script>
 
 <script type="module">
 import * as THREE from 'three';
