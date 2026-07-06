@@ -952,7 +952,7 @@ document.addEventListener('pointerlockchange', () => {
 // quand on relâche — comme un vrai avion, il faut contre-braquer pour revenir à plat.
 const YAW_RATE   = THREE.MathUtils.degToRad(70);
 const PITCH_RATE = THREE.MathUtils.degToRad(55);
-const ROLL_RATE  = THREE.MathUtils.degToRad(90);
+const ROLL_RATE  = THREE.MathUtils.degToRad(200); // roulis vif, façon chasse
 const MOUSE_MAX_DELTA = 0.05;
 
 // — Moteur —
@@ -993,6 +993,7 @@ const flight = { aoa: 0, stall: false, climb: 0, throttle: 0 };
 // Vecteurs temporaires — zéro allocation par frame dans updateFlight
 const _fwd = new THREE.Vector3(), _up = new THREE.Vector3(), _right = new THREE.Vector3();
 const _acc = new THREE.Vector3(), _tmp = new THREE.Vector3(), _tgtAng = new THREE.Vector3();
+const _dir = new THREE.Vector3();
 const _UP_AXIS = new THREE.Vector3(0, 1, 0); // verticale monde (virage coordonné)
 
 function updateFlight(dt) {
@@ -1111,24 +1112,42 @@ function updateFlight(dt) {
   // Virage coordonné : une aile inclinée courbe la trajectoire au taux réel
   // ω = g·tan(inclinaison)/v. On fait pivoter ENSEMBLE la trajectoire (composante
   // horizontale de la vitesse) et le nez (autour de la verticale monde) → virage
-  // parfaitement coordonné, sans dérapage, franc et lisible.
-  if (speed > 3) {
-    const turnRate = GRAVITY * Math.tan(THREE.MathUtils.clamp(curBank, -1.25, 1.25)) / speed;
-    const a = turnRate * dt, ca = Math.cos(a), sa = Math.sin(a);
+  // parfaitement coordonné, sans dérapage, franc et lisible. Le plafond sur tan()
+  // est repoussé à 83° (au lieu de 71,6°) pour qu'un virage « sur la tranche »
+  // reste de plus en plus serré à mesure qu'on incline plus fort (sensation chasse).
+  //
+  // Ce modèle de bank angle n'a de sens qu'en vol à peu près horizontal : dès que
+  // le nez pointe vers la verticale (montée cabrée, décrochage), l'angle d'inclinaison
+  // lu depuis l'orientation devient dégénéré (gimbal lock) et se met à osciller —
+  // on atténue donc cette correction à mesure que le nez approche de la verticale,
+  // pour éviter que la caméra ne « recentre » erratiquement pendant ces phases.
+  const levelness = 1 - THREE.MathUtils.clamp(Math.abs(_fwd.y) / 0.85, 0, 1);
+  if (speed > 3 && levelness > 0) {
+    const turnRate = GRAVITY * Math.tan(THREE.MathUtils.clamp(curBank, -1.45, 1.45)) / speed;
+    const a = turnRate * dt * levelness;
+    const ca = Math.cos(a), sa = Math.sin(a);
     const vx = velocity.x, vz = velocity.z;
     velocity.x = vx * ca + vz * sa;
     velocity.z = -vx * sa + vz * ca;
     owlGroup.rotateOnWorldAxis(_UP_AXIS, a);
   }
 
-  // ── 10. Bordure ellipsoïde + plancher (on annule la vitesse « sortante ») ──
+  // ── 10. Bordure ellipsoïde : résistance progressive (pas de téléportation) ──
+  // On freine la composante « sortante » de la vitesse de plus en plus fort à
+  // mesure qu'on approche du bord (comme un vent de face croissant), au lieu de
+  // clamper brutalement la position — ce qui donnait l'impression que la caméra
+  // se recentrait toute seule d'un coup en approchant de la limite.
   const offset = _tmp.copy(owlGroup.position).sub(ARENA_CENTER);
   const f = ellipsoidFactor(owlGroup.position);
-  if (f > 1) {
-    owlGroup.position.copy(ARENA_CENTER).addScaledVector(offset, 1 / f);
-    offset.normalize();
-    const vn = velocity.dot(offset);
-    if (vn > 0) velocity.addScaledVector(offset, -vn); // glisse le long de la paroi
+  const pushStart = 1 - BOUNDARY_FADE_DIST / ARENA_RADIUS_XZ;
+  if (f > pushStart) {
+    _dir.copy(offset).normalize();
+    const vOut = velocity.dot(_dir);
+    if (vOut > 0) {
+      const strength = THREE.MathUtils.clamp((f - pushStart) / (1 - pushStart), 0, 1);
+      velocity.addScaledVector(_dir, -vOut * strength * Math.min(1, 6 * dt));
+    }
+    if (f > 1) owlGroup.position.copy(ARENA_CENTER).addScaledVector(offset, 1 / f); // garde-fou dur, en dernier recours
   }
   if (owlGroup.position.y < FLOOR_Y) {
     owlGroup.position.y = FLOOR_Y;
