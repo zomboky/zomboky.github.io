@@ -95,9 +95,9 @@ function makeSkyGradient() {
 
 const scene = new THREE.Scene();
 scene.background = makeSkyGradient();
-scene.fog = new THREE.FogExp2(0x0c1030, 0.0045);
+scene.fog = new THREE.FogExp2(0x0c1030, 0.00225);
 
-const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 500);
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 900);
 
 const ambientLight = new THREE.AmbientLight(0x8899ff, 0.9);
 scene.add(ambientLight);
@@ -108,7 +108,7 @@ const fillLight = new THREE.HemisphereLight(0x9fb4ff, 0x24361f, 0.5);
 scene.add(fillLight);
 
 const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(500, 500),
+  new THREE.PlaneGeometry(900, 900),
   new THREE.MeshStandardMaterial({ color: 0x16321f, roughness: 1 })
 );
 ground.rotation.x = -Math.PI / 2;
@@ -278,8 +278,8 @@ window.addEventListener('resize', resize);
 //  VOLUME DE JEU (sphère 3D)
 // ══════════════════════════════════════════════════
 const ARENA_CENTER = new THREE.Vector3(0, 35, 0);
-const ARENA_RADIUS_XZ = 140; // largeur x2
-const ARENA_RADIUS_Y  = 105; // hauteur x1.5
+const ARENA_RADIUS_XZ = 280; // largeur x2 (zone doublée)
+const ARENA_RADIUS_Y  = 210; // hauteur x2 (zone doublée)
 const FLOOR_Y       = 1.5;
 const OWL_COLLIDE_RADIUS = 0.3;
 const TREE_HIT_COOLDOWN  = 45;
@@ -538,7 +538,7 @@ function makeTrees() {
     { trunk: 0x5a4230, leaf: [0x2f6a30, 0x3d8542, 0x4faa4d] },
     { trunk: 0x63432c, leaf: [0x397048, 0x459858, 0x57b56a] }
   ];
-  const count = 600; // densité adaptée à l'arène agrandie
+  const count = 1800; // densité adaptée à l'arène agrandie (rayon x2 → surface x4)
   treeColliders = [];
   // Pas de "vertexColors: true" ici : sur un InstancedMesh, la couleur par instance
   // (setColorAt/instanceColor) est automatiquement prise en compte par three.js.
@@ -564,7 +564,7 @@ function makeTrees() {
 
   for (let i = 0; i < count; i++) {
     const angle = rnd(0, Math.PI * 2);
-    const r = rnd(15, 170);
+    const r = rnd(15, 340);
     const x = Math.cos(angle) * r, z = Math.sin(angle) * r;
     const trunkH = rnd(4, 10);
     const pal = palettes[i % 3];
