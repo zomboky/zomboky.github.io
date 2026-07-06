@@ -759,13 +759,91 @@ function updateFlap(dt, speedRatio) {
 }
 
 // ══════════════════════════════════════════════════
-//  ENTRÉES — clavier (ZQSD/AE) + souris (joystick additionnel)
+//  ENTRÉES — clavier (ZQSD/AE) + souris (joystick additionnel) + tactile (mobile)
 // ══════════════════════════════════════════════════
+const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
 const keys = {};
 const ARROW_KEYS = ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
+
+// ── Menu de sensibilité souris (desktop uniquement, touche O) ──
+let settingsOpen = false;
+let sliderDrag = false;
+let mouseSensitivity = 0.5; // 0.05..1.0, 0.5 = sensibilité par défaut d'origine
+const MOUSE_SENS_BASE = 0.002;
+
+function toggleSettings() {
+  if (isMobile || state === S.LOOT || state === S.OVER) return;
+  settingsOpen = !settingsOpen;
+  if (settingsOpen) {
+    if (document.pointerLockElement) document.exitPointerLock();
+    if (state === S.PLAY) { state = S.PAUSED; document.body.style.cursor = 'default'; }
+  }
+}
+function getSettingsPanelRect() {
+  const W = hudCanvas.width, H = hudCanvas.height;
+  const pw = 280, ph = 110;
+  return { x: W / 2 - pw / 2, y: H / 2 - ph / 2, w: pw, h: ph };
+}
+function getSliderHitArea() {
+  const p = getSettingsPanelRect();
+  return { x: p.x + 20, y: p.y + 62, w: p.w - 40, h: 16 };
+}
+function handleSliderDrag(clientX) {
+  const hit = getSliderHitArea();
+  const t = Math.max(0, Math.min(1, (clientX - hit.x) / hit.w));
+  mouseSensitivity = Math.max(0.05, Math.min(1.0, 0.05 + t * 0.95));
+}
+
+// ── Joystick virtuel + boutons tactiles (mobile uniquement) ──
+const JOYSTICK_RADIUS = 55;
+let joystick = { active: false, id: null, baseX: 0, baseY: 0, dx: 0, dy: 0 };
+let touchThrust = false, touchThrustId = null;
+let touchBrake  = false, touchBrakeId  = null;
+
+function getThrustButtonCenter() {
+  const W = hudCanvas.width, H = hudCanvas.height;
+  return { x: W - 74, y: H - 90, r: 48 };
+}
+function getBrakeButtonCenter() {
+  const W = hudCanvas.width, H = hudCanvas.height;
+  return { x: W - 74, y: H - 210, r: 34 };
+}
+function handleMobilePointerDown(e) {
+  const thrust = getThrustButtonCenter();
+  if (Math.hypot(e.clientX - thrust.x, e.clientY - thrust.y) < thrust.r) {
+    touchThrust = true; touchThrustId = e.pointerId; return;
+  }
+  const brake = getBrakeButtonCenter();
+  if (Math.hypot(e.clientX - brake.x, e.clientY - brake.y) < brake.r) {
+    touchBrake = true; touchBrakeId = e.pointerId; return;
+  }
+  if (!joystick.active && e.clientX < hudCanvas.width * 0.55) {
+    joystick.active = true;
+    joystick.id = e.pointerId;
+    joystick.baseX = e.clientX; joystick.baseY = e.clientY;
+    joystick.dx = 0; joystick.dy = 0;
+  }
+}
+function handleMobilePointerMove(e) {
+  if (joystick.active && e.pointerId === joystick.id) {
+    let dx = e.clientX - joystick.baseX, dy = e.clientY - joystick.baseY;
+    const d = Math.hypot(dx, dy);
+    if (d > JOYSTICK_RADIUS) { dx = dx / d * JOYSTICK_RADIUS; dy = dy / d * JOYSTICK_RADIUS; }
+    joystick.dx = dx; joystick.dy = dy;
+  }
+}
+function handleMobilePointerUp(e) {
+  if (joystick.active && e.pointerId === joystick.id) { joystick.active = false; joystick.dx = 0; joystick.dy = 0; }
+  if (touchThrust && e.pointerId === touchThrustId) touchThrust = false;
+  if (touchBrake  && e.pointerId === touchBrakeId)  touchBrake  = false;
+}
+
 window.addEventListener('keydown', e => {
   keys[e.key.toLowerCase()] = true;
   if (e.key === ' ' || ARROW_KEYS.includes(e.key.toLowerCase())) e.preventDefault();
+  if (e.key === 'o' || e.key === 'O') { toggleSettings(); return; }
+  if (e.key === 'Escape') { settingsOpen = false; return; }
   if (state === S.START || state === S.OVER) beginGame();
   else if (state === S.PAUSED) requestFlightPointerLock();
 });
@@ -775,15 +853,37 @@ window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 // ne se bloque plus quand on atteint le bord (mouvements relatifs via movementX/Y).
 let mouseDX = 0, mouseDY = 0;
 function requestFlightPointerLock() {
-  if (glCanvas.requestPointerLock) glCanvas.requestPointerLock();
+  if (!isMobile && glCanvas.requestPointerLock) glCanvas.requestPointerLock();
 }
 window.addEventListener('pointermove', e => {
+  if (isMobile) { handleMobilePointerMove(e); return; }
   if (document.pointerLockElement === glCanvas) {
     mouseDX += e.movementX;
     mouseDY += e.movementY;
   }
+  if (sliderDrag) handleSliderDrag(e.clientX);
 });
-window.addEventListener('pointerdown', () => {
+window.addEventListener('pointerup',     e => { if (isMobile) handleMobilePointerUp(e); sliderDrag = false; });
+window.addEventListener('pointercancel', e => { if (isMobile) handleMobilePointerUp(e); sliderDrag = false; });
+window.addEventListener('pointerdown', e => {
+  if (isMobile) {
+    if (state === S.START || state === S.OVER) { beginGame(); return; }
+    if (state === S.PLAY) handleMobilePointerDown(e);
+    return;
+  }
+  if (settingsOpen) {
+    const hit = getSliderHitArea();
+    if (e.clientX >= hit.x && e.clientX <= hit.x + hit.w && e.clientY >= hit.y - 10 && e.clientY <= hit.y + hit.h + 10) {
+      sliderDrag = true;
+      handleSliderDrag(e.clientX);
+      return;
+    }
+    const panel = getSettingsPanelRect();
+    if (e.clientX < panel.x || e.clientX > panel.x + panel.w || e.clientY < panel.y || e.clientY > panel.y + panel.h) {
+      settingsOpen = false;
+    }
+    return;
+  }
   if (state === S.START || state === S.OVER) beginGame();
   else if (state === S.PLAY || state === S.PAUSED) requestFlightPointerLock();
 });
@@ -807,8 +907,6 @@ document.addEventListener('pointerlockchange', () => {
 const YAW_RATE   = THREE.MathUtils.degToRad(60);
 const PITCH_RATE = THREE.MathUtils.degToRad(50);
 const ROLL_RATE  = THREE.MathUtils.degToRad(90);
-const MOUSE_YAW_SENS   = 0.002;
-const MOUSE_PITCH_SENS = 0.002;
 const MOUSE_MAX_DELTA  = 0.05;
 
 const THRUST_ACCEL = 18;
@@ -818,16 +916,23 @@ const MAX_SPEED    = 28;
 let speed = 0;
 
 function updateFlight(dt) {
-  const yawIn   = (keys['q'] || keys['arrowleft']  ? 1 : 0) - (keys['d'] || keys['arrowright'] ? 1 : 0);
-  const pitchIn = (keys['s'] || keys['arrowdown']  ? 1 : 0) - (keys['z'] || keys['arrowup']    ? 1 : 0);
+  let yawIn   = (keys['q'] || keys['arrowleft']  ? 1 : 0) - (keys['d'] || keys['arrowright'] ? 1 : 0);
+  let pitchIn = (keys['s'] || keys['arrowdown']  ? 1 : 0) - (keys['z'] || keys['arrowup']    ? 1 : 0);
   const rollIn  = (keys['a'] ? 1 : 0) - (keys['e'] ? 1 : 0);
+
+  // Joystick tactile (mobile) : contrôle proportionnel du lacet/tangage, remplace le clavier.
+  if (isMobile && joystick.active) {
+    yawIn   = THREE.MathUtils.clamp(-joystick.dx / JOYSTICK_RADIUS, -1, 1);
+    pitchIn = THREE.MathUtils.clamp( joystick.dy / JOYSTICK_RADIUS, -1, 1);
+  }
 
   let yawDelta   = yawIn * YAW_RATE * dt;
   let pitchDelta = pitchIn * PITCH_RATE * dt;
   const rollDelta = rollIn * ROLL_RATE * dt;
 
-  const mdx = THREE.MathUtils.clamp(-mouseDX * MOUSE_YAW_SENS, -MOUSE_MAX_DELTA, MOUSE_MAX_DELTA);
-  const mdy = THREE.MathUtils.clamp(-mouseDY * MOUSE_PITCH_SENS, -MOUSE_MAX_DELTA, MOUSE_MAX_DELTA);
+  const mouseSens = MOUSE_SENS_BASE * (mouseSensitivity / 0.5);
+  const mdx = THREE.MathUtils.clamp(-mouseDX * mouseSens, -MOUSE_MAX_DELTA, MOUSE_MAX_DELTA);
+  const mdy = THREE.MathUtils.clamp(-mouseDY * mouseSens, -MOUSE_MAX_DELTA, MOUSE_MAX_DELTA);
   yawDelta   += mdx;
   pitchDelta += mdy;
   mouseDX = 0; mouseDY = 0;
@@ -840,8 +945,8 @@ function updateFlight(dt) {
   const effMaxSpeed = MAX_SPEED * speedBoost;
   const effAccel    = THRUST_ACCEL * speedBoost;
 
-  if (keys[' ']) speed = Math.min(effMaxSpeed, speed + effAccel * dt);
-  else if (keys['control']) speed = Math.max(0, speed - BRAKE_DECEL * dt);
+  if (keys[' '] || touchThrust) speed = Math.min(effMaxSpeed, speed + effAccel * dt);
+  else if (keys['control'] || touchBrake) speed = Math.max(0, speed - BRAKE_DECEL * dt);
   else speed = Math.max(0, speed * (1 - DRAG_PER_SEC * dt));
   speed = Math.min(speed, effMaxSpeed);
 
@@ -1291,6 +1396,14 @@ function drawHUD() {
   hctx.fillText('NID ' + nest + '% ➔ +1 ❤️', 117, barY + 5);
   hctx.restore();
 
+  if (!isMobile) {
+    hctx.save();
+    hctx.fillStyle = 'rgba(150,140,220,0.55)'; hctx.font = '11px system-ui';
+    hctx.textAlign = 'left'; hctx.textBaseline = 'middle';
+    hctx.fillText('[O] Sensibilité souris', 22, 130);
+    hctx.restore();
+  }
+
   if (moon.state === 'blood') {
     hctx.save();
     const w = hudCanvas.width;
@@ -1329,11 +1442,17 @@ function drawStart() {
   hctx.fillStyle = '#cbc3ff'; hctx.font = '900 28px system-ui';
   hctx.fillText('HIBOU 3D', cx, cy - 100);
   hctx.fillStyle = '#cbc3dd'; hctx.font = '14px system-ui';
-  hctx.fillText('Q / D ou ← / → = lacet (yaw)', cx, cy - 50);
-  hctx.fillText('Z / S ou ↑ / ↓ = tangage (pitch)', cx, cy - 28);
-  hctx.fillText('A / E = roulis (roll)', cx, cy - 6);
-  hctx.fillText('Espace = accélérer   Ctrl = freiner', cx, cy + 20);
-  hctx.fillText('Souris (verrouillée) = pilotage additionnel', cx, cy + 44);
+  if (isMobile) {
+    hctx.fillText('Joystick (bas gauche) = lacet / tangage', cx, cy - 50);
+    hctx.fillText('⚡ = accélérer   ✋ = freiner', cx, cy - 28);
+  } else {
+    hctx.fillText('Q / D ou ← / → = lacet (yaw)', cx, cy - 50);
+    hctx.fillText('Z / S ou ↑ / ↓ = tangage (pitch)', cx, cy - 28);
+    hctx.fillText('A / E = roulis (roll)', cx, cy - 6);
+    hctx.fillText('Espace = accélérer   Ctrl = freiner', cx, cy + 20);
+    hctx.fillText('Souris (verrouillée) = pilotage additionnel', cx, cy + 44);
+    hctx.fillText('[O] = régler la sensibilité souris', cx, cy + 66);
+  }
   hctx.fillStyle = '#fff'; hctx.font = 'bold 18px system-ui';
   hctx.fillText('Clique ou appuie sur une touche', cx, cy + 100);
   hctx.fillText('pour décoller', cx, cy + 124);
@@ -1377,6 +1496,78 @@ function drawPaused() {
   hctx.fillText('pour reprendre le pilotage', cx, cy + 32);
   hctx.fillStyle = '#cbc3dd'; hctx.font = '13px system-ui';
   hctx.fillText('(verrouillage souris relâché)', cx, cy + 58);
+  hctx.restore();
+}
+
+function drawSettings() {
+  const W = hudCanvas.width, H = hudCanvas.height;
+  hctx.save();
+  hctx.fillStyle = 'rgba(0,0,0,0.55)'; hctx.fillRect(0, 0, W, H);
+
+  const p   = getSettingsPanelRect();
+  const hit = getSliderHitArea();
+
+  rrect(p.x, p.y, p.w, p.h, 16, 'rgba(8,8,40,0.97)', 'rgba(110,90,255,0.7)', 2);
+
+  hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+  hctx.fillStyle = '#cbc3ff'; hctx.font = 'bold 15px system-ui';
+  hctx.fillText('🖱️  Sensibilité souris', p.x + p.w / 2, p.y + 22);
+
+  const pct = Math.round(mouseSensitivity * 100);
+  hctx.fillStyle = '#ffffff'; hctx.font = 'bold 13px system-ui';
+  hctx.fillText(pct + '%', p.x + p.w / 2, p.y + 44);
+
+  const sx = hit.x, sy = hit.y, sw = hit.w, sh = hit.h;
+  rrect(sx, sy, sw, sh, sh / 2, 'rgba(255,255,255,0.1)', 'rgba(110,90,255,0.4)', 1);
+
+  const fillW = sw * mouseSensitivity;
+  const grad = hctx.createLinearGradient(sx, 0, sx + sw, 0);
+  grad.addColorStop(0, '#5544dd'); grad.addColorStop(1, '#aa44ff');
+  rrect(sx, sy, Math.max(sh, fillW), sh, sh / 2, grad);
+
+  const thumbX = sx + fillW;
+  hctx.beginPath(); hctx.arc(thumbX, sy + sh / 2, 10, 0, Math.PI * 2);
+  hctx.fillStyle = sliderDrag ? '#ffffff' : '#cbc3ff'; hctx.fill();
+  hctx.strokeStyle = '#5544dd'; hctx.lineWidth = 2; hctx.stroke();
+
+  hctx.fillStyle = 'rgba(180,170,240,0.6)'; hctx.font = '10px system-ui';
+  hctx.textAlign = 'left';  hctx.fillText('Lent',   sx,      sy + sh + 12);
+  hctx.textAlign = 'right'; hctx.fillText('Rapide', sx + sw, sy + sh + 12);
+
+  hctx.fillStyle = 'rgba(150,140,220,0.5)'; hctx.font = '10px system-ui';
+  hctx.textAlign = 'center';
+  hctx.fillText('[O] ou clic extérieur pour fermer', p.x + p.w / 2, p.y + p.h - 10);
+
+  hctx.restore();
+}
+
+function drawMobileControls() {
+  hctx.save();
+  const base = joystick.active ? { x: joystick.baseX, y: joystick.baseY } : { x: 100, y: hudCanvas.height - 120 };
+  hctx.globalAlpha = joystick.active ? 0.55 : 0.3;
+  hctx.beginPath(); hctx.arc(base.x, base.y, JOYSTICK_RADIUS, 0, Math.PI * 2);
+  hctx.fillStyle = 'rgba(255,255,255,0.12)'; hctx.fill();
+  hctx.strokeStyle = 'rgba(200,200,255,0.5)'; hctx.lineWidth = 2; hctx.stroke();
+  hctx.beginPath(); hctx.arc(base.x + joystick.dx, base.y + joystick.dy, 24, 0, Math.PI * 2);
+  hctx.fillStyle = 'rgba(203,195,255,0.85)'; hctx.fill();
+  hctx.globalAlpha = 1;
+
+  const thrust = getThrustButtonCenter();
+  hctx.beginPath(); hctx.arc(thrust.x, thrust.y, thrust.r, 0, Math.PI * 2);
+  hctx.fillStyle = touchThrust ? 'rgba(0,255,180,0.55)' : 'rgba(0,255,180,0.28)';
+  hctx.fill();
+  hctx.strokeStyle = 'rgba(200,255,230,0.7)'; hctx.lineWidth = 2; hctx.stroke();
+  hctx.textAlign = 'center'; hctx.textBaseline = 'middle'; hctx.font = '30px serif';
+  hctx.fillText('⚡', thrust.x, thrust.y);
+
+  const brake = getBrakeButtonCenter();
+  hctx.beginPath(); hctx.arc(brake.x, brake.y, brake.r, 0, Math.PI * 2);
+  hctx.fillStyle = touchBrake ? 'rgba(255,80,80,0.55)' : 'rgba(255,80,80,0.28)';
+  hctx.fill();
+  hctx.strokeStyle = 'rgba(255,200,200,0.7)'; hctx.lineWidth = 2; hctx.stroke();
+  hctx.font = '22px serif';
+  hctx.fillText('✋', brake.x, brake.y);
+
   hctx.restore();
 }
 
@@ -1467,9 +1658,12 @@ function drawOverlay() {
     }
     drawHUD();
     if (state === S.OVER) drawOver();
-    else if (state === S.PAUSED) drawPaused();
+    else if (state === S.PAUSED && !settingsOpen) drawPaused();
     else if (state === S.LOOT) drawLootbox();
+    if (isMobile && state === S.PLAY) drawMobileControls();
   }
+
+  if (settingsOpen) drawSettings();
 
   if (hitFlash > 0) {
     hctx.save(); hctx.globalAlpha = hitFlash; hctx.fillStyle = '#ff2222';
