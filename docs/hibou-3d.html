@@ -27,6 +27,10 @@
 
 <script type="module">
 import * as THREE from 'three';
+import { GLTFLoader } from './three/examples/jsm/loaders/GLTFLoader.js';
+
+// Modèles 3D externes (voir docs/models/CREDITS.md pour les licences/attributions) :
+// hibou, ours, lune © Poly by Google (CC-BY 3.0) — arbres, montagnes, nuages © Quaternius (CC0).
 
 // ══════════════════════════════════════════════════
 //  ÉTAT DU JEU
@@ -107,17 +111,14 @@ scene.add(moonLight);
 const fillLight = new THREE.HemisphereLight(0x9fb4ff, 0x24361f, 0.5);
 scene.add(fillLight);
 
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(900, 900),
-  new THREE.MeshStandardMaterial({ color: 0x16321f, roughness: 1 })
-);
-ground.rotation.x = -Math.PI / 2;
-scene.add(ground);
+// Le sol plat d'origine est remplacé par un terrain procédural (voir section TERRAIN) :
+// relief fBm, montagnes gaussiennes, lacs sous le niveau d'eau, colorisation par altitude/pente.
 
 // ══════════════════════════════════════════════════
 //  CIEL — étoiles + lune (vrai objet 3D sphérique, pas un sprite repeint à chaque frame)
 // ══════════════════════════════════════════════════
 let moonMesh;
+let moonMaterials = []; // matériaux émissifs de la lune (1 pour la sphère de repli, n pour le GLB)
 let starGeo, starBaseColors, starPhases;
 const MOON_RADIUS      = 30;   // rayon de base (pleine lune = MOON_RADIUS * MOON_FULL_SCALE)
 const MOON_FULL_SCALE  = 1.7;
@@ -177,18 +178,35 @@ function makeSky() {
   scene.add(new THREE.Points(starGeo, starMat));
 
   const moonPos = moonLight.position.clone().normalize().multiplyScalar(320);
-  const moonSurfaceTex = makeMoonSurfaceTexture();
-  moonMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(MOON_RADIUS, 48, 32),
-    new THREE.MeshStandardMaterial({
+  moonMesh = new THREE.Group(); // groupe extérieur : updateMoonVisual pilote scale/rotation dessus
+  moonMaterials = [];
+  if (models.moon) {
+    // Modèle GLB low-poly : matériaux clonés puis rendus émissifs (la lune éclaire, elle n'est pas éclairée)
+    const norm = normalizeModel(models.moon, { height: MOON_RADIUS * 2, groundAlign: false });
+    norm.traverse(o => {
+      if (o.isMesh) {
+        o.material = o.material.clone();
+        o.material.emissive = MOON_COLOR_NORMAL.clone();
+        o.material.emissiveMap = o.material.map || null;
+        o.material.emissiveIntensity = MOON_BASE_LIGHT;
+        o.material.fog = false;
+        moonMaterials.push(o.material);
+      }
+    });
+    moonMesh.add(norm);
+  } else {
+    const moonSurfaceTex = makeMoonSurfaceTexture();
+    const mat = new THREE.MeshStandardMaterial({
       map: moonSurfaceTex,
       emissiveMap: moonSurfaceTex,
       emissive: MOON_COLOR_NORMAL,
       emissiveIntensity: MOON_BASE_LIGHT,
       roughness: 1, metalness: 0,
       fog: false
-    })
-  );
+    });
+    moonMesh.add(new THREE.Mesh(new THREE.SphereGeometry(MOON_RADIUS, 48, 32), mat));
+    moonMaterials.push(mat);
+  }
   moonMesh.position.copy(moonPos);
   scene.add(moonMesh);
 }
@@ -280,7 +298,7 @@ window.addEventListener('resize', resize);
 const ARENA_CENTER = new THREE.Vector3(0, 35, 0);
 const ARENA_RADIUS_XZ = 280; // largeur x2 (zone doublée)
 const ARENA_RADIUS_Y  = 210; // hauteur x2 (zone doublée)
-const FLOOR_Y       = 1.5;
+const OWL_GROUND_CLEAR = 1.2; // garde au sol : sous (terrain + marge) = crash
 const OWL_COLLIDE_RADIUS = 0.3;
 const TREE_HIT_COOLDOWN  = 45;
 
@@ -316,7 +334,8 @@ function updateBoundaryGrid() {
   boundaryGrid.visible = opacity > 0.01;
 }
 
-function randomPointInArena(minY, maxY) {
+// minAbove = hauteur minimale AU-DESSUS du terrain local, maxY = plafond absolu.
+function randomPointInArena(minAbove, maxY) {
   let x, y, z;
   do {
     x = rnd(-1, 1); y = rnd(-1, 1); z = rnd(-1, 1);
@@ -328,8 +347,300 @@ function randomPointInArena(minY, maxY) {
     ARENA_CENTER.y + dir.y * r * ARENA_RADIUS_Y,
     ARENA_CENTER.z + dir.z * r * ARENA_RADIUS_XZ
   );
-  p.y = THREE.MathUtils.clamp(p.y, minY, maxY);
+  p.y = Math.max(effectiveGroundY(p.x, p.z) + minAbove, Math.min(p.y, maxY));
   return p;
+}
+
+// ══════════════════════════════════════════════════
+//  MODÈLES 3D EXTERNES (GLB) — chargés au démarrage, avec repli procédural
+//  si un fichier manque (hors-ligne, 404…). Voir docs/models/CREDITS.md.
+// ══════════════════════════════════════════════════
+const MODEL_URLS = {
+  owl:           'models/owl.glb',
+  bear:          'models/bear.glb',
+  moon:          'models/moon.glb',
+  pine1:         'models/pine1.glb',
+  pine2:         'models/pine2.glb',
+  tree1:         'models/tree1.glb',
+  birch:         'models/birch.glb',
+  mountains:     'models/mountains.glb',
+  mountainGroup: 'models/mountain_group.glb',
+  cloud1:        'models/cloud1.glb',
+  cloud2:        'models/cloud2.glb',
+  cloud3:        'models/cloud3.glb'
+};
+const models = {};
+let assetsReady = false;
+
+async function loadAssets() {
+  const loader = new GLTFLoader();
+  const entries = Object.entries(MODEL_URLS);
+  const results = await Promise.allSettled(entries.map(([, url]) => loader.loadAsync(url)));
+  results.forEach((res, i) => {
+    if (res.status === 'fulfilled') models[entries[i][0]] = res.value.scene;
+    else console.warn('Modèle 3D indisponible (repli procédural) :', entries[i][0], res.reason);
+  });
+}
+
+// Enveloppe un modèle dans un Group normalisé : recentré en XZ, posé au sol (ou centré),
+// mis à l'échelle pour atteindre la hauteur/longueur cible, avec lacet optionnel.
+// Le Group extérieur reste « neutre » : l'appelant peut le scaler/tourner librement.
+function normalizeModel(root, { height, length, groundAlign = true, yaw = 0 } = {}) {
+  const wrapper = new THREE.Group();
+  const spin = new THREE.Group();
+  const inner = new THREE.Group();
+  spin.rotation.y = yaw;
+  inner.add(root);
+  spin.add(inner);
+  wrapper.add(spin);
+  const box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  let s = 1;
+  if (height) s = height / (size.y || 1);
+  else if (length) s = length / (size.z || 1);
+  inner.scale.setScalar(s);
+  inner.position.set(-center.x * s, groundAlign ? -box.min.y * s : -center.y * s, -center.z * s);
+  return wrapper;
+}
+
+// Extrait les couples {géométrie, matériau, matrice locale} d'un modèle pour l'instancing.
+function collectMeshParts(root) {
+  root.updateMatrixWorld(true);
+  const parts = [];
+  root.traverse(o => {
+    if (o.isMesh) parts.push({ geo: o.geometry, mat: o.material, matrix: o.matrixWorld.clone() });
+  });
+  return parts;
+}
+
+// Construit des InstancedMesh à partir d'un modèle et d'une liste de matrices d'instance.
+// frustumCulled=false : les instances sont dispersées sur toute la carte, la sphère
+// englobante de la géométrie seule ferait disparaître des arbres en bord d'écran.
+function makeInstancedFromModel(root, matrices) {
+  const parts = collectMeshParts(root);
+  const group = new THREE.Group();
+  const tmpM = new THREE.Matrix4();
+  for (const part of parts) {
+    const im = new THREE.InstancedMesh(part.geo, part.mat, matrices.length);
+    for (let i = 0; i < matrices.length; i++) {
+      tmpM.multiplyMatrices(matrices[i], part.matrix);
+      im.setMatrixAt(i, tmpM);
+    }
+    im.instanceMatrix.needsUpdate = true;
+    im.frustumCulled = false;
+    im.userData.partMatrix = part.matrix.clone(); // conservé pour les mises à jour dynamiques (nuages)
+    group.add(im);
+  }
+  return group;
+}
+
+// ══════════════════════════════════════════════════
+//  TERRAIN PROCÉDURAL — bruit de valeur fBm + pics gaussiens (montagnes),
+//  lacs sous WATER_Y, forêts par masque de bruit, neige en altitude.
+//  terrainHeight(x,z) est ANALYTIQUE : la même fonction sert au maillage
+//  ET aux collisions/placements — aucun échantillonnage de grille.
+// ══════════════════════════════════════════════════
+const TERRAIN_SIZE = 900;   // même emprise que l'ancien sol plat
+const TERRAIN_SEGS = 128;
+const WATER_Y      = -3.0;  // niveau des lacs
+const HILL_AMP     = 9;     // amplitude des collines fBm (±)
+const SNOW_LINE    = 46;    // altitude d'enneigement
+const TREE_LINE    = 38;    // au-dessus : plus d'arbres
+
+const terrainSeed = Math.random() * 1000;
+
+function hashNoise(ix, iz) {
+  const n = Math.sin(ix * 127.1 + iz * 311.7 + terrainSeed * 17.3) * 43758.5453;
+  return n - Math.floor(n);
+}
+function valueNoise(x, z) {
+  const ix = Math.floor(x), iz = Math.floor(z);
+  const fx = x - ix, fz = z - iz;
+  const sx = fx * fx * (3 - 2 * fx), sz = fz * fz * (3 - 2 * fz);
+  const a = hashNoise(ix, iz),     b = hashNoise(ix + 1, iz);
+  const c = hashNoise(ix, iz + 1), d = hashNoise(ix + 1, iz + 1);
+  return a + (b - a) * sx + (c - a) * sz + (a - b - c + d) * sx * sz;
+}
+function fbm(x, z, octaves = 4) {
+  let sum = 0, amp = 0.5, freq = 1;
+  for (let o = 0; o < octaves; o++) {
+    sum += amp * valueNoise(x * freq, z * freq);
+    amp *= 0.5; freq *= 2.03;
+  }
+  return sum; // ~[0,1]
+}
+
+// Pics montagneux : bosses gaussiennes semées à l'intérieur de l'arène (jamais au centre).
+const mountainPeaks = [];
+{
+  const peakCount = 7;
+  for (let i = 0; i < peakCount; i++) {
+    const angle = (i / peakCount) * Math.PI * 2 + rnd(-0.35, 0.35);
+    const dist = rnd(110, 250);
+    mountainPeaks.push({
+      x: Math.cos(angle) * dist,
+      z: Math.sin(angle) * dist,
+      h: rnd(35, 72),
+      r: rnd(32, 62)
+    });
+  }
+}
+
+function terrainHeight(x, z) {
+  // Collines fBm recentrées sur ±HILL_AMP (les creux sous WATER_Y deviennent des lacs)
+  let h = (fbm(x * 0.008, z * 0.008) * 2 - 1) * HILL_AMP;
+  // Montagnes gaussiennes
+  for (const p of mountainPeaks) {
+    const dx = x - p.x, dz = z - p.z;
+    h += p.h * Math.exp(-(dx * dx + dz * dz) / (p.r * p.r));
+  }
+  // Zone de départ aplanie (rayon ~25 autour du centre, fondu jusqu'à 80)
+  const d = Math.hypot(x, z);
+  const flat = THREE.MathUtils.smoothstep(d, 25, 80);
+  return h * flat;
+}
+
+// Sol « effectif » pour les collisions/spawns : le terrain, ou la surface de l'eau.
+function effectiveGroundY(x, z) {
+  return Math.max(terrainHeight(x, z), WATER_Y);
+}
+
+// Masque de forêt : bruit séparé, décalé pour être indépendant du relief.
+function forestDensity(x, z) {
+  return fbm(x * 0.006 + 57.3, z * 0.006 - 91.7, 3);
+}
+
+function makeTerrain() {
+  const geo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGS, TERRAIN_SEGS);
+  geo.rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    pos.setY(i, terrainHeight(pos.getX(i), pos.getZ(i)));
+  }
+  // Non-indexé + couleur PAR FACE = facettes franches, look low-poly assumé.
+  const flat = geo.toNonIndexed();
+  flat.computeVertexNormals();
+  const fpos = flat.attributes.position;
+  const fnorm = flat.attributes.normal;
+  const colors = new Float32Array(fpos.count * 3);
+  const c = new THREE.Color();
+  const grassA = new THREE.Color(0x16321f), grassB = new THREE.Color(0x1e422a);
+  const sand   = new THREE.Color(0x4a4632), bed   = new THREE.Color(0x1c2822);
+  const rock   = new THREE.Color(0x3a3f46), snow  = new THREE.Color(0x9aa4b8);
+  for (let f = 0; f < fpos.count; f += 3) {
+    const hAvg = (fpos.getY(f) + fpos.getY(f + 1) + fpos.getY(f + 2)) / 3;
+    const nY   = (fnorm.getY(f) + fnorm.getY(f + 1) + fnorm.getY(f + 2)) / 3;
+    if (hAvg < WATER_Y - 0.5)       c.copy(bed);
+    else if (hAvg < WATER_Y + 1.2)  c.copy(sand);
+    else if (hAvg > SNOW_LINE)      c.copy(snow);
+    else if (nY < 0.62 || hAvg > TREE_LINE) c.copy(rock);
+    else c.lerpColors(grassA, grassB, valueNoise(fpos.getX(f) * 0.05, fpos.getZ(f) * 0.05));
+    c.multiplyScalar(rnd(0.92, 1.08)); // léger tramage par facette
+    for (let v = 0; v < 3; v++) {
+      colors[(f + v) * 3] = c.r; colors[(f + v) * 3 + 1] = c.g; colors[(f + v) * 3 + 2] = c.b;
+    }
+  }
+  flat.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mesh = new THREE.Mesh(flat, new THREE.MeshStandardMaterial({
+    vertexColors: true, flatShading: true, roughness: 1
+  }));
+  scene.add(mesh);
+
+  // Lacs : un seul plan d'eau sous tout le terrain, visible dans les creux.
+  const water = new THREE.Mesh(
+    new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE),
+    new THREE.MeshStandardMaterial({
+      color: 0x16305a, roughness: 0.15, metalness: 0.25,
+      transparent: true, opacity: 0.92
+    })
+  );
+  water.rotation.x = -Math.PI / 2;
+  water.position.y = WATER_Y;
+  scene.add(water);
+}
+
+// Chaînes de montagnes GLB en décor d'horizon, HORS de l'arène jouable.
+function makeMountainScenery() {
+  const protos = [models.mountains, models.mountainGroup].filter(Boolean);
+  if (!protos.length) return; // le terrain a déjà ses propres pics, pas de repli nécessaire
+  const matrices = [[], []];
+  const dummy = new THREE.Object3D();
+  const ringCount = 9;
+  for (let i = 0; i < ringCount; i++) {
+    const angle = (i / ringCount) * Math.PI * 2 + rnd(-0.2, 0.2);
+    const dist = rnd(360, 430);
+    dummy.position.set(Math.cos(angle) * dist, -2, Math.sin(angle) * dist);
+    dummy.rotation.set(0, rnd(0, Math.PI * 2), 0);
+    dummy.scale.setScalar(rnd(1.6, 2.8));
+    dummy.updateMatrix();
+    matrices[i % protos.length].push(dummy.matrix.clone());
+  }
+  protos.forEach((proto, i) => {
+    if (!matrices[i].length) return;
+    const norm = normalizeModel(proto.clone(true), { height: 60, groundAlign: true });
+    scene.add(makeInstancedFromModel(norm, matrices[i]));
+  });
+}
+
+// ══════════════════════════════════════════════════
+//  NUAGES LOW-POLY — instanciés, dérive lente, recyclés en bord de carte.
+// ══════════════════════════════════════════════════
+const CLOUD_COUNT = 34;
+let cloudSets = []; // { group, data:[{pos, scale, rotY, speed}], parts }
+
+function makeClouds() {
+  const protos = [models.cloud1, models.cloud2, models.cloud3].filter(Boolean);
+  if (!protos.length) return; // pas de repli : les nuages sont purement décoratifs
+  const perType = Math.ceil(CLOUD_COUNT / protos.length);
+  const dummy = new THREE.Object3D();
+  for (const proto of protos) {
+    const norm = normalizeModel(proto.clone(true), { height: 6, groundAlign: false });
+    const data = [];
+    const matrices = [];
+    for (let i = 0; i < perType; i++) {
+      const d = {
+        pos: new THREE.Vector3(rnd(-380, 380), rnd(95, 200), rnd(-380, 380)),
+        scale: rnd(1.6, 4.2),
+        rotY: rnd(0, Math.PI * 2),
+        speed: rnd(1.2, 3.2)
+      };
+      data.push(d);
+      dummy.position.copy(d.pos);
+      dummy.rotation.set(0, d.rotY, 0);
+      dummy.scale.setScalar(d.scale);
+      dummy.updateMatrix();
+      matrices.push(dummy.matrix.clone());
+    }
+    const group = makeInstancedFromModel(norm, matrices);
+    scene.add(group);
+    cloudSets.push({ group, data });
+  }
+}
+
+const _cloudDummy = new THREE.Object3D();
+const _cloudTmpM = new THREE.Matrix4();
+function updateClouds(dt) {
+  const windX = storm.active ? Math.cos(storm.windAngle) * storm.windForce * 6 : 1;
+  const windZ = storm.active ? Math.sin(storm.windAngle) * storm.windForce * 6 : 0.3;
+  for (const set of cloudSets) {
+    for (let i = 0; i < set.data.length; i++) {
+      const d = set.data[i];
+      d.pos.x += windX * d.speed * dt;
+      d.pos.z += windZ * d.speed * dt;
+      if (d.pos.x > 430) d.pos.x = -430; if (d.pos.x < -430) d.pos.x = 430;
+      if (d.pos.z > 430) d.pos.z = -430; if (d.pos.z < -430) d.pos.z = 430;
+      _cloudDummy.position.copy(d.pos);
+      _cloudDummy.rotation.set(0, d.rotY, 0);
+      _cloudDummy.scale.setScalar(d.scale);
+      _cloudDummy.updateMatrix();
+      for (const im of set.group.children) {
+        _cloudTmpM.multiplyMatrices(_cloudDummy.matrix, im.userData.partMatrix);
+        im.setMatrixAt(i, _cloudTmpM);
+      }
+    }
+    for (const im of set.group.children) im.instanceMatrix.needsUpdate = true;
+  }
 }
 
 // ══════════════════════════════════════════════════
@@ -388,8 +699,10 @@ function updateMoonVisual(dt) {
   moonMesh.scale.setScalar(THREE.MathUtils.lerp(1, MOON_FULL_SCALE, t));
   moonMesh.rotation.y += dt * 0.015;
 
-  moonMesh.material.emissive.lerpColors(MOON_COLOR_NORMAL, MOON_COLOR_BLOOD, isBlood ? t : 0);
-  moonMesh.material.emissiveIntensity = THREE.MathUtils.lerp(MOON_BASE_LIGHT, MOON_FULL_LIGHT, t);
+  for (const mat of moonMaterials) {
+    mat.emissive.lerpColors(MOON_COLOR_NORMAL, MOON_COLOR_BLOOD, isBlood ? t : 0);
+    mat.emissiveIntensity = THREE.MathUtils.lerp(MOON_BASE_LIGHT, MOON_FULL_LIGHT, t);
+  }
 
   moonLight.intensity = THREE.MathUtils.lerp(MOON_BASE_LIGHT, MOON_FULL_LIGHT * 0.6, t);
   moonLight.color.lerp(new THREE.Color(isBlood ? 0xff5a5a : 0xccccff), 0.05);
@@ -514,7 +827,7 @@ function updateRocks(dt) {
     rk.mesh.rotation.y += rk.rotSpeed.y * dt;
     rk.mesh.rotation.z += rk.rotSpeed.z * dt;
 
-    if (rk.mesh.position.y < ARENA_CENTER.y - ARENA_RADIUS_Y * 1.1) { removeRock(i); continue; }
+    if (rk.mesh.position.y < effectiveGroundY(rk.mesh.position.x, rk.mesh.position.z) - 1.5) { removeRock(i); continue; }
 
     if (rockInvul <= 0 && buffs.invincible <= 0 &&
         owlGroup.position.distanceTo(rk.mesh.position) < (ROCK_RADIUS * rk.scale + OWL_COLLIDE_RADIUS + 0.6)) {
@@ -529,139 +842,94 @@ function updateRocks(dt) {
 }
 
 // ══════════════════════════════════════════════════
-//  ARBRES PROCÉDURAUX (InstancedMesh) — feuillage multi-volumes pour silhouette naturelle
+//  FORÊTS — modèles GLB instanciés (pins, bouleau, feuillu), placés sur le terrain
+//  par masque de bruit : denses dans les vallées, absents au-dessus de TREE_LINE,
+//  jamais dans les lacs ni sur les pentes raides. Repli : cône+cylindre procédural.
 // ══════════════════════════════════════════════════
 let treeColliders = [];
-function makeTrees() {
-  const palettes = [
-    { trunk: 0x6b4d38, leaf: [0x2a7a3e, 0x36994e, 0x48b563] },
-    { trunk: 0x5a4230, leaf: [0x2f6a30, 0x3d8542, 0x4faa4d] },
-    { trunk: 0x63432c, leaf: [0x397048, 0x459858, 0x57b56a] }
-  ];
-  const count = 1800; // densité adaptée à l'arène agrandie (rayon x2 → surface x4)
-  treeColliders = [];
-  // Pas de "vertexColors: true" ici : sur un InstancedMesh, la couleur par instance
-  // (setColorAt/instanceColor) est automatiquement prise en compte par three.js.
-  // Activer vertexColors en plus déclenche la lecture d'un attribut de couleur PAR SOMMET
-  // qui n'existe pas sur ces géométries ; cet attribut manquant vaut 0 et multipliait donc
-  // la couleur finale par zéro — c'est ce qui rendait tronc/feuillage/calotte tout noirs.
-  const trunkMat  = new THREE.MeshStandardMaterial({ roughness: 1 });
-  const leafMat   = new THREE.MeshStandardMaterial({ roughness: 1 });
-  const leaf2Mat  = new THREE.MeshStandardMaterial({ roughness: 1 });
-  const capMat    = new THREE.MeshStandardMaterial({ roughness: 1 });
+const TREE_COUNT = 650;
 
-  // Tronc : légèrement tronconique et irrégulier (segments radiaux réduits pour rester léger).
-  const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.22, 0.4, 1, 6), trunkMat, count);
-  // Feuillage principal : cône dominant, présent sur tous les arbres.
-  const leaves = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 7), leafMat, count);
-  // Feuillage secondaire : second cône plus petit, décalé en XZ/Y, cassant la symétrie (≈65% des arbres).
-  const leaves2 = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 6), leaf2Mat, count);
-  // Calotte sommitale : sphère aplatie qui arrondit la pointe du cône (≈55% des arbres).
-  const cap = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 7, 5), capMat, count);
+// Repli si un modèle d'arbre manque : silhouette cône+cylindre équivalente.
+function makeFallbackTree(leafHex, trunkHex) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.22, 0.4, 3, 6),
+    new THREE.MeshStandardMaterial({ color: trunkHex, roughness: 1 })
+  );
+  trunk.position.y = 1.5;
+  const leaf = new THREE.Mesh(
+    new THREE.ConeGeometry(2, 5.5, 7),
+    new THREE.MeshStandardMaterial({ color: leafHex, roughness: 1 })
+  );
+  leaf.position.y = 5.5;
+  g.add(trunk, leaf);
+  return g;
+}
+
+function makeTrees() {
+  treeColliders = [];
+  // Types d'arbres : proto normalisé (hauteur ~9) + gabarit de collision relatif (0..1 de la hauteur).
+  const types = [
+    { proto: models.pine1, weight: 0.38, fallback: () => makeFallbackTree(0x1a3a17, 0x47301c) },
+    { proto: models.pine2, weight: 0.30, fallback: () => makeFallbackTree(0x16331a, 0x3f2b19) },
+    { proto: models.birch, weight: 0.20, fallback: () => makeFallbackTree(0x22421c, 0x8a8a80) },
+    { proto: models.tree1, weight: 0.12, fallback: () => makeFallbackTree(0x21421b, 0x4d331e) }
+  ].map(t => {
+    const src = t.proto ? t.proto.clone(true) : t.fallback();
+    const norm = normalizeModel(src, { height: 9, groundAlign: true });
+    // Gabarit de collision estimé depuis la boîte englobante du modèle normalisé.
+    const box = new THREE.Box3().setFromObject(norm);
+    const radiusXZ = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) / 2;
+    return {
+      norm,
+      matrices: [],
+      colliderProto: { trunkR: Math.max(0.28, radiusXZ * 0.14), leafR: radiusXZ * 0.72, leafBaseFrac: 0.22, height: 9 }
+    };
+  });
 
   const dummy = new THREE.Object3D();
-  const color = new THREE.Color();
-
-  for (let i = 0; i < count; i++) {
+  let placed = 0, attempts = 0;
+  while (placed < TREE_COUNT && attempts < TREE_COUNT * 14) {
+    attempts++;
     const angle = rnd(0, Math.PI * 2);
-    const r = rnd(15, 340);
+    const r = Math.sqrt(Math.random()) * 340; // aire uniforme jusqu'à l'horizon proche
     const x = Math.cos(angle) * r, z = Math.sin(angle) * r;
-    const trunkH = rnd(4, 10);
-    const pal = palettes[i % 3];
+    if (r < 14) continue;                                    // clairière de départ
+    const h = terrainHeight(x, z);
+    if (h < WATER_Y + 0.8) continue;                         // pas d'arbres dans les lacs
+    if (h > TREE_LINE) continue;                             // au-dessus : roche/neige
+    const slope = Math.abs(terrainHeight(x + 2, z) - h) + Math.abs(terrainHeight(x, z + 2) - h);
+    if (slope > 2.2) continue;                               // pentes raides : pas de forêt
+    if (forestDensity(x, z) < 0.42 && Math.random() > 0.15) continue; // masque de forêt (15% d'isolés)
 
-    // ── Tronc : inclinaison discrète + assombrissement aléatoire de teinte ──
-    const tiltX = rnd(-0.08, 0.08), tiltZ = rnd(-0.08, 0.08);
-    dummy.position.set(x, trunkH / 2, z);
-    dummy.rotation.set(tiltX, rnd(0, Math.PI * 2), tiltZ);
-    dummy.scale.set(rnd(0.85, 1.15), trunkH, rnd(0.85, 1.15));
-    dummy.updateMatrix();
-    trunks.setMatrixAt(i, dummy.matrix);
-    trunks.setColorAt(i, color.setHex(pal.trunk).multiplyScalar(rnd(0.75, 1.1)));
+    // Tirage pondéré du type
+    let pick = Math.random(), ti = 0;
+    const weights = [0.38, 0.30, 0.20, 0.12];
+    for (let i = 0; i < weights.length; i++) { pick -= weights[i]; if (pick <= 0) { ti = i; break; } }
+    const type = types[ti];
 
-    // ── Feuillage principal (cône) ──
-    const leafH = trunkH * 1.4, leafR = rnd(1.5, 2.6);
-    const leafBaseY = trunkH; // base du cône principal = sommet du tronc
-    const mainOffX = rnd(-0.15, 0.15), mainOffZ = rnd(-0.15, 0.15);
-    dummy.position.set(x + mainOffX, leafBaseY + leafH * 0.45, z + mainOffZ);
+    const s = rnd(0.7, 1.5);
+    dummy.position.set(x, h - 0.15, z); // très légèrement enterré pour épouser la pente
     dummy.rotation.set(0, rnd(0, Math.PI * 2), 0);
-    dummy.scale.set(leafR * rnd(0.9, 1.1), leafH * rnd(0.92, 1.08), leafR * rnd(0.9, 1.1));
+    dummy.scale.setScalar(s);
     dummy.updateMatrix();
-    leaves.setMatrixAt(i, dummy.matrix);
-    leaves.setColorAt(i, color.setHex(pal.leaf[Math.floor(Math.random() * 3)]));
+    type.matrices.push(dummy.matrix.clone());
 
-    // Étendue verticale/radiale réelle du volume principal (pour la collision).
-    let envTop = leafBaseY + leafH;               // pointe du cône principal
-    let envBase = leafBaseY;                        // base du cône principal
-    let envR = leafR + Math.max(Math.abs(mainOffX), Math.abs(mainOffZ));
-
-    // ── Feuillage secondaire : petit cône excentré, ~65% des arbres ──
-    const hasSecondary = Math.random() < 0.65;
-    if (hasSecondary) {
-      const leaf2R = leafR * rnd(0.45, 0.7);
-      const leaf2H = leafH * rnd(0.55, 0.8);
-      const secAngle = rnd(0, Math.PI * 2);
-      const secDist = leafR * rnd(0.35, 0.6);
-      const secOffX = Math.cos(secAngle) * secDist, secOffZ = Math.sin(secAngle) * secDist;
-      const secBaseY = leafBaseY + rnd(-leafH * 0.15, leafH * 0.1);
-      dummy.position.set(x + secOffX, secBaseY + leaf2H * 0.45, z + secOffZ);
-      dummy.rotation.set(0, rnd(0, Math.PI * 2), 0);
-      dummy.scale.set(leaf2R, leaf2H, leaf2R);
-      dummy.updateMatrix();
-      leaves2.setMatrixAt(i, dummy.matrix);
-      leaves2.setColorAt(i, color.setHex(pal.leaf[Math.floor(Math.random() * 3)]).multiplyScalar(rnd(0.9, 1.05)));
-
-      envTop  = Math.max(envTop, secBaseY + leaf2H);
-      envBase = Math.min(envBase, secBaseY);
-      envR    = Math.max(envR, leaf2R + Math.hypot(secOffX, secOffZ));
-    } else {
-      dummy.position.set(x, leafBaseY, z);
-      dummy.scale.set(0, 0, 0);
-      dummy.updateMatrix();
-      leaves2.setMatrixAt(i, dummy.matrix);
-      leaves2.setColorAt(i, color.setHex(0x000000));
-    }
-
-    // ── Calotte sommitale : arrondit la pointe du cône, ~55% des arbres ──
-    const hasCap = Math.random() < 0.55;
-    if (hasCap) {
-      const capR = leafR * rnd(0.32, 0.48);
-      const capY = leafBaseY + leafH * rnd(0.75, 0.95);
-      const capOffX = rnd(-leafR * 0.2, leafR * 0.2), capOffZ = rnd(-leafR * 0.2, leafR * 0.2);
-      dummy.position.set(x + capOffX, capY, z + capOffZ);
-      dummy.rotation.set(0, rnd(0, Math.PI * 2), 0);
-      dummy.scale.set(capR, capR * rnd(0.7, 0.9), capR);
-      dummy.updateMatrix();
-      cap.setMatrixAt(i, dummy.matrix);
-      cap.setColorAt(i, color.setHex(pal.leaf[Math.floor(Math.random() * 3)]).multiplyScalar(rnd(1.0, 1.15)));
-
-      envTop = Math.max(envTop, capY + capR * rnd(0.7, 0.9));
-      envR   = Math.max(envR, capR + Math.hypot(capOffX, capOffZ));
-    } else {
-      dummy.position.set(x, leafBaseY, z);
-      dummy.scale.set(0, 0, 0);
-      dummy.updateMatrix();
-      cap.setMatrixAt(i, dummy.matrix);
-      cap.setColorAt(i, color.setHex(0x000000));
-    }
-
-    // Collision : englobe la silhouette RÉELLE (cône principal + secondaire + calotte).
+    const cp = type.colliderProto;
     treeColliders.push({
       x, z,
-      trunkR: 0.32,
-      leafBase: envBase - leafH * 0.05,
-      leafTop: envTop,
-      leafR: envR
+      trunkR: cp.trunkR * s,
+      leafBase: h + cp.height * cp.leafBaseFrac * s,
+      leafTop:  h + cp.height * s,
+      leafR: cp.leafR * s,
+      groundY: h
     });
+    placed++;
   }
-  trunks.instanceMatrix.needsUpdate = true;
-  leaves.instanceMatrix.needsUpdate = true;
-  leaves2.instanceMatrix.needsUpdate = true;
-  cap.instanceMatrix.needsUpdate = true;
-  if (trunks.instanceColor) trunks.instanceColor.needsUpdate = true;
-  if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
-  if (leaves2.instanceColor) leaves2.instanceColor.needsUpdate = true;
-  if (cap.instanceColor) cap.instanceColor.needsUpdate = true;
-  scene.add(trunks, leaves, leaves2, cap);
+
+  for (const type of types) {
+    if (type.matrices.length) scene.add(makeInstancedFromModel(type.norm, type.matrices));
+  }
 }
 
 // ══════════════════════════════════════════════════
@@ -714,10 +982,29 @@ function buildOwl() {
   return { group: g, wings, body };
 }
 
-const owl = buildOwl();
-const owlGroup = owl.group;
+// owlGroup existe dès le boot (la caméra y est attachée) ; le visuel — modèle GLB
+// ou repli procédural — y est ajouté par setupOwlVisual() une fois les assets chargés.
+const owlGroup = new THREE.Group();
 owlGroup.visible = false;
 scene.add(owlGroup);
+
+// Lacet appliqué au modèle GLB pour aligner sa face sur l'avant du jeu (-Z).
+// Le hibou Google Poly regarde vers +Z → demi-tour. Ajuster ici si le modèle change.
+const OWL_MODEL_YAW = Math.PI;
+let owl = { wings: null, body: null, bob: null }; // rempli par setupOwlVisual
+
+function setupOwlVisual() {
+  if (models.owl) {
+    const norm = normalizeModel(models.owl, { length: 3.2, groundAlign: false, yaw: OWL_MODEL_YAW });
+    norm.rotation.x = -0.25; // légère assiette piquée : posture de vol plutôt que perché
+    owlGroup.add(norm);
+    owl = { wings: null, body: null, bob: norm };
+  } else {
+    const built = buildOwl();
+    owlGroup.add(built.group);
+    owl = { wings: built.wings, body: built.body, bob: built.group };
+  }
+}
 
 // Caméra rigidement attachée au hibou : elle hérite de TOUTE son orientation (roulis inclus).
 const CAMERA_LOCAL_OFFSET = new THREE.Vector3(0, 2, 6.5);
@@ -749,7 +1036,12 @@ function updateCameraClip() {
   for (let i = 1; i <= CAMERA_CLIP_SAMPLES; i++) {
     const t = (i / CAMERA_CLIP_SAMPLES) * maxDist;
     camClipPoint.copy(owlGroup.position).addScaledVector(camClipDir, t);
-    if (pointInsideAnyTree(camClipPoint)) { safeDist = Math.max(CAMERA_MIN_DIST, t - 0.5); break; }
+    // La caméra ne doit traverser ni le feuillage ni le relief du terrain
+    if (pointInsideAnyTree(camClipPoint) ||
+        camClipPoint.y < effectiveGroundY(camClipPoint.x, camClipPoint.z) + 0.4) {
+      safeDist = Math.max(CAMERA_MIN_DIST, t - 0.5);
+      break;
+    }
   }
   camera.position.copy(CAMERA_LOCAL_OFFSET).setLength(safeDist);
 }
@@ -760,10 +1052,17 @@ function updateFlap(dt, speedRatio) {
   const rate = 5 + 14 * speedRatio;
   flapPhase += rate * dt;
   const s = Math.sin(flapPhase);
-  const angle = -0.2 + s * amp;
-  owl.wings[0].rotation.z = -angle;
-  owl.wings[1].rotation.z = angle;
-  owl.body.position.y = Math.sin(flapPhase * 0.5) * 0.05;
+  if (owl.wings) {
+    // Repli procédural : vraies ailes articulées
+    const angle = -0.2 + s * amp;
+    owl.wings[0].rotation.z = -angle;
+    owl.wings[1].rotation.z = angle;
+    owl.body.position.y = Math.sin(flapPhase * 0.5) * 0.05;
+  } else if (owl.bob) {
+    // Modèle GLB statique : ondulation de vol (bob vertical + léger roulis)
+    owl.bob.position.y = Math.sin(flapPhase * 0.5) * 0.12;
+    owl.bob.rotation.z = s * 0.06 * (0.4 + 0.6 * speedRatio);
+  }
 }
 
 // ══════════════════════════════════════════════════
@@ -1149,8 +1448,9 @@ function updateFlight(dt) {
     }
     if (f > 1) owlGroup.position.copy(ARENA_CENTER).addScaledVector(offset, 1 / f); // garde-fou dur, en dernier recours
   }
-  if (owlGroup.position.y < FLOOR_Y) {
-    owlGroup.position.y = FLOOR_Y;
+  const groundY = effectiveGroundY(owlGroup.position.x, owlGroup.position.z) + OWL_GROUND_CLEAR;
+  if (owlGroup.position.y < groundY) {
+    owlGroup.position.y = groundY;
     onGroundCrash();
   }
 
@@ -1253,7 +1553,7 @@ function spawnGiftIfNeeded(dt) {
     const mat = new THREE.SpriteMaterial({ map: giftTexture, transparent: true });
     const sprite = new THREE.Sprite(mat);
     sprite.scale.set(2.4, 2.4, 1);
-    const pos = randomPointInArena(3, 68);
+    const pos = randomPointInArena(3, 130);
     sprite.position.copy(pos);
     scene.add(sprite);
 
@@ -1382,7 +1682,7 @@ function newBranch() {
   if (rotten) mat.color.set(0x99775a);
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(2, 2, 1);
-  const pos = randomPointInArena(3, 68);
+  const pos = randomPointInArena(3, 130);
   sprite.position.copy(pos);
   scene.add(sprite);
   return { sprite, rotten, w: rnd(0, Math.PI * 2), ws: rotten ? rnd(0.06, 0.11) : rnd(0.03, 0.07), age: 0, baseY: pos.y };
@@ -1432,9 +1732,18 @@ function updateBranches() {
 }
 
 // ══════════════════════════════════════════════════
-//  OURS
+//  OURS — modèle GLB cloné par ours (géométrie/matériaux partagés), orienté vers
+//  sa direction de déplacement. Repli : sprite emoji 🐻 d'origine.
 // ══════════════════════════════════════════════════
 let bears = [];
+// Lacet du modèle GLB pour que l'ours regarde vers +Z (convention lookAt de three.js).
+const BEAR_MODEL_YAW = 0;
+let bearProto = null; // gabarit normalisé, cloné pour chaque ours
+function setupBearProto() {
+  if (!models.bear) return;
+  bearProto = normalizeModel(models.bear, { height: 1, groundAlign: false, yaw: BEAR_MODEL_YAW });
+}
+
 function bearTarget() {
   if (moon.state === 'blood') return 18;
   if (moon.state === 'full')  return 12;
@@ -1442,9 +1751,15 @@ function bearTarget() {
 }
 
 function newBear() {
-  const mat = new THREE.SpriteMaterial({ map: bearTexture, transparent: true });
-  const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(2.6, 2.6, 1);
+  let sprite;
+  if (bearProto) {
+    sprite = bearProto.clone(true); // clone léger : géométries et matériaux partagés
+    sprite.scale.setScalar(2.6);
+  } else {
+    const mat = new THREE.SpriteMaterial({ map: bearTexture, transparent: true });
+    sprite = new THREE.Sprite(mat);
+    sprite.scale.set(2.6, 2.6, 1);
+  }
 
   const angle = rnd(0, Math.PI * 2);
   const elev = rnd(-0.4, 0.4);
@@ -1455,7 +1770,8 @@ function newBear() {
   const f = ellipsoidFactor(pos);
   if (f > 1) offset.multiplyScalar(0.95 / f);
   pos = ARENA_CENTER.clone().add(offset);
-  pos.y = THREE.MathUtils.clamp(pos.y, 3, 68);
+  pos.y = Math.max(effectiveGroundY(pos.x, pos.z) + 2.5,
+                   Math.min(pos.y, ARENA_CENTER.y + ARENA_RADIUS_Y * 0.55));
   sprite.position.copy(pos);
   scene.add(sprite);
 
@@ -1476,7 +1792,7 @@ function newBear() {
 }
 function removeBear(i) {
   scene.remove(bears[i].sprite);
-  bears[i].sprite.material.dispose();
+  if (bears[i].sprite.isSprite) bears[i].sprite.material.dispose(); // le GLB partage ses matériaux : ne pas les détruire
   bears.splice(i, 1);
 }
 
@@ -1507,6 +1823,13 @@ function updateBears(dt) {
     const spd = b.spdBase * (buffs.slow > 0 ? 0.3 : 1);
     b.sprite.position.add(toTarget.multiplyScalar((spd * dt) / d));
     b.sprite.position.y += Math.sin(b.bob) * 0.02;
+    // Jamais sous le terrain (les ours volants restent des ours polis)
+    b.sprite.position.y = Math.max(b.sprite.position.y, effectiveGroundY(b.sprite.position.x, b.sprite.position.z) + 1.2);
+    // Le modèle 3D regarde dans sa direction de déplacement (le sprite de repli, lui, fait toujours face caméra)
+    if (!b.sprite.isSprite && toTarget.lengthSq() > 1e-6) {
+      _tmp.copy(b.sprite.position).add(toTarget);
+      b.sprite.lookAt(_tmp);
+    }
 
     if (owlInvul <= 0 && buffs.invincible <= 0 && b.spawnGrace <= 0 && owlGroup.position.distanceTo(b.sprite.position) < COLLECT_RADIUS + 1) {
       lives--;
@@ -1627,7 +1950,7 @@ function drawHUD() {
 
     hctx.textAlign = 'right'; hctx.font = 'bold 12px system-ui'; hctx.fillStyle = '#e8ecff';
     hctx.fillText(Math.round(speed) + ' u/s', px + pw - 12, py + 18);
-    hctx.fillText(Math.max(0, Math.round(owlGroup.position.y - FLOOR_Y)) + ' m', px + pw - 12, py + 38);
+    hctx.fillText(Math.max(0, Math.round(owlGroup.position.y - effectiveGroundY(owlGroup.position.x, owlGroup.position.z))) + ' m', px + pw - 12, py + 38);
     hctx.fillText(Math.round(flight.throttle * 100) + ' %', px + pw - 12, py + 58);
     const climb = flight.climb;
     hctx.fillStyle = climb > 0.3 ? '#8fe06a' : climb < -0.3 ? '#ff9a6a' : '#e8ecff';
@@ -1925,6 +2248,7 @@ function drawOverlay() {
 //  INIT / RESET
 // ══════════════════════════════════════════════════
 function beginGame() {
+  if (!assetsReady) return; // le monde n'est pas encore construit (modèles en cours de chargement)
   state = S.PLAY;
   document.body.style.cursor = 'none';
   score = 0; nest = 0; combo = 1; comboTimer = 0; lives = 1; overReason = 'eaten';
@@ -1942,7 +2266,7 @@ function beginGame() {
   requestFlightPointerLock();
 
   for (const br of branches) { scene.remove(br.sprite); br.sprite.material.dispose(); }
-  for (const b of bears)     { scene.remove(b.sprite);  b.sprite.material.dispose(); }
+  for (const b of bears)     { scene.remove(b.sprite);  if (b.sprite.isSprite) b.sprite.material.dispose(); }
   for (let i = rocks.length - 1; i >= 0; i--) removeRock(i);
   rockInvul = 0;
   branches = Array.from({ length: 8 }, newBranch);
@@ -1998,6 +2322,7 @@ function update() {
   }
   updateMoonVisual(dt);
   updateStars(dt);
+  updateClouds(dt);
   updateParticles();
 }
 
@@ -2012,12 +2337,51 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
+// ── Boot : écran de chargement pendant le fetch des GLB, puis construction du monde ──
+function drawLoading() {
+  hctx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+  hctx.save();
+  hctx.fillStyle = '#04040e';
+  hctx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+  hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+  hctx.font = '54px serif';
+  hctx.fillText('🦉', hudCanvas.width / 2, hudCanvas.height / 2 - 40);
+  hctx.fillStyle = '#cbc3ff'; hctx.font = 'bold 18px system-ui';
+  hctx.fillText('Chargement des modèles 3D…', hudCanvas.width / 2, hudCanvas.height / 2 + 20);
+  hctx.restore();
+}
+
+// Sonde de debug/test (lecture seule) : état du jeu inspectable depuis la console.
+window.__hibouDebug = () => ({
+  state, score, lives, assetsReady,
+  pos: owlGroup.position.toArray().map(v => Math.round(v * 10) / 10),
+  groundY: Math.round(effectiveGroundY(owlGroup.position.x, owlGroup.position.z) * 10) / 10,
+  trees: treeColliders.length,
+  bears: bears.length,
+  clouds: cloudSets.reduce((n, s) => n + s.data.length, 0),
+  usingModels: {
+    owl: !!models.owl, bear: !!models.bear, moon: !!models.moon,
+    trees: !!(models.pine1 || models.pine2 || models.birch || models.tree1),
+    mountains: !!(models.mountains || models.mountainGroup),
+    clouds: !!(models.cloud1 || models.cloud2 || models.cloud3)
+  }
+});
+
 resize();
-makeSky();
-makeTrees();
-makeBoundaryGrid();
-makeWindParticles();
-loop();
+drawLoading();
+loadAssets().then(() => {
+  makeSky();
+  makeTerrain();
+  makeMountainScenery();
+  makeClouds();
+  makeTrees();
+  setupOwlVisual();
+  setupBearProto();
+  makeBoundaryGrid();
+  makeWindParticles();
+  assetsReady = true;
+  loop();
+});
 </script>
 </body>
 </html>
