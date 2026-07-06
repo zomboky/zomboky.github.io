@@ -1,30 +1,105 @@
 'use strict';
 
+const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const express = require('express');
 const { REGIONS } = require('./lib/regions');
 const { initEarthEngine, getTimeseries } = require('./lib/earthengine');
+const { buildDashboard } = require('./lib/buildDashboard');
 
 const PORT = process.env.ORANGE_SERVER_PORT || 8096;
 const HOST = process.env.ORANGE_SERVER_HOST || '127.0.0.1';
 const DATA_DIR = path.join(__dirname, 'data');
+const DASHBOARD_PASSWORD = process.env.ORANGE_DASHBOARD_PASSWORD || '';
 
 const app = express();
+app.use(express.json());
 
-// Ce service n'est pas la source principale du tableau de bord (voir
-// README : mixed-content HTTPS -> HTTP interdit par les navigateurs
-// lorsque la page est servie par GitHub Pages, comme documenté pour le
-// chess-server WebSocket). Il reste utile pour des requêtes ponctuelles en
-// accès direct http://bear.servebeer.com/orange-api/... — CORS ouvert pour
-// ce cas d'usage.
+// CORS ouvert : la page HTTPS zomboky.github.io/orange-disease.html doit
+// pouvoir appeler cette API cross-origin. Ce n'est pas ce qui protège les
+// données (voir authentification par mot de passe ci-dessous) — juste ce
+// qui autorise le navigateur à faire la requête.
 app.use((req, res, next) => {
   res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
 
+// ---------------------------------------------------------------------
+// Authentification par mot de passe (tableau de bord confidentiel)
+// ---------------------------------------------------------------------
+// Le mot de passe n'est jamais committé dans le repo : il est fourni au
+// service via la variable d'environnement ORANGE_DASHBOARD_PASSWORD (voir
+// deploy/orange-server.service, alimentée par le secret GitHub Actions
+// ORANGE_DASHBOARD_PASSWORD au déploiement).
+
+const sessions = new Map(); // token -> expiresAt (ms)
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h
+
+const loginAttempts = new Map(); // ip -> { count, windowStart }
+const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 8;
+
+function sha256(value) {
+  return crypto.createHash('sha256').update(value, 'utf8').digest();
+}
+
+function passwordMatches(candidate) {
+  if (!DASHBOARD_PASSWORD) return false;
+  const a = sha256(candidate);
+  const b = sha256(DASHBOARD_PASSWORD);
+  return crypto.timingSafeEqual(a, b);
+}
+
+function rateLimited(ip) {
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (!entry || now - entry.windowStart > LOGIN_WINDOW_MS) {
+    loginAttempts.set(ip, { count: 1, windowStart: now });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > LOGIN_MAX_ATTEMPTS;
+}
+
+function requireAuth(req, res, next) {
+  const header = req.get('authorization') || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  const expiresAt = token && sessions.get(token);
+  if (!expiresAt || expiresAt < Date.now()) {
+    if (token) sessions.delete(token);
+    return res.status(401).json({ error: 'authentification requise' });
+  }
+  next();
+}
+
+app.post('/api/login', (req, res) => {
+  if (!DASHBOARD_PASSWORD) {
+    return res.status(503).json({ error: "mot de passe non configuré côté serveur" });
+  }
+  const ip = req.ip;
+  if (rateLimited(ip)) {
+    return res.status(429).json({ error: 'trop de tentatives, réessayez plus tard' });
+  }
+  const password = (req.body && req.body.password) || '';
+  if (!passwordMatches(password)) {
+    return res.status(401).json({ error: 'mot de passe incorrect' });
+  }
+  const token = crypto.randomBytes(24).toString('hex');
+  sessions.set(token, Date.now() + SESSION_TTL_MS);
+  res.json({ token, expiresIn: SESSION_TTL_MS });
+});
+
+// ---------------------------------------------------------------------
+// Données (protégées)
+// ---------------------------------------------------------------------
+
 const TIMESERIES_TTL_MS = 6 * 60 * 60 * 1000; // 6h : la donnée satellite ne change pas dans la journée
 const cache = new Map();
+let dashboardCache = null; // { ts, data }
 
 async function cachedTimeseries(regionId, start, end) {
   const region = REGIONS[regionId];
@@ -35,6 +110,16 @@ async function cachedTimeseries(regionId, start, end) {
   await initEarthEngine();
   const data = await getTimeseries(region, start, end);
   cache.set(key, { ts: Date.now(), data });
+  return data;
+}
+
+async function cachedDashboard() {
+  if (dashboardCache && Date.now() - dashboardCache.ts < TIMESERIES_TTL_MS) {
+    return dashboardCache.data;
+  }
+  await initEarthEngine();
+  const data = await buildDashboard();
+  dashboardCache = { ts: Date.now(), data };
   return data;
 }
 
@@ -54,7 +139,15 @@ app.get('/health', (req, res) => res.type('text').send('orange-server ok'));
 
 app.get('/api/regions', (req, res) => res.json(Object.values(REGIONS)));
 
-app.get('/api/timeseries', async (req, res) => {
+app.get('/api/dashboard', requireAuth, async (req, res) => {
+  try {
+    res.json(await cachedDashboard());
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+app.get('/api/timeseries', requireAuth, async (req, res) => {
   const { region } = req.query;
   if (!region || !REGIONS[region]) {
     return res.status(400).json({ error: 'paramètre region invalide', regions: Object.keys(REGIONS) });
@@ -69,7 +162,7 @@ app.get('/api/timeseries', async (req, res) => {
   }
 });
 
-app.get('/api/vector-occurrences', (req, res) => {
+app.get('/api/vector-occurrences', requireAuth, (req, res) => {
   const data = readJsonWithFallback(
     path.join(DATA_DIR, 'trioza_occurrences.json'),
     path.join(DATA_DIR, 'trioza_occurrences.example.json')
@@ -78,7 +171,7 @@ app.get('/api/vector-occurrences', (req, res) => {
   res.json(data);
 });
 
-app.get('/api/sif', (req, res) => {
+app.get('/api/sif', requireAuth, (req, res) => {
   const data = readJsonWithFallback(
     path.join(DATA_DIR, 'sif_cache.json'),
     path.join(DATA_DIR, 'sif_demo.json')
@@ -89,4 +182,7 @@ app.get('/api/sif', (req, res) => {
 
 app.listen(PORT, HOST, () => {
   console.log(`orange-server à l'écoute sur ${HOST}:${PORT}`);
+  if (!DASHBOARD_PASSWORD) {
+    console.warn('ORANGE_DASHBOARD_PASSWORD absent : /api/login refusera toute connexion.');
+  }
 });
