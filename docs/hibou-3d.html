@@ -938,28 +938,63 @@ document.addEventListener('pointerlockchange', () => {
   }
 });
 
-// Vitesses angulaires (rad/s) et sensibilité souris — ajustables en polish
-const YAW_RATE   = THREE.MathUtils.degToRad(60);
-const PITCH_RATE = THREE.MathUtils.degToRad(50);
-const ROLL_RATE  = THREE.MathUtils.degToRad(90);
-const MOUSE_MAX_DELTA  = 0.05;
+// ══════════════════════════════════════════════════
+//  MÉCANIQUE DU VOL — modèle aérodynamique
+//  Le hibou n'est plus « poussé tout droit » : on intègre un vrai VECTEUR
+//  VITESSE soumis à quatre forces (poussée, portance, traînée, pesanteur),
+//  avec incidence/décrochage et inertie de rotation. Les virages, montées,
+//  piqués et décrochages émergent de la physique, pas de règles ad hoc.
+// ══════════════════════════════════════════════════
 
-const THRUST_ACCEL  = 18;
-const BRAKE_DECEL   = 24;
-const MAX_SPEED     = 28;
-const CRUISE_SPEED  = 20;  // vitesse atteinte puis maintenue sur simple appui de ⚡ (pas besoin de rester appuyé)
-const GRAVITY_ACCEL = 14;  // bonus de vitesse (unités/s) en piqué complet, retiré en montée complète
-let speed = 0;
-let throttleTarget = 0;   // consigne de vitesse "moteur", changée seulement par un appui sur ⚡/✋
+// Vitesses angulaires maximales commandées (rad/s) — la « barre », pas l'inertie
+const YAW_RATE   = THREE.MathUtils.degToRad(70);
+const PITCH_RATE = THREE.MathUtils.degToRad(55);
+const MAX_BANK   = THREE.MathUtils.degToRad(60);  // inclinaison max commandée par A/E (bank-to-turn)
+const BANK_RESPONSE = 3.2;                         // rapidité pour atteindre l'inclinaison visée
+const MOUSE_MAX_DELTA = 0.05;
+
+// — Moteur —
+const THRUST_ACCEL    = 28;   // poussée max (u/s²) le long du nez
+const MAX_SPEED       = 34;   // repère HUD + amplitude du battement d'ailes
+const CRUISE_THROTTLE = 0.6;  // consigne fixée d'un simple appui sur ⚡ (0..1)
+
+// — Aérodynamique (masse = 1 → force = accélération) —
+const GRAVITY      = 15;      // pesanteur (u/s²)
+const AIR_LIFT     = 0.05;    // portance dynamique de l'aile  ∝ v²·CL
+const AIR_DRAG     = 0.02;    // traînée parasite ∝ v² — cale la vitesse de croisière ~MAX_SPEED
+const INDUCED_DRAG = 0.03;    // traînée induite (prix de l'incidence/des virages) ∝ CL²·v
+const FLAP_LIFT    = 13;      // portance de battement d'ailes (basse vitesse, ∝ poussée)
+const FLAP_FADE    = 17;      // vitesse air au-delà de laquelle le battement ne porte plus
+const SIDE_GRIP    = 0.6;     // léger amortissement du dérapage latéral (ne doit pas tuer le virage)
+const WEATHERVANE  = 2.6;     // girouette : le nez se recale sur la trajectoire → vire en roulis
+const STALL_AOA    = THREE.MathUtils.degToRad(18); // incidence critique de décrochage
+const CL_MAX       = 1.5;     // portance dynamique max juste avant le décrochage
+const CTRL_MIN_SPEED  = 7;    // sous cette vitesse air : gouvernes molles (autorité réduite)
+const CTRL_FULL_SPEED = 18;   // au-dessus : pleine autorité des gouvernes
+const ANG_RESPONSE = 7;       // inertie de rotation (vitesse de convergence vers la consigne)
+const WIND_ACCEL   = 0.55;    // conversion windForce (tempête) -> accélération latérale
+
+let speed = 0;                // module du vecteur vitesse (flap + HUD)
+let throttle = 0;             // consigne moteur 0..1 (⚡ = CRUISE_THROTTLE, ✋ = 0)
 let prevThrustHeld = false, prevBrakeHeld = false;
-const _tmpFwd = new THREE.Vector3(); // évite une allocation par frame dans updateFlight
+const velocity = new THREE.Vector3();  // vecteur vitesse dans le repère monde
+const angRate  = new THREE.Vector3();  // vitesses angulaires courantes (x=tangage, y=lacet, z=roulis) rad/s
+
+// État de vol exposé au HUD (instruments)
+const flight = { aoa: 0, stall: false, climb: 0, throttle: 0 };
+
+// Vecteurs temporaires — zéro allocation par frame dans updateFlight
+const _fwd = new THREE.Vector3(), _up = new THREE.Vector3(), _right = new THREE.Vector3();
+const _acc = new THREE.Vector3(), _tmp = new THREE.Vector3(), _tgtAng = new THREE.Vector3();
+const _UP_AXIS = new THREE.Vector3(0, 1, 0); // verticale monde (virage coordonné)
 
 function updateFlight(dt) {
+  // ── 1. Lecture des commandes ──────────────────────────────────────────
   let yawIn   = (keys['q'] || keys['arrowleft']  ? 1 : 0) - (keys['d'] || keys['arrowright'] ? 1 : 0);
   let pitchIn = (keys['s'] || keys['arrowdown']  ? 1 : 0) - (keys['z'] || keys['arrowup']    ? 1 : 0);
   let rollIn  = (keys['a'] ? 1 : 0) - (keys['e'] ? 1 : 0);
 
-  // Joystick tactile (mobile) : contrôle proportionnel du tangage/roulis, pas de lacet.
+  // Joystick tactile (mobile) : tangage/roulis proportionnels, pas de lacet.
   if (isMobile) {
     yawIn = 0;
     if (joystick.active) {
@@ -968,66 +1003,155 @@ function updateFlight(dt) {
     }
   }
 
-  let yawDelta   = yawIn * YAW_RATE * dt;
-  let pitchDelta = pitchIn * PITCH_RATE * dt;
-  const rollDelta = rollIn * ROLL_RATE * dt;
-
   const mouseSens = MOUSE_SENS_BASE * (mouseSensitivity / 0.5);
   const mdx = THREE.MathUtils.clamp(-mouseDX * mouseSens, -MOUSE_MAX_DELTA, MOUSE_MAX_DELTA);
   const mdy = THREE.MathUtils.clamp(-mouseDY * mouseSens, -MOUSE_MAX_DELTA, MOUSE_MAX_DELTA);
-  yawDelta   += mdx;
-  pitchDelta += mdy;
   mouseDX = 0; mouseDY = 0;
 
-  owlGroup.rotateY(yawDelta);
-  owlGroup.rotateX(pitchDelta);
-  owlGroup.rotateZ(rollDelta);
+  // ── 2. Dynamique de rotation : inertie + autorité selon la vitesse air ──
+  // Gouvernes molles à basse vitesse (un aéronef lent ne répond plus).
+  const authority = THREE.MathUtils.clamp(
+    (speed - CTRL_MIN_SPEED) / (CTRL_FULL_SPEED - CTRL_MIN_SPEED), 0.2, 1);
 
-  const speedBoost = buffs.speed > 0 ? 1.5 : 1;
-  const effMaxSpeed = MAX_SPEED * speedBoost;
-  const effAccel    = THRUST_ACCEL * speedBoost;
+  // Tangage & lacet : commande en VITESSE angulaire, avec inertie (le hibou n'est
+  // plus une girouette instantanée — il faut « emmancher » la rotation).
+  _tgtAng.set(pitchIn * PITCH_RATE, yawIn * YAW_RATE, 0).multiplyScalar(authority);
+  const kAng = 1 - Math.exp(-ANG_RESPONSE * dt); // lissage exponentiel, stable quel que soit dt
+  angRate.lerp(_tgtAng, kAng);
+  owlGroup.rotateX(angRate.x * dt);
+  owlGroup.rotateY(angRate.y * dt);
+  owlGroup.rotateY(mdx); // souris = pilotage fin, appliqué directement (crisp)
+  owlGroup.rotateX(mdy);
 
-  // Consigne de vitesse "moteur" : un simple appui (front montant) sur ⚡ ou ✋ la fixe,
-  // pas besoin de rester appuyé — elle ne change que sur un nouvel appui.
+  // Roulis : commande en ANGLE d'inclinaison (« bank-to-turn »). Maintenir A/E
+  // incline vers un bank cible et l'y TIENT → virage stable ; relâcher ramène les
+  // ailes à plat. C'est ce qui empêche le tonneau involontaire et la spirale.
+  _right.set(1, 0, 0).applyQuaternion(owlGroup.quaternion);
+  const curBank = Math.asin(THREE.MathUtils.clamp(_right.y, -1, 1));
+  const tgtBank = rollIn * MAX_BANK * (0.4 + 0.6 * authority);
+  owlGroup.rotateZ((tgtBank - curBank) * Math.min(1, BANK_RESPONSE * dt));
+
+  // ── 3. Repère local du hibou (nez / haut / droite) ──
+  const q = owlGroup.quaternion;
+  _fwd.set(0, 0, -1).applyQuaternion(q);
+  _up.set(0, 1, 0).applyQuaternion(q);
+  _right.set(1, 0, 0).applyQuaternion(q);
+
+  // ── 4. Poussée moteur : ⚡ fixe la consigne, la maintenir la module finement ──
   const thrustHeld = keys[' '] || touchThrust;
   const brakeHeld  = keys['control'] || touchBrake;
-  if (thrustHeld && !prevThrustHeld) throttleTarget = CRUISE_SPEED;
-  if (brakeHeld  && !prevBrakeHeld)  throttleTarget = 0;
+  if (thrustHeld && !prevThrustHeld) throttle = CRUISE_THROTTLE;
+  if (brakeHeld  && !prevBrakeHeld)  throttle = 0;
+  if (thrustHeld) throttle = Math.min(1, throttle + 0.8 * dt);
+  if (brakeHeld)  throttle = Math.max(0, throttle - 1.1 * dt);
   prevThrustHeld = thrustHeld;
   prevBrakeHeld  = brakeHeld;
 
-  // Gravité : piquer (nez vers le bas) relève la vitesse effective visée au-dessus de la
-  // consigne moteur (donc on accélère en piqué) ; grimper l'abaisse. À plat, elle revient
-  // exactement à la consigne moteur, qui reste alors constante comme demandé.
-  const fwdDir = _tmpFwd.set(0, 0, -1).applyQuaternion(owlGroup.quaternion);
-  const diveFactor = THREE.MathUtils.clamp(-fwdDir.y, -1, 1);
-  const effTarget = THREE.MathUtils.clamp(throttleTarget * speedBoost + diveFactor * GRAVITY_ACCEL, 0, effMaxSpeed);
+  const speedBoost = buffs.speed > 0 ? 1.4 : 1;
+  const thrust = throttle * THRUST_ACCEL * speedBoost;
 
-  if (speed < effTarget) speed = Math.min(effTarget, speed + effAccel * dt);
-  else                    speed = Math.max(effTarget, speed - BRAKE_DECEL * dt);
+  // ── 5. Vitesse air & incidence (angle d'attaque) ──
+  const v      = velocity.length();
+  const vUp    = velocity.dot(_up);
+  const vFwd   = velocity.dot(_fwd);
+  const vRight = velocity.dot(_right);
+  // Incidence : angle entre la trajectoire et l'axe du nez, dans le plan de tangage.
+  // >0 = le hibou « cabre » (nez au-dessus du flux) → génère de la portance.
+  const aoa = v > 0.6 ? Math.atan2(-vUp, Math.abs(vFwd) + 1e-3) : 0;
 
-  owlGroup.translateZ(-speed * dt);
-
-  // Poussée du vent de tempête : déplacement additionnel indépendant de l'orientation
-  // du hibou, sur le plan horizontal XZ + légère composante verticale, AVANT le clamp
-  // pour que le vent ne puisse jamais éjecter le hibou hors de l'arène.
-  if (storm.active) {
-    const WIND_PUSH_SCALE = 0.6; // conversion windForce -> unités de monde/s
-    const push = storm.windForce * WIND_PUSH_SCALE * dt;
-    owlGroup.position.x += Math.cos(storm.windAngle) * push;
-    owlGroup.position.z += Math.sin(storm.windAngle) * push;
-    owlGroup.position.y += Math.sin(storm.gustPhase * 0.5) * push * 0.25; // turbulence verticale légère
+  // ── 6. Coefficient de portance : linéaire avec l'incidence, puis effondrement ──
+  const absAoa = Math.abs(aoa);
+  const stalling = absAoa > STALL_AOA;
+  let CL;
+  if (!stalling) {
+    CL = CL_MAX * (aoa / STALL_AOA);                 // régime linéaire
+  } else {
+    const over = Math.min(1, (absAoa - STALL_AOA) / STALL_AOA);
+    CL = Math.sign(aoa) * CL_MAX * (1 - 0.75 * over); // aile décrochée : la portance chute
   }
 
-  // Clamp dans le volume 3D (ellipsoïde + plancher)
-  const offset = owlGroup.position.clone().sub(ARENA_CENTER);
+  // ── 7. Bilan des forces (accélérations, masse = 1) ──
+  _acc.set(0, -GRAVITY, 0);              // pesanteur
+  _acc.addScaledVector(_fwd, thrust);    // poussée le long du nez
+
+  // Portance : dynamique (aile, ∝ v²·CL) + battement (basse vitesse, ∝ poussée)
+  const dynLift  = AIR_LIFT * v * v * CL;
+  const flapLift = FLAP_LIFT * (0.35 + 0.65 * throttle) * Math.max(0, 1 - v / FLAP_FADE);
+  _acc.addScaledVector(_up, dynLift + flapLift);
+
+  // Traînée : parasite (∝ v²) + induite (∝ CL²), opposée à la vitesse
+  if (v > 1e-3) {
+    const drag = AIR_DRAG * v * v + INDUCED_DRAG * CL * CL * v;
+    _acc.addScaledVector(velocity, -drag / v);
+  }
+
+  // Anti-dérapage : on gomme la glisse latérale → sensation « je vole », pas « je glisse »
+  _acc.addScaledVector(_right, -vRight * SIDE_GRIP);
+
+  // ── 8. Vent de tempête : accélération latérale physique (pas un téléport) ──
+  if (storm.active) {
+    const w = storm.windForce * WIND_ACCEL;
+    _acc.x += Math.cos(storm.windAngle) * w;
+    _acc.z += Math.sin(storm.windAngle) * w;
+    _acc.y += Math.sin(storm.gustPhase * 0.5) * w * 0.3;
+  }
+
+  // ── 9. Intégration semi-implicite du vecteur vitesse puis de la position ──
+  velocity.addScaledVector(_acc, dt);
+  const vmax = MAX_SPEED * speedBoost * 1.2;
+  if (velocity.lengthSq() > vmax * vmax) velocity.setLength(vmax);
+  owlGroup.position.addScaledVector(velocity, dt);
+  speed = velocity.length();
+
+  // Virage coordonné : une aile inclinée courbe la trajectoire au taux réel
+  // ω = g·tan(inclinaison)/v. On fait pivoter ENSEMBLE la trajectoire (composante
+  // horizontale de la vitesse) et le nez (autour de la verticale monde) → virage
+  // parfaitement coordonné, sans dérapage, franc et lisible.
+  if (speed > 3) {
+    const turnRate = GRAVITY * Math.tan(THREE.MathUtils.clamp(curBank, -1.25, 1.25)) / speed;
+    const a = turnRate * dt, ca = Math.cos(a), sa = Math.sin(a);
+    const vx = velocity.x, vz = velocity.z;
+    velocity.x = vx * ca + vz * sa;
+    velocity.z = -vx * sa + vz * ca;
+    owlGroup.rotateOnWorldAxis(_UP_AXIS, a);
+  }
+
+  // Girouette : le nez se recale progressivement sur la trajectoire horizontale.
+  // C'est ce qui transforme un simple roulis en VIRAGE (la portance inclinée courbe
+  // la trajectoire, et le nez suit) — le pilotage « bank-to-turn » réaliste.
+  _tmp.copy(velocity); _tmp.y = 0;
+  if (_tmp.lengthSq() > 1) {
+    const velAng = Math.atan2(_tmp.x, _tmp.z);      // cap de la trajectoire
+    const fwdAng = Math.atan2(_fwd.x, _fwd.z);      // cap du nez
+    let dYaw = velAng - fwdAng;
+    while (dYaw >  Math.PI) dYaw -= 2 * Math.PI;
+    while (dYaw < -Math.PI) dYaw += 2 * Math.PI;
+    owlGroup.rotateY(dYaw * Math.min(1, WEATHERVANE * dt));
+  }
+
+  // ── 10. Bordure ellipsoïde + plancher (on annule la vitesse « sortante ») ──
+  const offset = _tmp.copy(owlGroup.position).sub(ARENA_CENTER);
   const f = ellipsoidFactor(owlGroup.position);
-  if (f > 1) owlGroup.position.copy(ARENA_CENTER.clone().add(offset.multiplyScalar(1 / f)));
-  if (owlGroup.position.y < FLOOR_Y) owlGroup.position.y = FLOOR_Y;
+  if (f > 1) {
+    owlGroup.position.copy(ARENA_CENTER).addScaledVector(offset, 1 / f);
+    offset.normalize();
+    const vn = velocity.dot(offset);
+    if (vn > 0) velocity.addScaledVector(offset, -vn); // glisse le long de la paroi
+  }
+  if (owlGroup.position.y < FLOOR_Y) {
+    owlGroup.position.y = FLOOR_Y;
+    if (velocity.y < 0) velocity.y = 0; // le sol arrête la chute
+  }
+
+  // ── 11. État de vol pour les instruments du HUD ──
+  flight.aoa = aoa;
+  flight.stall = stalling;
+  flight.climb = velocity.y;
+  flight.throttle = throttle;
 
   checkTreeCollision();
 
-  return speed / MAX_SPEED;
+  return THREE.MathUtils.clamp(speed / MAX_SPEED, 0, 1);
 }
 
 // Collision avec un arbre : grosse perte de score/nid + vitesse ramenée à zéro.
@@ -1059,6 +1183,7 @@ function checkTreeCollision() {
 
 function onTreeHit() {
   speed = 0;
+  velocity.set(0, 0, 0); // le crash casse net l'élan (le vecteur vitesse, pas juste le scalaire)
   score = Math.max(0, score - 15);
   nest = Math.max(0, nest - 30);
   combo = 1; comboTimer = 0;
@@ -1460,6 +1585,42 @@ function drawHUD() {
     hctx.restore();
   }
 
+  // ── Instruments de vol (haut-droite) : vitesse air, altitude, poussée, vario ──
+  {
+    hctx.save();
+    const w = hudCanvas.width;
+    const pw = 146, ph = 96, px = w - pw - 12, py = 12;
+    rrect(px, py, pw, ph, 12, 'rgba(8,8,35,0.82)', 'rgba(100,90,220,0.4)');
+    hctx.textBaseline = 'middle';
+    hctx.font = '11px system-ui'; hctx.fillStyle = '#9fb0d8'; hctx.textAlign = 'left';
+    hctx.fillText('Vitesse',  px + 12, py + 18);
+    hctx.fillText('Altitude', px + 12, py + 38);
+    hctx.fillText('Poussée',  px + 12, py + 58);
+    hctx.fillText('Vario',    px + 12, py + 78);
+
+    hctx.textAlign = 'right'; hctx.font = 'bold 12px system-ui'; hctx.fillStyle = '#e8ecff';
+    hctx.fillText(Math.round(speed) + ' u/s', px + pw - 12, py + 18);
+    hctx.fillText(Math.max(0, Math.round(owlGroup.position.y - FLOOR_Y)) + ' m', px + pw - 12, py + 38);
+    hctx.fillText(Math.round(flight.throttle * 100) + ' %', px + pw - 12, py + 58);
+    const climb = flight.climb;
+    hctx.fillStyle = climb > 0.3 ? '#8fe06a' : climb < -0.3 ? '#ff9a6a' : '#e8ecff';
+    hctx.fillText((climb >= 0 ? '▲ ' : '▼ ') + Math.abs(climb).toFixed(1), px + pw - 12, py + 78);
+    hctx.restore();
+  }
+
+  // ── Alerte décrochage (clignotante) ──
+  if (flight.stall && state === S.PLAY) {
+    const w = hudCanvas.width, h = hudCanvas.height;
+    if (Math.floor(Date.now() / 220) % 2 === 0) {
+      hctx.save();
+      rrect(w / 2 - 110, h - 92, 220, 40, 12, 'rgba(60,10,10,0.9)', 'rgba(255,90,60,0.95)');
+      hctx.fillStyle = '#ffd0c0'; hctx.font = 'bold 18px system-ui';
+      hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+      hctx.fillText('⚠ DÉCROCHAGE', w / 2, h - 72);
+      hctx.restore();
+    }
+  }
+
   if (moon.state === 'blood') {
     hctx.save();
     const w = hudCanvas.width;
@@ -1499,15 +1660,19 @@ function drawStart() {
   hctx.fillText('HIBOU 3D', cx, cy - 100);
   hctx.fillStyle = '#cbc3dd'; hctx.font = '14px system-ui';
   if (isMobile) {
-    hctx.fillText('Joystick (bas gauche) = tangage / roulis', cx, cy - 50);
-    hctx.fillText('⚡ = accélérer   ✋ = freiner', cx, cy - 28);
+    hctx.fillText('Joystick = tangage / inclinaison', cx, cy - 54);
+    hctx.fillText('Incline pour virer, relâche = à plat', cx, cy - 34);
+    hctx.fillText('⚡ = accélérer   ✋ = freiner', cx, cy - 14);
+    hctx.fillStyle = '#ffb0a0'; hctx.font = '12px system-ui';
+    hctx.fillText('Vitesse = portance : trop lent = décrochage !', cx, cy + 8);
   } else {
-    hctx.fillText('Q / D ou ← / → = lacet (yaw)', cx, cy - 50);
-    hctx.fillText('Z / S ou ↑ / ↓ = tangage (pitch)', cx, cy - 28);
-    hctx.fillText('A / E = roulis (roll)', cx, cy - 6);
-    hctx.fillText('Espace = accélérer   Ctrl = freiner', cx, cy + 20);
-    hctx.fillText('Souris (verrouillée) = pilotage additionnel', cx, cy + 44);
-    hctx.fillText('[O] = régler la sensibilité souris', cx, cy + 66);
+    hctx.fillText('Q / D ou ← / → = lacet   A / E = incliner (virer)', cx, cy - 54);
+    hctx.fillText('S / Z = cabrer / piquer   (on tire pour monter)', cx, cy - 32);
+    hctx.fillText('Espace = accélérer   Ctrl = freiner', cx, cy - 10);
+    hctx.fillText('Souris (verrouillée) = pilotage fin   [O] = sensibilité', cx, cy + 12);
+    hctx.fillStyle = '#ffb0a0'; hctx.font = '12px system-ui';
+    hctx.fillText('Vol réaliste : la vitesse fait la portance —', cx, cy + 40);
+    hctx.fillText('trop lent ou trop cabré = DÉCROCHAGE. Pique pour reprendre.', cx, cy + 58);
   }
   hctx.fillStyle = '#fff'; hctx.font = 'bold 18px system-ui';
   hctx.fillText('Clique ou appuie sur une touche', cx, cy + 100);
@@ -1742,6 +1907,11 @@ function beginGame() {
   owlGroup.position.set(ARENA_CENTER.x, 16, ARENA_CENTER.z); // altitude basse au départ
   owlGroup.quaternion.identity();
   owlGroup.visible = true;
+  // État de vol initial : lancé vers l'avant (−Z), moteur en croisière, rotations à plat.
+  velocity.set(0, 0, -speed);
+  angRate.set(0, 0, 0);
+  throttle = CRUISE_THROTTLE;
+  flight.aoa = 0; flight.stall = false; flight.climb = 0; flight.throttle = throttle;
   requestFlightPointerLock();
 
   for (const br of branches) { scene.remove(br.sprite); br.sprite.material.dispose(); }
