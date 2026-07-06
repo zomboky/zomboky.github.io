@@ -99,13 +99,13 @@ function makeSkyGradient() {
 
 const scene = new THREE.Scene();
 scene.background = makeSkyGradient();
-scene.fog = new THREE.FogExp2(0x0c1030, 0.00225);
+scene.fog = new THREE.FogExp2(0x0c1030, 0.00045); // densité /5 : même portée relative que l'ancienne arène malgré la zone x5
 
-const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 900);
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 3200); // plan éloigné repoussé pour garder lune/étoiles visibles à leur nouvelle distance
 
 const ambientLight = new THREE.AmbientLight(0x8899ff, 0.9);
 scene.add(ambientLight);
-const moonLight = new THREE.DirectionalLight(0xccccff, 0.9);
+const moonLight = new THREE.DirectionalLight(0xccccff, 1.6);
 moonLight.position.set(-60, 90, 30);
 scene.add(moonLight);
 const fillLight = new THREE.HemisphereLight(0x9fb4ff, 0x24361f, 0.5);
@@ -120,9 +120,10 @@ scene.add(fillLight);
 let moonMesh;
 let moonMaterials = []; // matériaux émissifs de la lune (1 pour la sphère de repli, n pour le GLB)
 let starGeo, starBaseColors, starPhases;
-const MOON_RADIUS      = 30;   // rayon de base (pleine lune = MOON_RADIUS * MOON_FULL_SCALE)
+const MOON_DISTANCE    = 2400;  // distance au centre de l'arène, bien au-delà d'ARENA_RADIUS_XZ/Y
+const MOON_RADIUS      = 225;   // rayon de base (mis à l'échelle avec MOON_DISTANCE pour garder la taille apparente)
 const MOON_FULL_SCALE  = 1.7;
-const MOON_BASE_LIGHT  = 0.9, MOON_FULL_LIGHT = 2.4;
+const MOON_BASE_LIGHT  = 1.6, MOON_FULL_LIGHT = 3.0; // la lune éclaire davantage le sol qu'auparavant
 const MOON_COLOR_NORMAL = new THREE.Color(0xfff2d0);
 const MOON_COLOR_BLOOD  = new THREE.Color(0xff2a2a);
 
@@ -158,7 +159,7 @@ function makeSky() {
   starBaseColors = new Float32Array(starCount * 3);
   starPhases = new Array(starCount);
   for (let i = 0; i < starCount; i++) {
-    const r = rnd(200, 400);
+    const r = rnd(1700, 2500); // bien au-delà d'ARENA_RADIUS_XZ/Y : jamais dans la zone de jeu
     const theta = rnd(0, Math.PI * 2), phi = Math.acos(rnd(-1, 1));
     positions[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
     positions[i * 3 + 1] = Math.abs(r * Math.cos(phi)) + 10;
@@ -172,12 +173,12 @@ function makeSky() {
   starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   const starMat = new THREE.PointsMaterial({
-    size: 2, vertexColors: true, transparent: true, opacity: 0.95,
+    size: 8, vertexColors: true, transparent: true, opacity: 0.95,
     depthWrite: false, sizeAttenuation: true, fog: false
   });
   scene.add(new THREE.Points(starGeo, starMat));
 
-  const moonPos = moonLight.position.clone().normalize().multiplyScalar(320);
+  const moonPos = moonLight.position.clone().normalize().multiplyScalar(MOON_DISTANCE);
   moonMesh = new THREE.Group(); // groupe extérieur : updateMoonVisual pilote scale/rotation dessus
   moonMaterials = [];
   if (models.moon) {
@@ -282,6 +283,82 @@ function updateWindParticles(dt) {
   posAttr.needsUpdate = true;
 }
 
+// ══════════════════════════════════════════════════
+//  PARTICULES AÉRODYNAMIQUES — stries de vitesse relative collées au hibou,
+//  intensité proportionnelle à sa vitesse air. Contrairement aux particules de
+//  vent ci-dessus (liées à storm.active, un vent EXTÉRIEUR), celles-ci existent
+//  en permanence en vol et traduisent le flux d'air créé par le hibou lui-même.
+// ══════════════════════════════════════════════════
+const SPEED_PARTICLE_COUNT   = 80;
+const SPEED_PARTICLE_RADIUS  = 3.4;  // rayon du nuage de particules autour du hibou
+const SPEED_STREAK_LEN_MAX   = 3.2;  // longueur du trait à vitesse max
+const SPEED_PARTICLE_MIN     = 9;    // vitesse air en dessous de laquelle l'effet est invisible
+let speedParticles, speedParticleData = [];
+const _spdDir = new THREE.Vector3();
+
+function randomSpeedPoint() {
+  let x, y, z;
+  do { x = rnd(-1, 1); y = rnd(-1, 1); z = rnd(-1, 1); } while (x * x + y * y + z * z > 1);
+  const r = SPEED_PARTICLE_RADIUS * Math.cbrt(Math.random());
+  const c = owlGroup.position;
+  return new THREE.Vector3(c.x + x * r, c.y + y * r, c.z + z * r);
+}
+
+function makeSpeedParticles() {
+  const positions = new Float32Array(SPEED_PARTICLE_COUNT * 2 * 3); // 2 points par trait
+  for (let i = 0; i < SPEED_PARTICLE_COUNT; i++) {
+    speedParticleData.push({ pos: randomSpeedPoint() });
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.LineBasicMaterial({
+    color: 0xe8f6ff, transparent: true, opacity: 0,
+    depthWrite: false, fog: false
+  });
+  speedParticles = new THREE.LineSegments(geo, mat);
+  speedParticles.visible = false;
+  speedParticles.frustumCulled = false;
+  scene.add(speedParticles);
+}
+
+function updateSpeedParticles(dt) {
+  const ratio = THREE.MathUtils.clamp((speed - SPEED_PARTICLE_MIN) / (MAX_SPEED - SPEED_PARTICLE_MIN), 0, 1);
+  speedParticles.material.opacity = THREE.MathUtils.lerp(speedParticles.material.opacity, ratio * 0.6, 0.15);
+  if (ratio <= 0 && speedParticles.material.opacity < 0.01) {
+    speedParticles.visible = false;
+    return;
+  }
+  speedParticles.visible = true;
+
+  // Sens du flux d'air relatif = opposé au déplacement réel (vitesse quasi nulle : repli sur le nez).
+  if (velocity.lengthSq() > 0.25) _spdDir.copy(velocity).normalize();
+  else owlGroup.getWorldDirection(_spdDir).negate();
+
+  const streakLen = SPEED_STREAK_LEN_MAX * (0.3 + 0.7 * ratio);
+  const scrollSpeed = 16 + ratio * 30; // unités/s de défilement visuel vers l'arrière
+  const posAttr = speedParticles.geometry.attributes.position;
+  const owlPos = owlGroup.position;
+
+  for (let i = 0; i < SPEED_PARTICLE_COUNT; i++) {
+    const d = speedParticleData[i];
+    d.pos.addScaledVector(_spdDir, -scrollSpeed * dt);
+
+    if (d.pos.distanceTo(owlPos) > SPEED_PARTICLE_RADIUS) {
+      d.pos.copy(randomSpeedPoint()).addScaledVector(_spdDir, SPEED_PARTICLE_RADIUS * 0.9);
+    }
+
+    const tail = d.pos.clone().addScaledVector(_spdDir, streakLen);
+    const i6 = i * 6;
+    posAttr.array[i6]     = d.pos.x;
+    posAttr.array[i6 + 1] = d.pos.y;
+    posAttr.array[i6 + 2] = d.pos.z;
+    posAttr.array[i6 + 3] = tail.x;
+    posAttr.array[i6 + 4] = tail.y;
+    posAttr.array[i6 + 5] = tail.z;
+  }
+  posAttr.needsUpdate = true;
+}
+
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h);
@@ -296,11 +373,14 @@ window.addEventListener('resize', resize);
 //  VOLUME DE JEU (sphère 3D)
 // ══════════════════════════════════════════════════
 const ARENA_CENTER = new THREE.Vector3(0, 35, 0);
-const ARENA_RADIUS_XZ = 280; // largeur x2 (zone doublée)
-const ARENA_RADIUS_Y  = 210; // hauteur x2 (zone doublée)
+const ARENA_RADIUS_XZ = 1400; // largeur x5
+const ARENA_RADIUS_Y  = 630;  // hauteur x3
 const OWL_GROUND_CLEAR = 1.2; // garde au sol : sous (terrain + marge) = crash
 const OWL_COLLIDE_RADIUS = 0.3;
 const TREE_HIT_COOLDOWN  = 45;
+// Plafond d'altitude des branches/cadeaux : même proportion qu'avant (130 sur une
+// arène de hauteur 210) rapportée à la nouvelle ARENA_RADIUS_Y (x3).
+const COLLECTIBLE_MAX_Y = ARENA_CENTER.y + ARENA_RADIUS_Y * ((130 - ARENA_CENTER.y) / 210);
 
 // Facteur radial normalisé (ellipsoïde) : 0 au centre, 1 sur la bordure, >1 en dehors.
 function ellipsoidFactor(pos) {
@@ -356,7 +436,7 @@ function randomPointInArena(minAbove, maxY) {
 //  si un fichier manque (hors-ligne, 404…). Voir docs/models/CREDITS.md.
 // ══════════════════════════════════════════════════
 const MODEL_URLS = {
-  owl:           'models/owl.glb',
+  owl:           'models/barnowl.glb',
   bear:          'models/bear.glb',
   moon:          'models/moon.glb',
   pine1:         'models/pine1.glb',
@@ -385,7 +465,7 @@ async function loadAssets() {
 // Enveloppe un modèle dans un Group normalisé : recentré en XZ, posé au sol (ou centré),
 // mis à l'échelle pour atteindre la hauteur/longueur cible, avec lacet optionnel.
 // Le Group extérieur reste « neutre » : l'appelant peut le scaler/tourner librement.
-function normalizeModel(root, { height, length, groundAlign = true, yaw = 0 } = {}) {
+function normalizeModel(root, { height, length, width, groundAlign = true, yaw = 0 } = {}) {
   const wrapper = new THREE.Group();
   const spin = new THREE.Group();
   const inner = new THREE.Group();
@@ -399,6 +479,7 @@ function normalizeModel(root, { height, length, groundAlign = true, yaw = 0 } = 
   let s = 1;
   if (height) s = height / (size.y || 1);
   else if (length) s = length / (size.z || 1);
+  else if (width) s = width / (size.x || 1);
   inner.scale.setScalar(s);
   inner.position.set(-center.x * s, groundAlign ? -box.min.y * s : -center.y * s, -center.z * s);
   return wrapper;
@@ -441,7 +522,7 @@ function makeInstancedFromModel(root, matrices) {
 //  terrainHeight(x,z) est ANALYTIQUE : la même fonction sert au maillage
 //  ET aux collisions/placements — aucun échantillonnage de grille.
 // ══════════════════════════════════════════════════
-const TERRAIN_SIZE = 900;   // même emprise que l'ancien sol plat
+const TERRAIN_SIZE = 4500;  // x5 : couvre la nouvelle zone de jeu élargie (ARENA_RADIUS_XZ)
 const TERRAIN_SEGS = 128;
 const WATER_Y      = -3.0;  // niveau des lacs
 const HILL_AMP     = 9;     // amplitude des collines fBm (±)
@@ -569,7 +650,7 @@ function makeMountainScenery() {
   const ringCount = 9;
   for (let i = 0; i < ringCount; i++) {
     const angle = (i / ringCount) * Math.PI * 2 + rnd(-0.2, 0.2);
-    const dist = rnd(360, 430);
+    const dist = rnd(ARENA_RADIUS_XZ * 1.29, ARENA_RADIUS_XZ * 1.54); // toujours hors de l'arène jouable
     dummy.position.set(Math.cos(angle) * dist, -2, Math.sin(angle) * dist);
     dummy.rotation.set(0, rnd(0, Math.PI * 2), 0);
     dummy.scale.setScalar(rnd(1.6, 2.8));
@@ -989,13 +1070,15 @@ owlGroup.visible = false;
 scene.add(owlGroup);
 
 // Lacet appliqué au modèle GLB pour aligner sa face sur l'avant du jeu (-Z).
-// Le hibou Google Poly regarde vers +Z → demi-tour. Ajuster ici si le modèle change.
+// barnowl.glb regarde vers +Z → demi-tour. Ajuster ici si le modèle change.
 const OWL_MODEL_YAW = Math.PI;
 let owl = { wings: null, body: null, bob: null }; // rempli par setupOwlVisual
 
 function setupOwlVisual() {
   if (models.owl) {
-    const norm = normalizeModel(models.owl, { length: 3.2, groundAlign: false, yaw: OWL_MODEL_YAW });
+    // Normalisation par l'envergure (X) plutôt que la profondeur (Z) : ce modèle a les
+    // ailes largement déployées, une normalisation par longueur le rendrait démesuré.
+    const norm = normalizeModel(models.owl, { width: 2.6, groundAlign: false, yaw: OWL_MODEL_YAW });
     norm.rotation.x = -0.25; // légère assiette piquée : posture de vol plutôt que perché
     owlGroup.add(norm);
     owl = { wings: null, body: null, bob: norm };
@@ -1553,7 +1636,7 @@ function spawnGiftIfNeeded(dt) {
     const mat = new THREE.SpriteMaterial({ map: giftTexture, transparent: true });
     const sprite = new THREE.Sprite(mat);
     sprite.scale.set(2.4, 2.4, 1);
-    const pos = randomPointInArena(3, 130);
+    const pos = randomPointInArena(3, COLLECTIBLE_MAX_Y);
     sprite.position.copy(pos);
     scene.add(sprite);
 
@@ -1682,7 +1765,7 @@ function newBranch() {
   if (rotten) mat.color.set(0x99775a);
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(2, 2, 1);
-  const pos = randomPointInArena(3, 130);
+  const pos = randomPointInArena(3, COLLECTIBLE_MAX_Y);
   sprite.position.copy(pos);
   scene.add(sprite);
   return { sprite, rotten, w: rnd(0, Math.PI * 2), ws: rotten ? rnd(0.06, 0.11) : rnd(0.03, 0.07), age: 0, baseY: pos.y };
@@ -2308,17 +2391,20 @@ function update() {
     updateGift(dt);
     updateBoundaryGrid();
     updateWindParticles(dt);
+    updateSpeedParticles(dt);
     updateCameraClip();
     owlGroup.visible = !(owlInvul > 0 && Math.floor(Date.now() / 80) % 2 !== 0);
   } else if (state === S.LOOT) {
     mouseDX = 0; mouseDY = 0;
     boundaryGrid.visible = false;
     windParticles.visible = false;
+    speedParticles.visible = false;
     updateLootbox(dt);
   } else {
     mouseDX = 0; mouseDY = 0;
     boundaryGrid.visible = false;
     windParticles.visible = false;
+    speedParticles.visible = false;
   }
   updateMoonVisual(dt);
   updateStars(dt);
@@ -2379,6 +2465,7 @@ loadAssets().then(() => {
   setupBearProto();
   makeBoundaryGrid();
   makeWindParticles();
+  makeSpeedParticles();
   assetsReady = true;
   loop();
 });
