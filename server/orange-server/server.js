@@ -15,6 +15,12 @@ const DASHBOARD_PASSWORD = process.env.ORANGE_DASHBOARD_PASSWORD || '';
 const HIBOU3D_PASSWORD = process.env.HIBOU3D_V6_PASSWORD || '';
 
 const app = express();
+// Le serveur est placé derrière un reverse proxy Apache (voir
+// deploy/orange-api.conf) qui tourne en local sur la même machine :
+// sans ça, req.ip vaudrait toujours 127.0.0.1 pour tout le monde et le
+// rate-limit du compteur de visites bloquerait tous les visiteurs
+// derrière la même IP (le compteur restait bloqué à 1).
+app.set('trust proxy', 'loopback');
 app.use(express.json());
 
 // CORS ouvert : la page HTTPS zomboky.github.io/orange-disease.html doit
