@@ -195,6 +195,45 @@ function readJsonWithFallback(primaryPath, fallbackPath) {
 
 app.get('/health', (req, res) => res.type('text').send('orange-server ok'));
 
+// ---------------------------------------------------------------------
+// Compteur de visiteurs (public, rate-limit par IP : 1 incrément / heure)
+// ---------------------------------------------------------------------
+const VISITOR_COUNT_FILE = process.env.VISITOR_COUNT_FILE || path.join(DATA_DIR, 'visitor-count.json');
+const visitorRateLimit = new Map(); // ip -> lastIncrementTime (ms)
+const VISITOR_RL_WINDOW_MS = 60 * 60 * 1000; // 1h
+
+function readVisitorCount() {
+  try {
+    return JSON.parse(fs.readFileSync(VISITOR_COUNT_FILE, 'utf8')).count || 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
+function writeVisitorCount(count) {
+  const tmp = VISITOR_COUNT_FILE + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify({ count }), 'utf8');
+  fs.renameSync(tmp, VISITOR_COUNT_FILE);
+}
+
+app.get('/api/visitor-count', (req, res) => {
+  res.json({ count: readVisitorCount() });
+});
+
+app.post('/api/visitor-count', (req, res) => {
+  const ip = req.ip;
+  const now = Date.now();
+  const last = visitorRateLimit.get(ip) || 0;
+  const count = readVisitorCount();
+  if (now - last >= VISITOR_RL_WINDOW_MS) {
+    visitorRateLimit.set(ip, now);
+    const newCount = count + 1;
+    writeVisitorCount(newCount);
+    return res.json({ count: newCount, incremented: true });
+  }
+  res.json({ count, incremented: false });
+});
+
 app.get('/api/regions', (req, res) => res.json(Object.values(REGIONS)));
 
 app.get('/api/dashboard', requireAuth, async (req, res) => {

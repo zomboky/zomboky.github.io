@@ -65,6 +65,8 @@ jobs:
               echo "ORANGE_DASHBOARD_PASSWORD et HIBOU3D_V6_PASSWORD absents : les API de login refuseront toute connexion."
             fi
             sudo chown -R oranged:oranged /opt/orange-server
+            sudo mkdir -p /var/lib/orange-server
+            sudo chown oranged:oranged /var/lib/orange-server
             cd /var/www/html
 
             sudo cp -R docs/* .
