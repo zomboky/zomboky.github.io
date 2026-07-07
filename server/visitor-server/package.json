@@ -1,0 +1,16 @@
+{
+  "name": "visitor-server",
+  "version": "1.0.0",
+  "description": "API du compteur de visiteurs pour zomboky.github.io",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

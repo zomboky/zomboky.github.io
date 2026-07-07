@@ -1,0 +1,23 @@
+[Unit]
+Description=API du compteur de visiteurs (zomboky.github.io)
+After=network.target
+
+[Service]
+Type=simple
+User=visitord
+Group=visitord
+WorkingDirectory=/opt/visitor-server
+ExecStart=/usr/bin/node /opt/visitor-server/server.js
+Environment=VISITOR_SERVER_HOST=127.0.0.1
+Environment=VISITOR_SERVER_PORT=8097
+Environment=VISITOR_COUNT_FILE=/var/lib/visitor-server/visitor-count.json
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/visitor-server /var/lib/visitor-server
+
+[Install]
+WantedBy=multi-user.target

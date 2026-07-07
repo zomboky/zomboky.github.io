@@ -65,8 +65,20 @@ jobs:
               echo "ORANGE_DASHBOARD_PASSWORD et HIBOU3D_V6_PASSWORD absents : les API de login refuseront toute connexion."
             fi
             sudo chown -R oranged:oranged /opt/orange-server
-            sudo mkdir -p /var/lib/orange-server
-            sudo chown oranged:oranged /var/lib/orange-server
+            cd /var/www/html
+
+            # --- Visitor counter API (extrait de orange-server, sans
+            # rapport avec les orangers — service indépendant) ---
+            id -u visitord >/dev/null 2>&1 || sudo useradd -r -s /sbin/nologin visitord
+
+            sudo rm -rf /opt/visitor-server
+            sudo mkdir -p /opt/visitor-server
+            sudo cp -R /var/www/html/server/visitor-server/. /opt/visitor-server/
+            cd /opt/visitor-server
+            sudo npm install --omit=dev
+            sudo chown -R visitord:visitord /opt/visitor-server
+            sudo mkdir -p /var/lib/visitor-server
+            sudo chown visitord:visitord /var/lib/visitor-server
             cd /var/www/html
 
             sudo cp -R docs/* .
@@ -79,13 +91,15 @@ jobs:
             sudo cp /opt/orange-server/deploy/orange-server.service /etc/systemd/system/orange-server.service
             sudo cp /opt/orange-server/deploy/orange-ingest.service /etc/systemd/system/orange-ingest.service
             sudo cp /opt/orange-server/deploy/orange-ingest.timer /etc/systemd/system/orange-ingest.timer
+            sudo cp /opt/visitor-server/deploy/visitor-server.service /etc/systemd/system/visitor-server.service
             sudo systemctl daemon-reload
-            sudo systemctl enable chess-server orange-server orange-ingest.timer
-            sudo systemctl restart chess-server orange-server
+            sudo systemctl enable chess-server orange-server orange-ingest.timer visitor-server
+            sudo systemctl restart chess-server orange-server visitor-server
             sudo systemctl restart orange-ingest.timer
 
             sudo cp /opt/chess-server/deploy/chess-ws.conf /etc/httpd/conf.d/chess-ws.conf
             sudo cp /opt/orange-server/deploy/orange-api.conf /etc/httpd/conf.d/orange-api.conf
+            sudo cp /opt/visitor-server/deploy/visitor-api.conf /etc/httpd/conf.d/visitor-api.conf
             sudo setsebool -P httpd_can_network_connect 1 || true
             sudo apachectl configtest
             sudo systemctl reload httpd
