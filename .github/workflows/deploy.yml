@@ -55,26 +55,19 @@ jobs:
             else
               echo "GEE_SERVICE_ACCOUNT_KEY absent : orange-server démarrera sans accès Earth Engine (/api/timeseries répondra 502)."
             fi
-            if [ -n "$ORANGE_DASHBOARD_PASSWORD" ]; then
-              printf 'ORANGE_DASHBOARD_PASSWORD=%s\n' "$ORANGE_DASHBOARD_PASSWORD" | sudo tee orange-dashboard-password.env > /dev/null
+            if [ -n "$ORANGE_DASHBOARD_PASSWORD" ] || [ -n "$HIBOU3D_V6_PASSWORD" ]; then
+              {
+                [ -n "$ORANGE_DASHBOARD_PASSWORD" ] && printf 'ORANGE_DASHBOARD_PASSWORD=%s\n' "$ORANGE_DASHBOARD_PASSWORD"
+                [ -n "$HIBOU3D_V6_PASSWORD" ] && printf 'HIBOU3D_V6_PASSWORD=%s\n' "$HIBOU3D_V6_PASSWORD"
+              } | sudo tee orange-dashboard-password.env > /dev/null
               sudo chmod 600 orange-dashboard-password.env
             else
-              echo "ORANGE_DASHBOARD_PASSWORD absent : /api/login refusera toute connexion (dashboard inaccessible)."
+              echo "ORANGE_DASHBOARD_PASSWORD et HIBOU3D_V6_PASSWORD absents : les API de login refuseront toute connexion."
             fi
             sudo chown -R oranged:oranged /opt/orange-server
             cd /var/www/html
 
             sudo cp -R docs/* .
-
-            # --- Verrou v6 prerelease du jeu Hibou 3D : seul le hash sha256 du
-            # mot de passe est injecté dans le fichier servi, jamais le mot de
-            # passe en clair (ni dans le dépôt, ni dans les fichiers déployés) ---
-            if [ -n "$HIBOU3D_V6_PASSWORD" ]; then
-              HIBOU3D_V6_HASH=$(printf '%s' "$HIBOU3D_V6_PASSWORD" | sha256sum | cut -d' ' -f1)
-              sudo sed -i "s/__HIBOU3D_V6_PASSWORD_HASH__/$HIBOU3D_V6_HASH/" scripts/hibou3d-lock.js
-            else
-              echo "HIBOU3D_V6_PASSWORD absent : le verrou v6 du hibou 3D restera fermé (aucun code ne le déverrouillera)."
-            fi
 
             sudo rm -rf server
             sudo chown -R apache:apache /var/www/html

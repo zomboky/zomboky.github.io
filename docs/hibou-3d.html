@@ -87,6 +87,20 @@
 import * as THREE from 'three';
 import { GLTFLoader } from './three/examples/jsm/loaders/GLTFLoader.js';
 
+// Le jeu ne démarre qu'après vérification d'un token délivré par le serveur.
+// window.__hibouStart(token) est appelé par hibou3d-lock.js une fois le token
+// obtenu via POST /api/hibou3d/login — le jeu ne tourne jamais sans token valide.
+window.__hibouStart = async function (token) {
+  const _API = 'https://bear.servebeer.com/orange-api';
+  try {
+    const _r = await fetch(_API + '/api/hibou3d/verify', {
+      headers: { 'Authorization': 'Bearer ' + token },
+    });
+    if (!_r.ok) { window.__hibouRelock(); return; }
+  } catch (_e) {
+    window.__hibouRelock(); return;
+  }
+
 // Modèles 3D externes (voir docs/models/CREDITS.md pour les licences/attributions) :
 // hibou, ours, lune © Poly by Google (CC-BY 3.0) — arbres, montagnes, nuages © Quaternius (CC0).
 
@@ -2894,6 +2908,7 @@ loadAssets().then(() => {
   assetsReady = true;
   loop();
 });
+}; // fin window.__hibouStart
 </script>
 </body>
 </html>
