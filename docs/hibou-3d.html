@@ -272,167 +272,6 @@ function makeSky() {
 }
 
 // ══════════════════════════════════════════════════
-//  PARTICULES DE VENT (tempête) — stries 3D disposées autour du hibou,
-//  visibles uniquement pendant storm.active, "infinies" (recyclées quand hors portée).
-// ══════════════════════════════════════════════════
-const WIND_PARTICLE_COUNT  = 50;
-const WIND_RADIUS          = 34;   // rayon de la sphère de recyclage autour du hibou
-const WIND_STREAK_LEN      = 2.2;  // longueur du trait dans le sens du vent
-let windParticles, windParticleData = [];
-const _windRecycleTmp = new THREE.Vector3();
-
-function makeWindParticles() {
-  const positions = new Float32Array(WIND_PARTICLE_COUNT * 2 * 3); // 2 points par trait
-  for (let i = 0; i < WIND_PARTICLE_COUNT; i++) {
-    windParticleData.push({ pos: randomWindPoint(), speed: rnd(0.8, 1.4) });
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const mat = new THREE.LineBasicMaterial({
-    color: 0xaab4c8, transparent: true, opacity: 0,
-    depthWrite: false, fog: false
-  });
-  windParticles = new THREE.LineSegments(geo, mat);
-  windParticles.visible = false;
-  windParticles.frustumCulled = false;
-  scene.add(windParticles);
-}
-
-// Point aléatoire dans une sphère de rayon WIND_RADIUS autour de la position donnée
-// (par défaut autour du hibou), utilisé à l'init et pour le recyclage.
-function randomWindPoint(center) {
-  const c = center || owlGroup.position;
-  let x, y, z;
-  do { x = rnd(-1, 1); y = rnd(-1, 1); z = rnd(-1, 1); } while (x * x + y * y + z * z > 1);
-  const r = WIND_RADIUS * Math.cbrt(Math.random());
-  return new THREE.Vector3(c.x + x * r, c.y + y * r, c.z + z * r);
-}
-
-function updateWindParticles(dt) {
-  if (!storm.active) {
-    windParticles.visible = false;
-    return;
-  }
-  windParticles.visible = true;
-  windParticles.material.opacity = THREE.MathUtils.lerp(windParticles.material.opacity, 0.55, 0.1);
-
-  const gust = (storm.windForce - 0.6) / 1.8; // renormalise 0..1
-  const dir = new THREE.Vector3(Math.cos(storm.windAngle), -0.15, Math.sin(storm.windAngle)).normalize();
-  const speedScale = 14 + gust * 22; // unités/s de défilement visuel
-
-  const posAttr = windParticles.geometry.attributes.position;
-  const owlPos = owlGroup.position;
-
-  for (let i = 0; i < WIND_PARTICLE_COUNT; i++) {
-    const d = windParticleData[i];
-    d.pos.addScaledVector(dir, speedScale * d.speed * dt);
-
-    if (d.pos.distanceTo(owlPos) > WIND_RADIUS) {
-      // Repositionne sur le "plan amont" de la sphère de recyclage : on tire un point
-      // aléatoire dans la sphère, on annule sa composante le long du vent, puis on le
-      // recolle à une distance fixe en amont. Le point reste ainsi toujours contenu
-      // près du hibou (contrairement à l'ancien calcul qui pouvait le renvoyer jusqu'à
-      // ~2x WIND_RADIUS de distance — cause du nuage mal centré / dispersé).
-      const p = randomWindPoint(owlPos);
-      const along = _windRecycleTmp.copy(p).sub(owlPos).dot(dir);
-      d.pos.copy(p).addScaledVector(dir, -along - WIND_RADIUS * 0.9);
-    }
-
-    const tail = d.pos.clone().addScaledVector(dir, -WIND_STREAK_LEN);
-    const i6 = i * 6;
-    posAttr.array[i6]     = d.pos.x;
-    posAttr.array[i6 + 1] = d.pos.y;
-    posAttr.array[i6 + 2] = d.pos.z;
-    posAttr.array[i6 + 3] = tail.x;
-    posAttr.array[i6 + 4] = tail.y;
-    posAttr.array[i6 + 5] = tail.z;
-  }
-  posAttr.needsUpdate = true;
-}
-
-// ══════════════════════════════════════════════════
-//  PARTICULES AÉRODYNAMIQUES — stries de vitesse relative collées au hibou,
-//  intensité proportionnelle à sa vitesse air. Contrairement aux particules de
-//  vent ci-dessus (liées à storm.active, un vent EXTÉRIEUR), celles-ci existent
-//  en permanence en vol et traduisent le flux d'air créé par le hibou lui-même.
-// ══════════════════════════════════════════════════
-const SPEED_PARTICLE_COUNT   = 40;
-const SPEED_PARTICLE_RADIUS  = 3.4;  // rayon du nuage de particules autour du hibou
-const SPEED_STREAK_LEN_MAX   = 3.2;  // longueur du trait à vitesse max
-const SPEED_PARTICLE_MIN     = 9;    // vitesse air en dessous de laquelle l'effet est invisible
-let speedParticles, speedParticleData = [];
-const _spdDir = new THREE.Vector3();
-const _spdRecycleTmp = new THREE.Vector3();
-
-function randomSpeedPoint() {
-  let x, y, z;
-  do { x = rnd(-1, 1); y = rnd(-1, 1); z = rnd(-1, 1); } while (x * x + y * y + z * z > 1);
-  const r = SPEED_PARTICLE_RADIUS * Math.cbrt(Math.random());
-  const c = owlGroup.position;
-  return new THREE.Vector3(c.x + x * r, c.y + y * r, c.z + z * r);
-}
-
-function makeSpeedParticles() {
-  const positions = new Float32Array(SPEED_PARTICLE_COUNT * 2 * 3); // 2 points par trait
-  for (let i = 0; i < SPEED_PARTICLE_COUNT; i++) {
-    speedParticleData.push({ pos: randomSpeedPoint() });
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const mat = new THREE.LineBasicMaterial({
-    color: 0xe8f6ff, transparent: true, opacity: 0,
-    depthWrite: false, fog: false
-  });
-  speedParticles = new THREE.LineSegments(geo, mat);
-  speedParticles.visible = false;
-  speedParticles.frustumCulled = false;
-  scene.add(speedParticles);
-}
-
-function updateSpeedParticles(dt) {
-  const ratio = THREE.MathUtils.clamp((speed - SPEED_PARTICLE_MIN) / (MAX_SPEED - SPEED_PARTICLE_MIN), 0, 1);
-  speedParticles.material.opacity = THREE.MathUtils.lerp(speedParticles.material.opacity, ratio * 0.6, 0.15);
-  if (ratio <= 0 && speedParticles.material.opacity < 0.01) {
-    speedParticles.visible = false;
-    return;
-  }
-  speedParticles.visible = true;
-
-  // Sens du flux d'air relatif = opposé au déplacement réel (vitesse quasi nulle : repli sur le nez).
-  if (velocity.lengthSq() > 0.25) _spdDir.copy(velocity).normalize();
-  else owlGroup.getWorldDirection(_spdDir).negate();
-
-  const streakLen = SPEED_STREAK_LEN_MAX * (0.3 + 0.7 * ratio);
-  const scrollSpeed = 16 + ratio * 30; // unités/s de défilement visuel vers l'arrière
-  const posAttr = speedParticles.geometry.attributes.position;
-  const owlPos = owlGroup.position;
-
-  for (let i = 0; i < SPEED_PARTICLE_COUNT; i++) {
-    const d = speedParticleData[i];
-    d.pos.addScaledVector(_spdDir, -scrollSpeed * dt);
-
-    if (d.pos.distanceTo(owlPos) > SPEED_PARTICLE_RADIUS) {
-      // Même correction que pour les particules de tempête : on annule la composante
-      // du point aléatoire le long du flux avant de le replacer en amont, pour que le
-      // nuage reste bien centré et contenu autour du hibou au lieu de se disperser.
-      const p = randomSpeedPoint();
-      const along = _spdRecycleTmp.copy(p).sub(owlPos).dot(_spdDir);
-      d.pos.copy(p).addScaledVector(_spdDir, -along + SPEED_PARTICLE_RADIUS * 0.9);
-    }
-
-    const tail = d.pos.clone().addScaledVector(_spdDir, streakLen);
-    const i6 = i * 6;
-    posAttr.array[i6]     = d.pos.x;
-    posAttr.array[i6 + 1] = d.pos.y;
-    posAttr.array[i6 + 2] = d.pos.z;
-    posAttr.array[i6 + 3] = tail.x;
-    posAttr.array[i6 + 4] = tail.y;
-    posAttr.array[i6 + 5] = tail.z;
-  }
-  posAttr.needsUpdate = true;
-}
-
-// ══════════════════════════════════════════════════
 //  PARTICULES 3D VOLUMÉTRIQUES — pool unique de points additifs recyclés :
 //  gerbes de collecte, poussière d'impact des rochers, éclats de choc,
 //  étincelles du cadeau, traînée de boost. (Les particules 2D du HUD restent
@@ -2969,21 +2808,15 @@ function update() {
     updateBears(dt);
     updateGift(dt);
     updateBoundaryGrid();
-    updateWindParticles(dt);
-    updateSpeedParticles(dt);
     updateCameraClip();
     owlGroup.visible = !(owlInvul > 0 && Math.floor(Date.now() / 80) % 2 !== 0);
   } else if (state === S.LOOT) {
     mouseDX = 0; mouseDY = 0;
     boundaryGrid.visible = false;
-    windParticles.visible = false;
-    speedParticles.visible = false;
     updateLootbox(dt);
   } else {
     mouseDX = 0; mouseDY = 0;
     boundaryGrid.visible = false;
-    windParticles.visible = false;
-    speedParticles.visible = false;
   }
   updateMoonVisual(dt);
   updateStars(dt);
@@ -3056,8 +2889,6 @@ loadAssets().then(() => {
   setupOwlVisual();
   setupBearProto();
   makeBoundaryGrid();
-  makeWindParticles();
-  makeSpeedParticles();
   makeFX3D();
   makeFireflies();
   assetsReady = true;
