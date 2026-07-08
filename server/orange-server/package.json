@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "ingest:gbif": "node scripts/fetch-gbif-occurrences.js",
+    "ingest:sif": "node scripts/refresh-gosif-cache.js",
     "refresh:dashboard": "node scripts/refresh-dashboard-data.js"
   },
   "engines": {
