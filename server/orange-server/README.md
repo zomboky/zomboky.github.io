@@ -32,10 +32,13 @@ front du vecteur.
 lib/regions.js           définitions des 5 zones (bbox, contexte maladie)
 lib/earthengine.js       auth + requêtes Earth Engine (Sentinel-2, indices)
 lib/gbif.js              requête GBIF (occurrences Trioza erytreae)
+lib/gosif.js             ingestion SIF réelle (GOSIF), voir § Fluorescence
 lib/buildDashboard.js    assemble le JSON complet du tableau de bord
 server.js                API Express protégée par mot de passe (seule source de données)
 scripts/refresh-dashboard-data.js   snapshot JSON pour inspection en dev local uniquement
 scripts/fetch-gbif-occurrences.js   rafraîchit data/trioza_occurrences.json
+scripts/refresh-gosif-cache.js      rafraîchit data/sif_cache.json (GOSIF)
+scripts/gosif_extract.py            extraction GDAL/numpy : moyenne SIF par zone depuis un GeoTIFF GOSIF
 deploy/                  systemd + config Apache pour le déploiement Oracle Cloud
 data/*.example.json, sif_demo.json   données de secours explicitement marquées "example"
 ```
@@ -103,30 +106,73 @@ répondent 502. Sans `ORANGE_DASHBOARD_PASSWORD`, `/api/login` répond 503 :
 personne ne peut se connecter, la page reste bloquée sur l'écran de
 verrouillage.
 
-## Fluorescence (SIF) — état actuel
+## Fluorescence (SIF) — ingestion réelle (GOSIF)
 
 Il n'existe **pas** de produit SIF temps réel dans le catalogue Earth
 Engine standard (vérifié : seuls les gaz troposphériques classiques y sont
-présents, `COPERNICUS/S5P/OFFL/L3_*`). Deux sources réelles identifiées :
+présents, `COPERNICUS/S5P/OFFL/L3_*`). Deux sources réelles ont été
+évaluées (accès réseau direct vérifié, pas seulement documentation) :
 
 - **TROPOSIF** (L2B, S5P/TROPOMI, projet ESA) : résolution ~3,5×5,5 km,
-  mais disponible **seulement mai 2018 – mars 2021** (produit arrêté),
-  téléchargeable hors GEE via le
-  [S5P-PAL Data Portal](https://data-portal.s5p-pal.com/products/troposif.html).
-- **GOSIF** (dérivé OCO-2 + MODIS EVI) : grille 0,05°, pas de temps 8
-  jours, **continu jusqu'à aujourd'hui** — mieux adapté à un tableau de
-  bord vivant, mais nécessite un pipeline de téléchargement/ingestion
-  séparé (fichiers raster globaux, pas d'API REST simple identifiée pour
-  l'instant).
+  mais **arrêté depuis mars 2021** (vérifié sur le
+  [S5P-PAL Data Portal](https://data-portal.s5p-pal.com/products/troposif.html)) —
+  ne peut donc pas alimenter un tableau de bord vivant sur la fenêtre
+  récente (24 derniers mois). De plus chaque granule journalier fait
+  ~370 Mo et le filtre spatial (`bbox`) de l'API STAC de recherche
+  s'est révélé cassé lors des tests (renvoie 0 résultat même sur un
+  granule existant qui devrait matcher) — écarté.
+- **GOSIF v2** (Li & Xiao, 2019, dérivé OCO-2 + MODIS + réanalyse) :
+  grille 0,05°, pas de temps 8 jours, **mis à jour par UNH jusqu'à fin
+  2024** au moment de l'écriture — **avec un décalage de publication
+  d'environ 1 à 2 ans** par rapport à la date du jour (pas de continuité
+  temps réel). C'est la source retenue et branchée.
 
-**Aucune des deux n'a été branchée dans ce commit** : l'environnement de
-développement n'avait pas accès réseau à ces hôtes pour valider le format
-exact d'accès (politique d'egress du bac à sable). `data/sif_demo.json`
-contient donc un **exemple synthétique clairement marqué `"example":
-true`**, affiché avec un badge "DONNÉE D'EXEMPLE" dans l'UI tant qu'un
-vrai fichier `data/sif_cache.json` (même structure, `example: false`)
-n'a pas été déposé par un script d'ingestion à écrire (GOSIF recommandé
-pour la continuité temporelle).
+### Pipeline GOSIF
+
+1. `lib/gosif.js` sonde `data.globalecology.unh.edu` en HEAD requests en
+   partant d'aujourd'hui vers le passé pour trouver la dernière période
+   de 8 jours réellement publiée (`findLatestAvailablePeriod`), puis
+   télécharge chaque granule manquant (`GOSIF_<année><jour_julien>.tif.gz`,
+   ~8 Mo compressé, ~50 Mo décompressé) dans `data/gosif-cache/` (jamais
+   commité — voir `.gitignore`).
+2. Chaque GeoTIFF (global, 7200×3600 px, Int16, *scale factor* 0.0001,
+   unité W·m⁻²·µm⁻¹·sr⁻¹, valeurs de remplissage 32767 = eau et 32766 =
+   neige/glace permanente — voir `Fair_Data_Use_Policy_and_Readme_GOSIF_v2.pdf`
+   du dépôt UNH) est passé à `scripts/gosif_extract.py` (GDAL + numpy)
+   qui calcule la moyenne par zone en excluant les pixels de
+   remplissage.
+3. `scripts/refresh-gosif-cache.js` assemble le tout sur une fenêtre de
+   36 mois **avant la dernière période publiée** (pas avant aujourd'hui,
+   à cause du décalage ci-dessus) et écrit `data/sif_cache.json`
+   (`example: false`, avec `latestAvailableDate` et une `note`
+   expliquant le décalage). Lancé par le timer systemd
+   `orange-gosif.timer` (mensuel — largement suffisant vu la fréquence
+   de mise à jour réelle de la source).
+4. `lib/buildDashboard.js` lit `data/sif_cache.json` s'il existe, sinon
+   retombe sur `data/sif_demo.json` (exemple synthétique, `example:
+   true`, badge "DONNÉE D'EXEMPLE" dans l'UI) — même mécanisme que pour
+   les occurrences GBIF.
+
+**Limite à garder en tête** : tant que UNH n'a pas publié de données plus
+récentes que fin 2024, la partie la plus récente du graphique SIF (et donc
+sa contribution au score de risque composite, qui recherche une valeur SIF
+à ±45 jours de chaque date NDVI/NDMI) restera vide sur les derniers mois —
+ce n'est pas un bug, c'est la réalité de fraîcheur de cette source. L'UI
+affiche la date de dernière période disponible sous le graphique SIF pour
+que ce ne soit jamais silencieusement trompeur.
+
+### Dépendances supplémentaires (déploiement)
+
+`scripts/gosif_extract.py` nécessite GDAL et son binding Python
+(`import osgeo.gdal`) — installés via `sudo dnf install -y gdal
+python3-gdal` par `deploy.yml`. **Piège rencontré en développement** :
+sur une machine avec plusieurs versions de Python installées, le binding
+`osgeo` et `numpy` doivent provenir du **même** interpréteur Python que
+celui invoqué par `lib/gosif.js` (variable d'environnement
+`GOSIF_PYTHON_BIN`, `python3` par défaut) — sinon `numpy` échoue à
+l'import avec une erreur `_multiarray_umath` trompeuse qui ressemble à
+une réinstallation cassée alors que c'est un mélange de versions. Vérifier
+avec `python3 -c "import osgeo.gdal, numpy"` avant de déployer.
 
 ## Occurrences du vecteur (GBIF)
 
@@ -170,6 +216,14 @@ Pour un instantané JSON sur disque à inspecter sans lancer le serveur
 npm run refresh:dashboard
 ```
 
+Pour rafraîchir le cache SIF (GOSIF) en local (nécessite GDAL, voir
+§ Fluorescence ; télécharge potentiellement plusieurs dizaines de granules
+la première fois) :
+
+```
+GOSIF_PYTHON_BIN=python3 npm run ingest:sif
+```
+
 ## Déploiement
 
 `deploy.yml` (à la racine du repo) déploie `orange-server` sur la même VM
@@ -177,4 +231,8 @@ Oracle Cloud que `chess-server`, selon le même schéma : utilisateur
 système dédié (`oranged`), service systemd écoutant en local
 (`127.0.0.1:8096`), reverse-proxy Apache (`/orange-api/`). Le timer
 `orange-ingest.timer` rafraîchit `data/trioza_occurrences.json`
-hebdomadairement sur la VM.
+hebdomadairement sur la VM, et `orange-gosif.timer` rafraîchit
+`data/sif_cache.json` mensuellement (voir § Fluorescence) — ce dernier est
+aussi lancé une première fois immédiatement après chaque déploiement
+(`systemctl start --no-block orange-gosif.service`) pour amorcer le cache
+sans attendre jusqu'à un mois.

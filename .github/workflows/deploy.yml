@@ -43,6 +43,9 @@ jobs:
             # --- Orange-disease API (seule source de données, protégée par
             # mot de passe — voir server/orange-server/README.md) ---
             id -u oranged >/dev/null 2>&1 || sudo useradd -r -s /sbin/nologin oranged
+            # gdal + son binding Python : requis par scripts/gosif_extract.py
+            # (ingestion SIF réelle, voir server/orange-server/README.md).
+            python3 -c "import osgeo.gdal" >/dev/null 2>&1 || sudo dnf install -y gdal python3-gdal
 
             sudo rm -rf /opt/orange-server
             sudo mkdir -p /opt/orange-server
@@ -79,10 +82,14 @@ jobs:
             sudo cp /opt/orange-server/deploy/orange-server.service /etc/systemd/system/orange-server.service
             sudo cp /opt/orange-server/deploy/orange-ingest.service /etc/systemd/system/orange-ingest.service
             sudo cp /opt/orange-server/deploy/orange-ingest.timer /etc/systemd/system/orange-ingest.timer
+            sudo cp /opt/orange-server/deploy/orange-gosif.service /etc/systemd/system/orange-gosif.service
+            sudo cp /opt/orange-server/deploy/orange-gosif.timer /etc/systemd/system/orange-gosif.timer
             sudo systemctl daemon-reload
-            sudo systemctl enable chess-server orange-server orange-ingest.timer
+            sudo systemctl enable chess-server orange-server orange-ingest.timer orange-gosif.timer
             sudo systemctl restart chess-server orange-server
             sudo systemctl restart orange-ingest.timer
+            sudo systemctl restart orange-gosif.timer
+            sudo systemctl start --no-block orange-gosif.service || true
 
             sudo cp /opt/chess-server/deploy/chess-ws.conf /etc/httpd/conf.d/chess-ws.conf
             sudo cp /opt/orange-server/deploy/orange-api.conf /etc/httpd/conf.d/orange-api.conf

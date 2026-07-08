@@ -1,0 +1,9 @@
+[Unit]
+Description=Lance orange-gosif.service chaque mois
+
+[Timer]
+OnCalendar=monthly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

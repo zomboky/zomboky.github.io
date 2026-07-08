@@ -365,11 +365,18 @@
     const badge = card.querySelector('.od-badge');
 
     const sifBlock = state.dashboard.sif;
+    const freshness = $('od-sif-freshness');
     if (sifBlock && sifBlock.example) {
       badge.style.display = 'inline-block';
       badge.textContent = 'DONNÉE D’EXEMPLE';
+      if (freshness) freshness.textContent = '';
     } else {
       badge.style.display = 'none';
+      if (freshness) {
+        freshness.textContent = sifBlock && sifBlock.latestAvailableDate
+          ? `Dernière période GOSIF disponible : ${sifBlock.latestAvailableDate} (${sifBlock.note || 'décalage de publication habituel de ce produit'}).`
+          : '';
+      }
     }
 
     const seriesList = activeRegionList()
