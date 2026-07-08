@@ -13,11 +13,12 @@ jobs:
         env:
           GEE_SERVICE_ACCOUNT_KEY: ${{ secrets.GEE_SERVICE_ACCOUNT_KEY }}
           ORANGE_DASHBOARD_PASSWORD: ${{ secrets.ORANGE_DASHBOARD_PASSWORD }}
+          HIBOU3D_V6_PASSWORD: ${{ secrets.HIBOU3D_V6_PASSWORD }}
         with:
           host: ${{ secrets.REMOTE_HOST }}
           username: ${{ secrets.REMOTE_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GEE_SERVICE_ACCOUNT_KEY,ORANGE_DASHBOARD_PASSWORD
+          envs: GEE_SERVICE_ACCOUNT_KEY,ORANGE_DASHBOARD_PASSWORD,HIBOU3D_V6_PASSWORD
           script: |
             set -e
             sudo git config --global --add safe.directory /var/www/html
@@ -42,6 +43,9 @@ jobs:
             # --- Orange-disease API (seule source de données, protégée par
             # mot de passe — voir server/orange-server/README.md) ---
             id -u oranged >/dev/null 2>&1 || sudo useradd -r -s /sbin/nologin oranged
+            # gdal + son binding Python : requis par scripts/gosif_extract.py
+            # (ingestion SIF réelle, voir server/orange-server/README.md).
+            python3 -c "import osgeo.gdal" >/dev/null 2>&1 || sudo dnf install -y gdal python3-gdal
 
             sudo rm -rf /opt/orange-server
             sudo mkdir -p /opt/orange-server
@@ -54,16 +58,22 @@ jobs:
             else
               echo "GEE_SERVICE_ACCOUNT_KEY absent : orange-server démarrera sans accès Earth Engine (/api/timeseries répondra 502)."
             fi
-            if [ -n "$ORANGE_DASHBOARD_PASSWORD" ]; then
-              printf 'ORANGE_DASHBOARD_PASSWORD=%s\n' "$ORANGE_DASHBOARD_PASSWORD" | sudo tee orange-dashboard-password.env > /dev/null
+            if [ -n "$ORANGE_DASHBOARD_PASSWORD" ] || [ -n "$HIBOU3D_V6_PASSWORD" ]; then
+              {
+                [ -n "$ORANGE_DASHBOARD_PASSWORD" ] && printf 'ORANGE_DASHBOARD_PASSWORD=%s\n' "$ORANGE_DASHBOARD_PASSWORD"
+                [ -n "$HIBOU3D_V6_PASSWORD" ] && printf 'HIBOU3D_V6_PASSWORD=%s\n' "$HIBOU3D_V6_PASSWORD"
+              } | sudo tee orange-dashboard-password.env > /dev/null
               sudo chmod 600 orange-dashboard-password.env
             else
-              echo "ORANGE_DASHBOARD_PASSWORD absent : /api/login refusera toute connexion (dashboard inaccessible)."
+              echo "ORANGE_DASHBOARD_PASSWORD et HIBOU3D_V6_PASSWORD absents : les API de login refuseront toute connexion."
             fi
             sudo chown -R oranged:oranged /opt/orange-server
+            sudo mkdir -p /var/lib/orange-server
+            sudo chown oranged:oranged /var/lib/orange-server
             cd /var/www/html
 
             sudo cp -R docs/* .
+
             sudo rm -rf server
             sudo chown -R apache:apache /var/www/html
             sudo restorecon -Rv /var/www/html
@@ -72,10 +82,14 @@ jobs:
             sudo cp /opt/orange-server/deploy/orange-server.service /etc/systemd/system/orange-server.service
             sudo cp /opt/orange-server/deploy/orange-ingest.service /etc/systemd/system/orange-ingest.service
             sudo cp /opt/orange-server/deploy/orange-ingest.timer /etc/systemd/system/orange-ingest.timer
+            sudo cp /opt/orange-server/deploy/orange-gosif.service /etc/systemd/system/orange-gosif.service
+            sudo cp /opt/orange-server/deploy/orange-gosif.timer /etc/systemd/system/orange-gosif.timer
             sudo systemctl daemon-reload
-            sudo systemctl enable chess-server orange-server orange-ingest.timer
+            sudo systemctl enable chess-server orange-server orange-ingest.timer orange-gosif.timer
             sudo systemctl restart chess-server orange-server
             sudo systemctl restart orange-ingest.timer
+            sudo systemctl restart orange-gosif.timer
+            sudo systemctl start --no-block orange-gosif.service || true
 
             sudo cp /opt/chess-server/deploy/chess-ws.conf /etc/httpd/conf.d/chess-ws.conf
             sudo cp /opt/orange-server/deploy/orange-api.conf /etc/httpd/conf.d/orange-api.conf

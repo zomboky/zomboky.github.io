@@ -2,137 +2,399 @@
 <html>
 <head>
 <meta charset="utf-8">
+<title>acceuil</title>
+<link rel="shortcut icon" type="image/x-icon" href="https://raw.githubusercontent.com/zomboky/zomboky.github.io/master/docs/assets/icons/ours.png">
 
-  <title>acceuil</title>
-  <link rel="stylesheet" href="styles/welcome.css">
-  <link rel="shortcut icon" type="image/x-icon" href="assets/icons/ours.png">
+<style>
+/* ============================================================
+   BASE — repris à l'identique de welcome.css
+   ============================================================ */
+a, button, [role="button"] {
+  cursor: url('https://raw.githubusercontent.com/zomboky/zomboky.github.io/master/docs/assets/cursors/real_hand_cursor.cur'), pointer;
+}
 
+body {
+  position: relative;
+  cursor: url('https://raw.githubusercontent.com/zomboky/zomboky.github.io/master/docs/assets/cursors/real_hand_cursor.cur'), auto;
+  background-image: url('https://raw.githubusercontent.com/zomboky/zomboky.github.io/master/docs/assets/gif/space_wallpaper_hd.gif');
+  background-repeat: repeat;
+  background-size: 128px 128px;
+  image-rendering: pixelated;
+  margin: 0;
+  min-height: 100vh;
+  color: #eee;
+  font-family: monospace;
+}
+
+#titre img {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  height: auto;
+  margin-top: 2rem;
+  position: relative;
+  z-index: 2;
+}
+
+/* boutons retro Windows gris */
+.retro-button {
+  display: inline-block;
+  font-family: monospace;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  text-decoration: none;
+  color: #000;
+  background: #c0c0c0;
+  border: 3px solid;
+  border-color: #fff #808080 #808080 #fff;
+  padding: 0.6rem 1.2rem;
+  box-shadow: 3px 3px 0 #000;
+  image-rendering: pixelated;
+}
+.retro-button:hover { background: #d8d8d8; }
+.retro-button:active {
+  border-color: #808080 #fff #fff #808080;
+  box-shadow: none;
+  transform: translate(3px, 3px);
+}
+
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.blink {
+  animation: blink 1s steps(1) infinite;
+  color: #ff0;
+  font-weight: bold;
+}
+
+#under-construction {
+  display: flex;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+}
+#blurtext {
+  width: min(90vw, 500px);
+  margin: 1rem auto 2rem;
+  padding: 0.5rem 1rem;
+  background: #333333;
+  color: #fff;
+  text-shadow: -9px -7px 11px #EDEDED;
+  text-align: center;
+  border: 2px solid #000;
+  outline: 2px solid #ccc;
+  font-family: monospace;
+}
+#blurtext marquee { display: block; margin-top: 0.3rem; }
+
+.visitor-counter {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 2rem auto 6rem;
+  font-family: monospace;
+  color: #eee;
+  position: relative;
+  z-index: 2;
+}
+.visitor-counter-digits {
+  background: #000;
+  color: #0f0;
+  padding: 0.3rem 0.6rem;
+  border: 2px solid #444;
+  letter-spacing: 3px;
+  font-weight: bold;
+  text-shadow: 0 0 5px #0f0;
+}
+
+.frame {
+  border: 2px solid #ccc;
+  outline: 4px solid #000;
+  box-shadow: 0 0 0 6px #ccc;
+  padding: 2rem;
+  max-width: 600px;
+  text-align: center;
+  margin: 4rem auto;
+  background-image: url('https://raw.githubusercontent.com/zomboky/zomboky.github.io/master/docs/assets/gif/space_wallpaper_hd.gif');
+  position: relative;
+  z-index: 2;
+}
+
+.main-frame {
+  position: absolute;
+  top: -50px;
+  left: 250px;
+  right: 250px;
+  bottom: 10px;
+  z-index: 1;
+  background: url('https://raw.githubusercontent.com/zomboky/zomboky.github.io/master/docs/assets/textures/rockwall8/rockwall8.png') repeat;
+  border-left: 2px solid #ccc;
+  border-right: 2px solid #ccc;
+  border-bottom: 2px solid #ccc;
+  outline: 4px solid #000;
+  box-shadow: 0 0 0 6px #ccc;
+  padding: 2rem;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.ours_img {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  z-index: 2;
+  filter: drop-shadow(0 0 30px rgba(255,255,255,0));
+  transition: filter 0.01s linear;
+}
+
+.ours_gif_lavalamp {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+}
+
+@keyframes neon-flicker {
+  0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% { opacity: 1; }
+  20%, 22%, 24%, 55% { opacity: 0.7; }
+}
+
+/* ============================================================
+   NOUVEAUX BOUTONS HIBOU
+   ============================================================ */
+
+/*
+  HIBOU 2D — Arcade pushbutton
+  Effet : bouton chunky empilé, s'enfonce mécaniquement au clic
+  Inspiration : boutons d'arcade NES/CPS2, chunky box-shadow stack
+*/
+.arcade-button {
+  display: inline-block;
+  font-family: monospace;
+  font-weight: bold;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-decoration: none;
+  color: #00ffee;
+  background: #003344;
+  border: 3px solid #00ffee;
+  padding: 0.75rem 1.8rem;
+  position: relative;
+  /* 8 couches d'ombre empilées = épaisseur du bouton */
+  box-shadow:
+    0 2px 0 #00ccbb,
+    0 4px 0 #009988,
+    0 6px 0 #007766,
+    0 8px 0 #006655,
+    0 10px 0 #004433,
+    0 12px 0 #003322,
+    0 14px 0 #002211,
+    0 16px 4px rgba(0,0,0,0.6);
+  transition: box-shadow 0.05s linear, transform 0.05s linear;
+  cursor: url('https://raw.githubusercontent.com/zomboky/zomboky.github.io/master/docs/assets/cursors/real_hand_cursor.cur'), pointer;
+}
+
+.arcade-button:hover {
+  background: #004455;
+  color: #66ffee;
+  box-shadow:
+    0 2px 0 #00ccbb,
+    0 4px 0 #009988,
+    0 6px 0 #007766,
+    0 8px 0 #006655,
+    0 10px 0 #004433,
+    0 12px 0 #003322,
+    0 14px 0 #002211,
+    0 16px 8px rgba(0,255,238,0.3);
+}
+
+.arcade-button:active {
+  /* s'enfonce : translateY = épaisseur du stack, ombre collapse */
+  transform: translateY(16px);
+  box-shadow:
+    0 1px 0 #00ccbb,
+    0 2px 2px rgba(0,0,0,0.5);
+  color: #33ddcc;
+}
+
+/*
+  HIBOU 3D — Physical skeuomorphic button
+  Effet : bouton physique plastique mat avec éclairage réel
+  Style complètement différent : amber/or, surface graduée, inset highlights
+*/
+.physical-button {
+  display: inline-block;
+  font-family: monospace;
+  font-weight: bold;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-decoration: none;
+  color: #1a0800;
+  background: linear-gradient(
+    180deg,
+    #ffe566 0%,
+    #ffcc00 30%,
+    #e6a800 70%,
+    #cc8800 100%
+  );
+  border: none;
+  padding: 0.75rem 1.8rem;
+  position: relative;
+  /* bords intérieurs : highlight haut-gauche + ombre bas-droit */
+  box-shadow:
+    inset 0 2px 3px rgba(255,255,255,0.7),
+    inset 0 -2px 3px rgba(0,0,0,0.3),
+    inset 2px 0 3px rgba(255,255,255,0.4),
+    inset -2px 0 3px rgba(0,0,0,0.2),
+    /* épaisseur du bouton */
+    0 6px 0 #7a4400,
+    0 12px 0 #5c3300,
+    0 14px 4px rgba(0,0,0,0.5);
+  transition: box-shadow 0.05s linear, transform 0.05s linear;
+  cursor: url('https://raw.githubusercontent.com/zomboky/zomboky.github.io/master/docs/assets/cursors/real_hand_cursor.cur'), pointer;
+}
+
+.physical-button:hover {
+  background: linear-gradient(
+    180deg,
+    #fff0aa 0%,
+    #ffdd33 30%,
+    #ffbb00 70%,
+    #dd9900 100%
+  );
+  box-shadow:
+    inset 0 2px 3px rgba(255,255,255,0.8),
+    inset 0 -2px 3px rgba(0,0,0,0.3),
+    inset 2px 0 3px rgba(255,255,255,0.5),
+    inset -2px 0 3px rgba(0,0,0,0.2),
+    0 6px 0 #7a4400,
+    0 12px 0 #5c3300,
+    0 14px 8px rgba(255,180,0,0.3);
+}
+
+.physical-button:active {
+  transform: translateY(14px);
+  background: linear-gradient(
+    180deg,
+    #e6a800 0%,
+    #cc8800 30%,
+    #aa6600 70%,
+    #995500 100%
+  );
+  box-shadow:
+    inset 0 2px 4px rgba(0,0,0,0.4),
+    inset 0 -1px 2px rgba(255,255,255,0.2),
+    0 1px 0 #7a4400,
+    0 2px 3px rgba(0,0,0,0.4);
+}
+
+.physical-button .version-badge {
+  display: inline-block;
+  font-family: monospace;
+  font-size: 0.65em;
+  font-weight: bold;
+  color: #fff;
+  background: #cc4400;
+  padding: 0.15em 0.45em;
+  margin-left: 0.5em;
+  vertical-align: middle;
+  letter-spacing: 1px;
+  text-shadow: none;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
+}
+
+</style>
 </head>
 
-<!-- BODY-->
+<body>
 
-<body> <!-- ---------------------------------------------------------------------------------------------------------------------------- -->
-
-<div id = "titre" >
-
-  <img src = 'assets/texts/welcome_ice.png'>
-  </img>
-
-
+<div id="titre">
+  <img src="https://raw.githubusercontent.com/zomboky/zomboky.github.io/master/docs/assets/texts/welcome_ice.png">
 </div>
 
-<div id = "under-construction" >
-
-  <div id = "blurtext" >
+<div id="under-construction">
+  <div id="blurtext">
     <span class="blink">⚠ UNDER CONSTRUCTION ⚠</span>
     <marquee behavior="scroll" direction="left" scrollamount="4">
       Welcome to BearServeBeer ! This site is still under construction... more rooms coming soon... thanks for visiting !
     </marquee>
   </div>
-
 </div>
 
-<div class = "frame">
-
-  <p> Visit the solar system</p>
-  <a class = "retro-button" id = "lien" href = "space.html" >🚀 Takeoff</a>
-
+<div class="frame">
+  <p>Visit the solar system</p>
+  <a class="retro-button" id="lien" href="space.html">🚀 Takeoff</a>
 </div>
 
-<div class = "frame">
-
-  <p> Jouer aux échecs en multijoueur</p>
-  <a class = "retro-button lien" href = "chess.html" >♟ Jouer</a>
-
+<div class="frame">
+  <p>Jouer aux échecs en multijoueur</p>
+  <a class="retro-button lien" href="chess.html">♟ Jouer</a>
 </div>
 
-<div class = "frame">
-
-  <p> Lancer un dé à 20 faces</p>
-  <a class = "retro-button lien" href = "dice.html" >🎲 Lancer</a>
-
+<div class="frame">
+  <p>Lancer un dé à 20 faces</p>
+  <a class="retro-button lien" href="dice.html">🎲 Lancer</a>
 </div>
 
-<div class = "visitor-counter">
+<!-- HIBOU 2D — nouveau bouton arcade -->
+<div class="frame">
+  <p>Hibou 2D — attrape des branches, fuis les ours !</p>
+  <a class="arcade-button" href="hibou-2d.html">🦉 Jouer</a>
+</div>
+
+<!-- HIBOU 3D — nouveau bouton physique -->
+<div class="frame">
+  <p>Hibou 3D — maintenant en version 6.2 !</p>
+  <a class="physical-button" href="hibou-3d.html">🦉 Jouer en 3D<span class="version-badge">v6.2</span></a>
+</div>
+
+<div class="frame">
+  <p>Plonger avec le sous-marin d'exploration</p>
+  <a class="retro-button" href="submarine.html">🚢 Plonger</a>
+</div>
+
+<div class="visitor-counter">
   <span class="visitor-counter-label">Visiteur n°</span>
   <span id="visitor-counter-digits" class="visitor-counter-digits">000000</span>
 </div>
-
-<div class = "main-frame">
-
-
-
-</div>
-
-
-
-
-  <!-- CHATBOX-->
-  <!-- <iframe src="https://www5.cbox.ws/box/?boxid=958197&boxtag=aIzGxa"
-   width="100%"
-   height="450"
-   allowtransparency="yes"
-   allow="autoplay"
-   frameborder="0"
-   marginheight="0"
-   marginwidth="0"
-   scrolling="auto"></iframe>
- -->
-
-  <!-- OURS -->
-  <div class = "ours_img">
-    <img id = "ours" src="assets/images/ours.png"
-      alt="A bear holding a beer"></img>
-
-
-
-    <script src="./scripts/ours_aura.js"></script>
-  </div>
-
-  <div class = "ours_gif_lavalamp">
-    <img src = "assets/gif/ours_biere_lavalamp.gif",
-    alt="Seems like this bear drank too much beer ..."></img>
-  </div>
-
-
-
-
-
-
-
-<!-- Script pour compter les clics-->
-<!-- <script src="scripts/click-counter.js"></script> -->
-
-<!--  BOB -->
-<!--
-<div class="bob" id="bob">
-
-  <img src="assets/entities/bob.png" alt="pixel art" />
-  <div id="oeil-droit"  style="position:absolute; left:24px; top:16px; width:1px; height:1px; background:red; pointer-events:none;"></div>
-  <div id="oeil-gauche" style="position:absolute; left:38px; top:16px; width:1px; height:1px; background:red; pointer-events:none;"></div>
-</div> -->
-
-
-  <!-- GIF CRANE1-->
-<!-- <div id = "crane1">
-  <img src="assets/gif/crane1.gif"
-       alt="gif d'un crane qui tire la langue"
-       style="
-        position: absolute;
-        left: 290px;
-        top: 380px">
-</div> -->
-
-
-  <!-- SCRIPT POUR RÉCUPÉRER LA POSITION DE LA SOURIS-->
-
-<script src="scripts/mouse-position.js"></script>
 <script src="scripts/visitor-counter.js"></script>
 
+<div class="main-frame"></div>
 
-</body> <!-- ---------------------------------------------------------------------------------------------------------------------------- -->
+<div class="ours_img">
+  <img id="ours" src="https://raw.githubusercontent.com/zomboky/zomboky.github.io/master/docs/assets/images/ours.png" alt="A bear holding a beer">
+</div>
 
+<script>
+const ours = document.querySelector('.ours_img img');
+let auraInterval = null;
+ours.addEventListener('mouseenter', () => {
+  if (!auraInterval) {
+    auraInterval = setInterval(() => {
+      const r = Math.floor(Math.random() * 256);
+      const g = Math.floor(Math.random() * 256);
+      const b = Math.floor(Math.random() * 256);
+      const color = 'rgba(' + r + ',' + g + ',' + b + ',1)';
+      ours.style.filter = 'drop-shadow(0 0 30px ' + color + ') drop-shadow(0 0 50px ' + color + ')';
+    }, 100);
+  }
+});
+ours.addEventListener('mouseleave', () => {
+  clearInterval(auraInterval);
+  auraInterval = null;
+  ours.style.filter = 'none';
+});
+</script>
+
+<div class="ours_gif_lavalamp">
+  <img src="https://raw.githubusercontent.com/zomboky/zomboky.github.io/master/docs/assets/gif/ours_biere_lavalamp.gif" alt="Seems like this bear drank too much beer ...">
+</div>
+
+</body>
 </html>
-
-
-

@@ -1,12 +1,19 @@
 (function () {
-  var STORAGE_KEY = 'zomboky_visitor_count';
-  var STARTING_NUMBER = 1994; // clin d'oeil rétro, pas un vrai compteur global
-
-  var count = parseInt(localStorage.getItem(STORAGE_KEY), 10);
-  if (isNaN(count)) count = STARTING_NUMBER;
-  count += 1;
-  localStorage.setItem(STORAGE_KEY, count);
-
+  var API_URL = 'https://bear.servebeer.com/orange-api/api/visitor-count';
   var el = document.getElementById('visitor-counter-digits');
-  if (el) el.textContent = String(count).padStart(6, '0');
+  if (!el) return;
+
+  el.textContent = '......';
+
+  fetch(API_URL, { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (typeof data.count === 'number') {
+        el.textContent = String(data.count).padStart(6, '0');
+      }
+    })
+    .catch(function () {
+      // fallback silencieux : affiche des tirets si le serveur est injoignable
+      el.textContent = '------';
+    });
 })();
