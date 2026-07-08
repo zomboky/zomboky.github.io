@@ -19,14 +19,90 @@
   html, body { width: 100%; height: 100%; overflow: hidden; background: #04040e; }
   canvas { position: fixed; top: 0; left: 0; display: block; }
   #hud { pointer-events: none; }
+
+  /* ── Verrou d'accès v6 prerelease ── */
+  #hibou-lock { display: none; }
+  body.hibou-locked #hibou-lock {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: #04040e;
+  }
+  body.hibou-locked canvas { pointer-events: none; }
+  #hibou-lock-form {
+    font-family: monospace;
+    color: #ccccff;
+    background: #0c1030;
+    border: 2px solid #8899ff;
+    box-shadow: 0 0 20px #4455aa;
+    padding: 2rem 2.5rem;
+    text-align: center;
+    width: min(90vw, 360px);
+  }
+  #hibou-lock-title { font-size: 1.05rem; font-weight: bold; margin: 0 0 1.2rem; line-height: 1.4; }
+  #hibou-lock-form label { display: block; text-align: left; margin-bottom: 0.4rem; font-size: 0.85rem; }
+  #hibou-lock-input {
+    width: 100%;
+    font-family: monospace;
+    background: #04040e;
+    color: #ccccff;
+    border: 1px solid #8899ff;
+    padding: 0.5rem;
+    margin-bottom: 1rem;
+    outline: none;
+  }
+  #hibou-lock-form button {
+    width: 100%;
+    font-family: monospace;
+    font-weight: bold;
+    text-transform: uppercase;
+    color: #04040e;
+    background: #ccccff;
+    border: none;
+    padding: 0.6rem;
+    cursor: pointer;
+  }
+  #hibou-lock-error { display: none; color: #ff6666; margin: 1rem 0 0; font-size: 0.85rem; }
 </style>
 </head>
-<body>
+<body class="hibou-locked">
 <canvas id="gl"></canvas>
 <canvas id="hud"></canvas>
 
+<div id="hibou-lock">
+  <form id="hibou-lock-form">
+    <p id="hibou-lock-title">🦉 Accès à la v6 prerelease<br>Veuillez saisir votre code d'accès confidentiel (VIP only)</p>
+    <label for="hibou-lock-input">Code d'accès</label>
+    <input type="password" id="hibou-lock-input" autocomplete="off" autofocus>
+    <button type="submit">Valider</button>
+    <p id="hibou-lock-error">Code incorrect.</p>
+  </form>
+</div>
+<script src="scripts/hibou3d-lock.js"></script>
+
 <script type="module">
 import * as THREE from 'three';
+import { GLTFLoader } from './three/examples/jsm/loaders/GLTFLoader.js';
+
+// Le jeu ne démarre qu'après vérification d'un token délivré par le serveur.
+// window.__hibouStart(token) est appelé par hibou3d-lock.js une fois le token
+// obtenu via POST /api/hibou3d/login — le jeu ne tourne jamais sans token valide.
+window.__hibouStart = async function (token) {
+  const _API = 'https://bear.servebeer.com/orange-api';
+  try {
+    const _r = await fetch(_API + '/api/hibou3d/verify', {
+      headers: { 'Authorization': 'Bearer ' + token },
+    });
+    if (!_r.ok) { window.__hibouRelock(); return; }
+  } catch (_e) {
+    window.__hibouRelock(); return;
+  }
+
+// Modèles 3D externes (voir docs/models/CREDITS.md pour les licences/attributions) :
+// hibou, ours, lune © Poly by Google (CC-BY 3.0) — arbres, montagnes, nuages © Quaternius (CC0).
 
 // ══════════════════════════════════════════════════
 //  ÉTAT DU JEU
@@ -36,6 +112,7 @@ let state = S.START;
 
 const MAX_COMBO_TIME = 120;
 let score = 0, nest = 0, combo = 1, comboTimer = 0, lives = 1, best = 0;
+let overReason = 'eaten'; // 'eaten' (ours) ou 'crash' (sol) — affiché par drawOver()
 let owlInvul = 0;
 let treeCooldown = 0;
 let rockInvul = 0; // invulnérabilité dédiée aux rochers de tempête, indépendante de celle des ours
@@ -94,33 +171,32 @@ function makeSkyGradient() {
 
 const scene = new THREE.Scene();
 scene.background = makeSkyGradient();
-scene.fog = new THREE.FogExp2(0x0c1030, 0.0045);
+// Brouillard configuré plus bas, une fois ARENA_RADIUS_XZ connu (doit estomper le terrain
+// juste après le mur invisible pour qu'on ne voie plus de sol "accessible" au-delà de la limite).
 
-const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 500);
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 3200); // plan éloigné repoussé pour garder lune/étoiles visibles à leur nouvelle distance
 
 const ambientLight = new THREE.AmbientLight(0x8899ff, 0.9);
 scene.add(ambientLight);
-const moonLight = new THREE.DirectionalLight(0xccccff, 0.9);
+const moonLight = new THREE.DirectionalLight(0xccccff, 2.2);
 moonLight.position.set(-60, 90, 30);
 scene.add(moonLight);
-const fillLight = new THREE.HemisphereLight(0x9fb4ff, 0x24361f, 0.5);
+const fillLight = new THREE.HemisphereLight(0x9fb4ff, 0x24361f, 0.7);
 scene.add(fillLight);
 
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(500, 500),
-  new THREE.MeshStandardMaterial({ color: 0x16321f, roughness: 1 })
-);
-ground.rotation.x = -Math.PI / 2;
-scene.add(ground);
+// Le sol plat d'origine est remplacé par un terrain procédural (voir section TERRAIN) :
+// relief fBm, montagnes gaussiennes, lacs sous le niveau d'eau, colorisation par altitude/pente.
 
 // ══════════════════════════════════════════════════
 //  CIEL — étoiles + lune (vrai objet 3D sphérique, pas un sprite repeint à chaque frame)
 // ══════════════════════════════════════════════════
 let moonMesh;
+let moonMaterials = []; // matériaux émissifs de la lune (1 pour la sphère de repli, n pour le GLB)
 let starGeo, starBaseColors, starPhases;
-const MOON_RADIUS      = 30;   // rayon de base (pleine lune = MOON_RADIUS * MOON_FULL_SCALE)
+const MOON_DISTANCE    = 2400;  // distance au centre de l'arène, bien au-delà d'ARENA_RADIUS_XZ/Y
+const MOON_RADIUS      = 225;   // rayon de base (mis à l'échelle avec MOON_DISTANCE pour garder la taille apparente)
 const MOON_FULL_SCALE  = 1.7;
-const MOON_BASE_LIGHT  = 0.9, MOON_FULL_LIGHT = 2.4;
+const MOON_BASE_LIGHT  = 2.2, MOON_FULL_LIGHT = 3.6; // la lune éclaire davantage le sol qu'auparavant
 const MOON_COLOR_NORMAL = new THREE.Color(0xfff2d0);
 const MOON_COLOR_BLOOD  = new THREE.Color(0xff2a2a);
 
@@ -156,7 +232,7 @@ function makeSky() {
   starBaseColors = new Float32Array(starCount * 3);
   starPhases = new Array(starCount);
   for (let i = 0; i < starCount; i++) {
-    const r = rnd(200, 400);
+    const r = rnd(1700, 2500); // bien au-delà d'ARENA_RADIUS_XZ/Y : jamais dans la zone de jeu
     const theta = rnd(0, Math.PI * 2), phi = Math.acos(rnd(-1, 1));
     positions[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
     positions[i * 3 + 1] = Math.abs(r * Math.cos(phi)) + 10;
@@ -170,97 +246,216 @@ function makeSky() {
   starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   const starMat = new THREE.PointsMaterial({
-    size: 2, vertexColors: true, transparent: true, opacity: 0.95,
+    size: 8, vertexColors: true, transparent: true, opacity: 0.95,
     depthWrite: false, sizeAttenuation: true, fog: false
   });
   scene.add(new THREE.Points(starGeo, starMat));
 
-  const moonPos = moonLight.position.clone().normalize().multiplyScalar(320);
-  const moonSurfaceTex = makeMoonSurfaceTexture();
-  moonMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(MOON_RADIUS, 48, 32),
-    new THREE.MeshStandardMaterial({
+  const moonPos = moonLight.position.clone().normalize().multiplyScalar(MOON_DISTANCE);
+  moonMesh = new THREE.Group(); // groupe extérieur : updateMoonVisual pilote scale/rotation dessus
+  moonMaterials = [];
+  if (models.moon) {
+    // Modèle GLB low-poly : matériaux clonés puis rendus émissifs (la lune éclaire, elle n'est pas éclairée)
+    const norm = normalizeModel(models.moon, { height: MOON_RADIUS * 2, groundAlign: false });
+    norm.traverse(o => {
+      if (o.isMesh) {
+        o.material = o.material.clone();
+        o.material.emissive = MOON_COLOR_NORMAL.clone();
+        o.material.emissiveMap = o.material.map || null;
+        o.material.emissiveIntensity = MOON_BASE_LIGHT;
+        o.material.fog = false;
+        moonMaterials.push(o.material);
+      }
+    });
+    moonMesh.add(norm);
+  } else {
+    const moonSurfaceTex = makeMoonSurfaceTexture();
+    const mat = new THREE.MeshStandardMaterial({
       map: moonSurfaceTex,
       emissiveMap: moonSurfaceTex,
       emissive: MOON_COLOR_NORMAL,
       emissiveIntensity: MOON_BASE_LIGHT,
       roughness: 1, metalness: 0,
       fog: false
-    })
-  );
+    });
+    moonMesh.add(new THREE.Mesh(new THREE.SphereGeometry(MOON_RADIUS, 48, 32), mat));
+    moonMaterials.push(mat);
+  }
   moonMesh.position.copy(moonPos);
   scene.add(moonMesh);
 }
 
 // ══════════════════════════════════════════════════
-//  PARTICULES DE VENT (tempête) — stries 3D disposées autour du hibou,
-//  visibles uniquement pendant storm.active, "infinies" (recyclées quand hors portée).
+//  PARTICULES 3D VOLUMÉTRIQUES — pool unique de points additifs recyclés :
+//  gerbes de collecte, poussière d'impact des rochers, éclats de choc,
+//  étincelles du cadeau, traînée de boost. (Les particules 2D du HUD restent
+//  pour le texte flottant ; celles-ci vivent DANS la scène, avec la parallaxe.)
 // ══════════════════════════════════════════════════
-const WIND_PARTICLE_COUNT  = 110;
-const WIND_RADIUS          = 34;   // rayon de la sphère de recyclage autour du hibou
-const WIND_STREAK_LEN      = 2.2;  // longueur du trait dans le sens du vent
-let windParticles, windParticleData = [];
+const FX3D_MAX = 320;
+let fx3d, fx3dData = [], fx3dCursor = 0;
+// grav = accélération vers le bas (négatif : flotte vers le haut), up = impulsion verticale initiale
+const FX3D_KINDS = {
+  collect: { colors: [0xffd700, 0x9fff6a, 0xfff6c0], speed: [4, 11],    life: [0.5, 0.9],  grav: 3,   up: 4 },
+  dust:    { colors: [0x8a7a5c, 0x6f6a58, 0x9c8f70], speed: [2, 7],     life: [0.6, 1.1],  grav: 6,   up: 5 },
+  burst:   { colors: [0xff5533, 0xffaa00, 0xffffff], speed: [5, 14],    life: [0.4, 0.8],  grav: 4,   up: 3 },
+  sparkle: { colors: [0xffe066, 0xfff2b0, 0xffc030], speed: [3, 9],     life: [0.7, 1.3],  grav: -1,  up: 5 },
+  trail:   { colors: [0x9fd8ff, 0xe8f6ff],           speed: [0.4, 1.6], life: [0.25, 0.5], grav: 0,   up: 0.5 }
+};
 
-function makeWindParticles() {
-  const positions = new Float32Array(WIND_PARTICLE_COUNT * 2 * 3); // 2 points par trait
-  for (let i = 0; i < WIND_PARTICLE_COUNT; i++) {
-    windParticleData.push({ pos: randomWindPoint(), speed: rnd(0.8, 1.4) });
+function makeFX3D() {
+  const positions = new Float32Array(FX3D_MAX * 3);
+  const colors = new Float32Array(FX3D_MAX * 3);
+  for (let i = 0; i < FX3D_MAX; i++) {
+    fx3dData.push({ alive: false, pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 0, maxLife: 1, color: new THREE.Color(), grav: 0 });
+    positions[i * 3 + 1] = -9999; // parqué hors champ tant que mort
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const mat = new THREE.LineBasicMaterial({
-    color: 0xaab4c8, transparent: true, opacity: 0,
-    depthWrite: false, fog: false
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mat = new THREE.PointsMaterial({
+    map: glowTexture, size: 1.5, vertexColors: true, transparent: true,
+    blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true
   });
-  windParticles = new THREE.LineSegments(geo, mat);
-  windParticles.visible = false;
-  windParticles.frustumCulled = false;
-  scene.add(windParticles);
+  fx3d = new THREE.Points(geo, mat);
+  fx3d.frustumCulled = false;
+  scene.add(fx3d);
 }
 
-// Point aléatoire dans une sphère de rayon WIND_RADIUS autour de la position donnée
-// (par défaut autour du hibou), utilisé à l'init et pour le recyclage.
-function randomWindPoint(center) {
-  const c = center || owlGroup.position;
-  let x, y, z;
-  do { x = rnd(-1, 1); y = rnd(-1, 1); z = rnd(-1, 1); } while (x * x + y * y + z * z > 1);
-  const r = WIND_RADIUS * Math.cbrt(Math.random());
-  return new THREE.Vector3(c.x + x * r, c.y + y * r, c.z + z * r);
-}
-
-function updateWindParticles(dt) {
-  if (!storm.active) {
-    windParticles.visible = false;
-    return;
+function spawnFX3D(worldPos, amount, kind = 'collect') {
+  if (!fx3d) return;
+  const spec = FX3D_KINDS[kind];
+  for (let n = 0; n < amount; n++) {
+    const d = fx3dData[fx3dCursor];
+    fx3dCursor = (fx3dCursor + 1) % FX3D_MAX;
+    d.alive = true;
+    d.pos.copy(worldPos);
+    let x, y, z;
+    do { x = rnd(-1, 1); y = rnd(-1, 1); z = rnd(-1, 1); } while (x * x + y * y + z * z > 1 || (x === 0 && y === 0 && z === 0));
+    d.vel.set(x, y, z).normalize().multiplyScalar(rnd(spec.speed[0], spec.speed[1]));
+    d.vel.y += spec.up;
+    d.grav = spec.grav;
+    d.maxLife = d.life = rnd(spec.life[0], spec.life[1]);
+    d.color.setHex(spec.colors[Math.floor(Math.random() * spec.colors.length)]);
   }
-  windParticles.visible = true;
-  windParticles.material.opacity = THREE.MathUtils.lerp(windParticles.material.opacity, 0.55, 0.1);
+}
 
-  const gust = (storm.windForce - 0.6) / 1.8; // renormalise 0..1
-  const dir = new THREE.Vector3(Math.cos(storm.windAngle), -0.15, Math.sin(storm.windAngle)).normalize();
-  const speedScale = 14 + gust * 22; // unités/s de défilement visuel
-
-  const posAttr = windParticles.geometry.attributes.position;
-  const owlPos = owlGroup.position;
-
-  for (let i = 0; i < WIND_PARTICLE_COUNT; i++) {
-    const d = windParticleData[i];
-    d.pos.addScaledVector(dir, speedScale * d.speed * dt);
-
-    if (d.pos.distanceTo(owlPos) > WIND_RADIUS) {
-      d.pos.copy(randomWindPoint(owlPos)).addScaledVector(dir, -WIND_RADIUS * 0.9);
+function updateFX3D(dt) {
+  const pos = fx3d.geometry.attributes.position, col = fx3d.geometry.attributes.color;
+  for (let i = 0; i < FX3D_MAX; i++) {
+    const d = fx3dData[i];
+    if (!d.alive) continue;
+    d.life -= dt;
+    if (d.life <= 0) {
+      d.alive = false;
+      pos.array[i * 3 + 1] = -9999;
+      col.array[i * 3] = col.array[i * 3 + 1] = col.array[i * 3 + 2] = 0;
+      continue;
     }
-
-    const tail = d.pos.clone().addScaledVector(dir, -WIND_STREAK_LEN);
-    const i6 = i * 6;
-    posAttr.array[i6]     = d.pos.x;
-    posAttr.array[i6 + 1] = d.pos.y;
-    posAttr.array[i6 + 2] = d.pos.z;
-    posAttr.array[i6 + 3] = tail.x;
-    posAttr.array[i6 + 4] = tail.y;
-    posAttr.array[i6 + 5] = tail.z;
+    d.vel.y -= d.grav * dt;
+    d.vel.multiplyScalar(Math.max(0, 1 - 1.6 * dt));
+    d.pos.addScaledVector(d.vel, dt);
+    const a = Math.min(1, d.life / (d.maxLife * 0.6)); // fondu : additive + couleur→noir = disparition douce
+    pos.array[i * 3]     = d.pos.x;
+    pos.array[i * 3 + 1] = d.pos.y;
+    pos.array[i * 3 + 2] = d.pos.z;
+    col.array[i * 3]     = d.color.r * a;
+    col.array[i * 3 + 1] = d.color.g * a;
+    col.array[i * 3 + 2] = d.color.b * a;
   }
-  posAttr.needsUpdate = true;
+  pos.needsUpdate = true;
+  col.needsUpdate = true;
+}
+
+// Traînée de boost : sillage lumineux quand le moteur est à fond (ou buff vitesse)
+let trailAccum = 0;
+const _trailTmp = new THREE.Vector3();
+function updateBoostTrail(dt) {
+  if (throttle < 0.75 && buffs.speed <= 0) { trailAccum = 0; return; }
+  trailAccum += dt;
+  while (trailAccum > 0.03) {
+    trailAccum -= 0.03;
+    owlGroup.getWorldDirection(_trailTmp);         // +Z local = l'arrière du hibou
+    _trailTmp.multiplyScalar(1.7).add(owlGroup.position);
+    _trailTmp.x += rnd(-0.35, 0.35); _trailTmp.y += rnd(-0.35, 0.35); _trailTmp.z += rnd(-0.35, 0.35);
+    spawnFX3D(_trailTmp, 1, 'trail');
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  LUCIOLES — nuées scintillantes au ras du sol, recyclées autour du hibou.
+//  La vie est en bas : elles attirent l'œil (et le vol) vers le sol, où les
+//  branches abondent et où le rase-mottes rapporte.
+// ══════════════════════════════════════════════════
+const FIREFLY_COUNT = 240;
+const FIREFLY_RANGE = 170;  // rayon d'ancrage autour du hibou
+let fireflies, fireflyData = [];
+const FIREFLY_COLORS = [new THREE.Color(0x9fff6a), new THREE.Color(0xffe08a), new THREE.Color(0x6affc8)];
+
+// (Ré)ancre une luciole près du hibou — plutôt DEVANT lui — au ras du terrain local.
+// La hauteur du sol est mémorisée à l'ancrage : zéro appel terrain par frame ensuite.
+function anchorFirefly(d) {
+  let ax, az;
+  if (velocity.lengthSq() > 4 && Math.random() < 0.55) {
+    const heading = Math.atan2(velocity.z, velocity.x);
+    const a = heading + rnd(-1.1, 1.1), r = rnd(40, FIREFLY_RANGE);
+    ax = owlGroup.position.x + Math.cos(a) * r;
+    az = owlGroup.position.z + Math.sin(a) * r;
+  } else {
+    const a = rnd(0, Math.PI * 2), r = rnd(15, FIREFLY_RANGE);
+    ax = owlGroup.position.x + Math.cos(a) * r;
+    az = owlGroup.position.z + Math.sin(a) * r;
+  }
+  d.x = ax; d.z = az;
+  d.groundY = effectiveGroundY(ax, az);
+  d.hover = rnd(0.6, 5);
+  d.phase = rnd(0, Math.PI * 2);
+  d.twinkle = rnd(1.5, 4);
+  d.wander = rnd(0.3, 1.1);
+  d.color = FIREFLY_COLORS[Math.floor(Math.random() * FIREFLY_COLORS.length)];
+}
+
+function makeFireflies() {
+  const positions = new Float32Array(FIREFLY_COUNT * 3);
+  const colors = new Float32Array(FIREFLY_COUNT * 3);
+  for (let i = 0; i < FIREFLY_COUNT; i++) {
+    const d = {};
+    anchorFirefly(d);
+    fireflyData.push(d);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mat = new THREE.PointsMaterial({
+    map: glowTexture, size: 1.05, vertexColors: true, transparent: true,
+    blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true
+  });
+  fireflies = new THREE.Points(geo, mat);
+  fireflies.frustumCulled = false;
+  scene.add(fireflies);
+}
+
+function updateFireflies(dt) {
+  const pos = fireflies.geometry.attributes.position, col = fireflies.geometry.attributes.color;
+  const ox = owlGroup.position.x, oz = owlGroup.position.z;
+  for (let i = 0; i < FIREFLY_COUNT; i++) {
+    const d = fireflyData[i];
+    // Recyclage : trop loin derrière → réapparaît devant (nuée « infinie »)
+    const ddx = d.x - ox, ddz = d.z - oz;
+    if (ddx * ddx + ddz * ddz > FIREFLY_RANGE * FIREFLY_RANGE * 1.55) anchorFirefly(d);
+
+    d.phase += dt * d.twinkle;
+    d.x += Math.cos(d.phase * 0.7) * d.wander * dt;
+    d.z += Math.sin(d.phase * 0.9) * d.wander * dt;
+    pos.array[i * 3]     = d.x;
+    pos.array[i * 3 + 1] = d.groundY + d.hover + Math.sin(d.phase) * 0.6;
+    pos.array[i * 3 + 2] = d.z;
+    const a = 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(d.phase * 2.3)); // scintillement individuel
+    col.array[i * 3]     = d.color.r * a;
+    col.array[i * 3 + 1] = d.color.g * a;
+    col.array[i * 3 + 2] = d.color.b * a;
+  }
+  pos.needsUpdate = true;
+  col.needsUpdate = true;
 }
 
 function resize() {
@@ -277,11 +472,20 @@ window.addEventListener('resize', resize);
 //  VOLUME DE JEU (sphère 3D)
 // ══════════════════════════════════════════════════
 const ARENA_CENTER = new THREE.Vector3(0, 35, 0);
-const ARENA_RADIUS_XZ = 140; // largeur x2
-const ARENA_RADIUS_Y  = 105; // hauteur x1.5
-const FLOOR_Y       = 1.5;
-const OWL_COLLIDE_RADIUS = 0.3;
+const ARENA_RADIUS_XZ = 1400; // largeur x5
+const ARENA_RADIUS_Y  = 630;  // hauteur x3
+
+// Brouillard linéaire : depuis que la limite de jeu est une vraie MURAILLE DE
+// MONTAGNES (voir terrainHeight), il n'a plus à cacher un sol interdit — il donne
+// de la profondeur et laisse deviner les crêtes en silhouette au loin.
+scene.fog = new THREE.Fog(0x0c1030, ARENA_RADIUS_XZ * 0.55, ARENA_RADIUS_XZ * 1.6);
+
+let OWL_GROUND_CLEAR = 1.2; // garde au sol : sous (terrain + marge) = crash — recalculé sur le vrai modèle dans setupOwlVisual()
+let OWL_COLLIDE_RADIUS = 0.3; // rayon de collision décor — idem, affiné sur le vrai modèle
 const TREE_HIT_COOLDOWN  = 45;
+// Plafond d'altitude des branches/cadeaux : même proportion qu'avant (130 sur une
+// arène de hauteur 210) rapportée à la nouvelle ARENA_RADIUS_Y (x3).
+const COLLECTIBLE_MAX_Y = ARENA_CENTER.y + ARENA_RADIUS_Y * ((130 - ARENA_CENTER.y) / 210);
 
 // Facteur radial normalisé (ellipsoïde) : 0 au centre, 1 sur la bordure, >1 en dehors.
 function ellipsoidFactor(pos) {
@@ -315,20 +519,327 @@ function updateBoundaryGrid() {
   boundaryGrid.visible = opacity > 0.01;
 }
 
-function randomPointInArena(minY, maxY) {
-  let x, y, z;
-  do {
-    x = rnd(-1, 1); y = rnd(-1, 1); z = rnd(-1, 1);
-  } while (x * x + y * y + z * z > 1);
-  const dir = new THREE.Vector3(x, y, z).normalize();
-  const r = Math.cbrt(Math.random());
-  const p = new THREE.Vector3(
-    ARENA_CENTER.x + dir.x * r * ARENA_RADIUS_XZ,
-    ARENA_CENTER.y + dir.y * r * ARENA_RADIUS_Y,
-    ARENA_CENTER.z + dir.z * r * ARENA_RADIUS_XZ
+// (l'ancien randomPointInArena — tirage uniforme dans tout le volume — a été retiré :
+//  les collectibles apparaissent désormais près du joueur via collectibleSpawnPos.)
+
+// ══════════════════════════════════════════════════
+//  MODÈLES 3D EXTERNES (GLB) — chargés au démarrage, avec repli procédural
+//  si un fichier manque (hors-ligne, 404…). Voir docs/models/CREDITS.md.
+// ══════════════════════════════════════════════════
+const MODEL_URLS = {
+  owl:           'models/barnowl.glb',
+  bear:          'models/bear.glb',
+  moon:          'models/moon.glb',
+  pine1:         'models/pine1.glb',
+  pine2:         'models/pine2.glb',
+  tree1:         'models/tree1.glb',
+  birch:         'models/birch.glb',
+  mountains:     'models/mountains.glb',
+  mountainGroup: 'models/mountain_group.glb',
+  cloud1:        'models/cloud1.glb',
+  cloud2:        'models/cloud2.glb',
+  cloud3:        'models/cloud3.glb'
+};
+const models = {};
+let assetsReady = false;
+
+async function loadAssets() {
+  const loader = new GLTFLoader();
+  const entries = Object.entries(MODEL_URLS);
+  const results = await Promise.allSettled(entries.map(([, url]) => loader.loadAsync(url)));
+  results.forEach((res, i) => {
+    if (res.status === 'fulfilled') models[entries[i][0]] = res.value.scene;
+    else console.warn('Modèle 3D indisponible (repli procédural) :', entries[i][0], res.reason);
+  });
+}
+
+// Enveloppe un modèle dans un Group normalisé : recentré en XZ, posé au sol (ou centré),
+// mis à l'échelle pour atteindre la hauteur/longueur cible, avec lacet optionnel.
+// Le Group extérieur reste « neutre » : l'appelant peut le scaler/tourner librement.
+function normalizeModel(root, { height, length, width, groundAlign = true, yaw = 0 } = {}) {
+  const wrapper = new THREE.Group();
+  const spin = new THREE.Group();
+  const inner = new THREE.Group();
+  spin.rotation.y = yaw;
+  inner.add(root);
+  spin.add(inner);
+  wrapper.add(spin);
+  const box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  let s = 1;
+  if (height) s = height / (size.y || 1);
+  else if (length) s = length / (size.z || 1);
+  else if (width) s = width / (size.x || 1);
+  inner.scale.setScalar(s);
+  inner.position.set(-center.x * s, groundAlign ? -box.min.y * s : -center.y * s, -center.z * s);
+  return wrapper;
+}
+
+// Extrait les couples {géométrie, matériau, matrice locale} d'un modèle pour l'instancing.
+function collectMeshParts(root) {
+  root.updateMatrixWorld(true);
+  const parts = [];
+  root.traverse(o => {
+    if (o.isMesh) parts.push({ geo: o.geometry, mat: o.material, matrix: o.matrixWorld.clone() });
+  });
+  return parts;
+}
+
+// Construit des InstancedMesh à partir d'un modèle et d'une liste de matrices d'instance.
+// frustumCulled=false : les instances sont dispersées sur toute la carte, la sphère
+// englobante de la géométrie seule ferait disparaître des arbres en bord d'écran.
+function makeInstancedFromModel(root, matrices) {
+  const parts = collectMeshParts(root);
+  const group = new THREE.Group();
+  const tmpM = new THREE.Matrix4();
+  for (const part of parts) {
+    const im = new THREE.InstancedMesh(part.geo, part.mat, matrices.length);
+    for (let i = 0; i < matrices.length; i++) {
+      tmpM.multiplyMatrices(matrices[i], part.matrix);
+      im.setMatrixAt(i, tmpM);
+    }
+    im.instanceMatrix.needsUpdate = true;
+    im.frustumCulled = false;
+    im.userData.partMatrix = part.matrix.clone(); // conservé pour les mises à jour dynamiques (nuages)
+    group.add(im);
+  }
+  return group;
+}
+
+// ══════════════════════════════════════════════════
+//  TERRAIN PROCÉDURAL — bruit de valeur fBm + pics gaussiens (montagnes),
+//  lacs sous WATER_Y, forêts par masque de bruit, neige en altitude.
+//  terrainHeight(x,z) est ANALYTIQUE : la même fonction sert au maillage
+//  ET aux collisions/placements — aucun échantillonnage de grille.
+// ══════════════════════════════════════════════════
+const TERRAIN_SIZE = 4500;  // x5 : couvre la nouvelle zone de jeu élargie (ARENA_RADIUS_XZ)
+const TERRAIN_SEGS = 160;
+const WATER_Y      = -3.0;  // niveau des lacs
+const HILL_AMP     = 24;    // amplitude des collines fBm (±) — terrain nettement plus vallonné
+const GROUND_DETAIL_AMP = 5.5; // bosses fines superposées, visibles même loin des montagnes/lacs
+const SNOW_LINE    = 46;    // altitude d'enneigement
+const TREE_LINE    = 38;    // au-dessus : plus d'arbres
+
+// ── Muraille de montagnes : l'arène est cernée d'une vraie chaîne de sommets ──
+// Le terrain se soulève à l'approche du bord et culmine au-delà du mur invisible :
+// la limite de jeu N'EST PLUS une grille abstraite, c'est la montagne elle-même.
+const RING_START = ARENA_RADIUS_XZ * 0.86; // le sol commence à se soulever ici
+const RING_FULL  = ARENA_RADIUS_XZ * 1.18; // altitude de crête atteinte ici
+const RING_BASE  = 240;                    // hauteur minimale de la muraille
+const RING_VAR   = 260;                    // relief supplémentaire des sommets (bruit)
+
+const terrainSeed = Math.random() * 1000;
+
+function hashNoise(ix, iz) {
+  const n = Math.sin(ix * 127.1 + iz * 311.7 + terrainSeed * 17.3) * 43758.5453;
+  return n - Math.floor(n);
+}
+function valueNoise(x, z) {
+  const ix = Math.floor(x), iz = Math.floor(z);
+  const fx = x - ix, fz = z - iz;
+  const sx = fx * fx * (3 - 2 * fx), sz = fz * fz * (3 - 2 * fz);
+  const a = hashNoise(ix, iz),     b = hashNoise(ix + 1, iz);
+  const c = hashNoise(ix, iz + 1), d = hashNoise(ix + 1, iz + 1);
+  return a + (b - a) * sx + (c - a) * sz + (a - b - c + d) * sx * sz;
+}
+function fbm(x, z, octaves = 4) {
+  let sum = 0, amp = 0.5, freq = 1;
+  for (let o = 0; o < octaves; o++) {
+    sum += amp * valueNoise(x * freq, z * freq);
+    amp *= 0.5; freq *= 2.03;
+  }
+  return sum; // ~[0,1]
+}
+
+// Pics montagneux : bosses gaussiennes semées à l'intérieur de l'arène (jamais au centre).
+// Nombre, position, hauteur et rayon tirés au hasard à chaque run — désormais répartis
+// sur TOUTE l'arène élargie (l'ancien semis 90..270 laissait 90 % de la carte plate).
+const mountainPeaks = [];
+{
+  const peakCount = Math.floor(rnd(10, 15));
+  for (let i = 0; i < peakCount; i++) {
+    const angle = (i / peakCount) * Math.PI * 2 + rnd(-0.5, 0.5);
+    const dist = rnd(140, ARENA_RADIUS_XZ * 0.72);
+    mountainPeaks.push({
+      x: Math.cos(angle) * dist,
+      z: Math.sin(angle) * dist,
+      h: rnd(35, 105),
+      r: rnd(55, 165)
+    });
+  }
+}
+
+function terrainHeight(x, z) {
+  // Collines fBm recentrées sur ±HILL_AMP (les creux sous WATER_Y deviennent des lacs)
+  let h = (fbm(x * 0.008, z * 0.008) * 2 - 1) * HILL_AMP;
+  // Relief fin superposé (fréquence plus haute) : bosses au sol même loin des montagnes/lacs
+  h += (fbm(x * 0.035, z * 0.035, 3) * 2 - 1) * GROUND_DETAIL_AMP;
+  // Montagnes gaussiennes
+  for (const p of mountainPeaks) {
+    const dx = x - p.x, dz = z - p.z;
+    h += p.h * Math.exp(-(dx * dx + dz * dz) / (p.r * p.r));
+  }
+  const d = Math.hypot(x, z);
+  // Muraille de montagnes fermant l'arène : cols et sommets variés (bruit basse
+  // fréquence) + arêtes découpées (bruit haute fréquence). Comme terrainHeight est
+  // aussi la fonction de collision, ces pentes sont de VRAIS obstacles.
+  const ringT = THREE.MathUtils.smoothstep(d, RING_START, RING_FULL);
+  if (ringT > 0) {
+    const ridge = fbm(x * 0.0016 + 31.4, z * 0.0016 - 12.9, 3); // grands cols et sommets
+    const crag  = fbm(x * 0.008 - 5.1,  z * 0.008 + 44.2, 3);   // arêtes déchiquetées
+    h += ringT * (RING_BASE + ridge * RING_VAR + crag * 90);
+  }
+  // Zone de départ aplanie (rayon ~25 autour du centre, fondu jusqu'à 80)
+  const flat = THREE.MathUtils.smoothstep(d, 25, 80);
+  return h * flat;
+}
+
+// Sol « effectif » pour les collisions/spawns : le terrain, ou la surface de l'eau.
+function effectiveGroundY(x, z) {
+  return Math.max(terrainHeight(x, z), WATER_Y);
+}
+
+// Masque de forêt : bruit séparé, décalé pour être indépendant du relief.
+function forestDensity(x, z) {
+  return fbm(x * 0.006 + 57.3, z * 0.006 - 91.7, 3);
+}
+
+function makeTerrain() {
+  const geo = new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEGS, TERRAIN_SEGS);
+  geo.rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    pos.setY(i, terrainHeight(pos.getX(i), pos.getZ(i)));
+  }
+  // Non-indexé + couleur PAR FACE = facettes franches, look low-poly assumé.
+  const flat = geo.toNonIndexed();
+  flat.computeVertexNormals();
+  const fpos = flat.attributes.position;
+  const fnorm = flat.attributes.normal;
+  const colors = new Float32Array(fpos.count * 3);
+  const c = new THREE.Color();
+  const grassA = new THREE.Color(0x16321f), grassB = new THREE.Color(0x1e422a);
+  const sand   = new THREE.Color(0x4a4632), bed   = new THREE.Color(0x1c2822);
+  const rock   = new THREE.Color(0x3a3f46), snow  = new THREE.Color(0x9aa4b8);
+  for (let f = 0; f < fpos.count; f += 3) {
+    const hAvg = (fpos.getY(f) + fpos.getY(f + 1) + fpos.getY(f + 2)) / 3;
+    const nY   = (fnorm.getY(f) + fnorm.getY(f + 1) + fnorm.getY(f + 2)) / 3;
+    if (hAvg < WATER_Y - 0.5)       c.copy(bed);
+    else if (hAvg < WATER_Y + 1.2)  c.copy(sand);
+    else if (hAvg > SNOW_LINE)      c.copy(snow);
+    else if (nY < 0.62 || hAvg > TREE_LINE) c.copy(rock);
+    else c.lerpColors(grassA, grassB, valueNoise(fpos.getX(f) * 0.05, fpos.getZ(f) * 0.05));
+    c.multiplyScalar(rnd(0.92, 1.08)); // léger tramage par facette
+    for (let v = 0; v < 3; v++) {
+      colors[(f + v) * 3] = c.r; colors[(f + v) * 3 + 1] = c.g; colors[(f + v) * 3 + 2] = c.b;
+    }
+  }
+  flat.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mesh = new THREE.Mesh(flat, new THREE.MeshStandardMaterial({
+    vertexColors: true, flatShading: true, roughness: 1
+  }));
+  scene.add(mesh);
+
+  // Lacs : un seul plan d'eau sous tout le terrain, visible dans les creux.
+  const water = new THREE.Mesh(
+    new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE),
+    new THREE.MeshStandardMaterial({
+      color: 0x16305a, roughness: 0.15, metalness: 0.25,
+      transparent: true, opacity: 0.92
+    })
   );
-  p.y = THREE.MathUtils.clamp(p.y, minY, maxY);
-  return p;
+  water.rotation.x = -Math.PI / 2;
+  water.position.y = WATER_Y;
+  scene.add(water);
+}
+
+// Chaînes de montagnes GLB plantées SUR la muraille procédurale : elles ajoutent
+// des silhouettes déchiquetées crédibles par-dessus l'anneau de terrain, tout
+// autour de l'arène (purement décoratives — la collision, c'est le terrain).
+function makeMountainScenery() {
+  const protos = [models.mountains, models.mountainGroup].filter(Boolean);
+  if (!protos.length) return; // le terrain a déjà sa muraille, pas de repli nécessaire
+  const matrices = [[], []];
+  const dummy = new THREE.Object3D();
+  const ringCount = 22;
+  for (let i = 0; i < ringCount; i++) {
+    const angle = (i / ringCount) * Math.PI * 2 + rnd(-0.14, 0.14);
+    const dist = rnd(ARENA_RADIUS_XZ * 0.98, ARENA_RADIUS_XZ * 1.3); // à cheval sur la crête
+    const x = Math.cos(angle) * dist, z = Math.sin(angle) * dist;
+    dummy.position.set(x, terrainHeight(x, z) - 18, z); // enraciné dans la pente
+    dummy.rotation.set(0, rnd(0, Math.PI * 2), 0);
+    dummy.scale.setScalar(rnd(1.3, 2.6));
+    dummy.updateMatrix();
+    matrices[i % protos.length].push(dummy.matrix.clone());
+  }
+  protos.forEach((proto, i) => {
+    if (!matrices[i].length) return;
+    const norm = normalizeModel(proto.clone(true), { height: 150, groundAlign: true });
+    scene.add(makeInstancedFromModel(norm, matrices[i]));
+  });
+}
+
+// ══════════════════════════════════════════════════
+//  NUAGES LOW-POLY — instanciés, dérive lente, recyclés en bord de carte.
+// ══════════════════════════════════════════════════
+const CLOUD_COUNT  = 64;                        // couvre l'arène élargie (l'ancien semis ±380 laissait le ciel vide au loin)
+const CLOUD_SPREAD = ARENA_RADIUS_XZ * 0.85;    // zone de semis
+const CLOUD_WRAP   = ARENA_RADIUS_XZ * 0.92;    // bord de recyclage de la dérive
+let cloudSets = []; // { group, data:[{pos, scale, rotY, speed}], parts }
+
+function makeClouds() {
+  const protos = [models.cloud1, models.cloud2, models.cloud3].filter(Boolean);
+  if (!protos.length) return; // pas de repli : les nuages sont purement décoratifs
+  const perType = Math.ceil(CLOUD_COUNT / protos.length);
+  const dummy = new THREE.Object3D();
+  for (const proto of protos) {
+    const norm = normalizeModel(proto.clone(true), { height: 6, groundAlign: false });
+    const data = [];
+    const matrices = [];
+    for (let i = 0; i < perType; i++) {
+      const d = {
+        pos: new THREE.Vector3(rnd(-CLOUD_SPREAD, CLOUD_SPREAD), rnd(95, 240), rnd(-CLOUD_SPREAD, CLOUD_SPREAD)),
+        scale: rnd(2.4, 6.5),
+        rotY: rnd(0, Math.PI * 2),
+        speed: rnd(1.2, 3.2)
+      };
+      data.push(d);
+      dummy.position.copy(d.pos);
+      dummy.rotation.set(0, d.rotY, 0);
+      dummy.scale.setScalar(d.scale);
+      dummy.updateMatrix();
+      matrices.push(dummy.matrix.clone());
+    }
+    const group = makeInstancedFromModel(norm, matrices);
+    scene.add(group);
+    cloudSets.push({ group, data });
+  }
+}
+
+const _cloudDummy = new THREE.Object3D();
+const _cloudTmpM = new THREE.Matrix4();
+function updateClouds(dt) {
+  const windX = storm.active ? Math.cos(storm.windAngle) * storm.windForce * 6 : 1;
+  const windZ = storm.active ? Math.sin(storm.windAngle) * storm.windForce * 6 : 0.3;
+  for (const set of cloudSets) {
+    for (let i = 0; i < set.data.length; i++) {
+      const d = set.data[i];
+      d.pos.x += windX * d.speed * dt;
+      d.pos.z += windZ * d.speed * dt;
+      if (d.pos.x >  CLOUD_WRAP) d.pos.x = -CLOUD_WRAP; if (d.pos.x < -CLOUD_WRAP) d.pos.x = CLOUD_WRAP;
+      if (d.pos.z >  CLOUD_WRAP) d.pos.z = -CLOUD_WRAP; if (d.pos.z < -CLOUD_WRAP) d.pos.z = CLOUD_WRAP;
+      _cloudDummy.position.copy(d.pos);
+      _cloudDummy.rotation.set(0, d.rotY, 0);
+      _cloudDummy.scale.setScalar(d.scale);
+      _cloudDummy.updateMatrix();
+      for (const im of set.group.children) {
+        _cloudTmpM.multiplyMatrices(_cloudDummy.matrix, im.userData.partMatrix);
+        im.setMatrixAt(i, _cloudTmpM);
+      }
+    }
+    for (const im of set.group.children) im.instanceMatrix.needsUpdate = true;
+  }
 }
 
 // ══════════════════════════════════════════════════
@@ -387,10 +898,12 @@ function updateMoonVisual(dt) {
   moonMesh.scale.setScalar(THREE.MathUtils.lerp(1, MOON_FULL_SCALE, t));
   moonMesh.rotation.y += dt * 0.015;
 
-  moonMesh.material.emissive.lerpColors(MOON_COLOR_NORMAL, MOON_COLOR_BLOOD, isBlood ? t : 0);
-  moonMesh.material.emissiveIntensity = THREE.MathUtils.lerp(MOON_BASE_LIGHT, MOON_FULL_LIGHT, t);
+  for (const mat of moonMaterials) {
+    mat.emissive.lerpColors(MOON_COLOR_NORMAL, MOON_COLOR_BLOOD, isBlood ? t : 0);
+    mat.emissiveIntensity = THREE.MathUtils.lerp(MOON_BASE_LIGHT, MOON_FULL_LIGHT, t);
+  }
 
-  moonLight.intensity = THREE.MathUtils.lerp(MOON_BASE_LIGHT, MOON_FULL_LIGHT * 0.6, t);
+  moonLight.intensity = THREE.MathUtils.lerp(MOON_BASE_LIGHT, MOON_FULL_LIGHT, t);
   moonLight.color.lerp(new THREE.Color(isBlood ? 0xff5a5a : 0xccccff), 0.05);
   ambientLight.color.lerp(new THREE.Color(isBlood ? 0xff6666 : 0x8899ff), 0.05);
 }
@@ -458,9 +971,9 @@ function updateStorm(dt) {
 
   // ── Rochers : danger réel de la tempête (calqué sur newRock/updateRocks du jeu 2D) ──
   storm.rockSpawnTimer -= dt;
-  if (storm.rockSpawnTimer <= 0) {
+  if (storm.rockSpawnTimer <= 0 && rocks.length < ROCK_MAX) {
     rocks.push(newRock());
-    storm.rockSpawnTimer = rnd(0.8, 1.3);
+    storm.rockSpawnTimer = rnd(0.35, 0.75); // pluie de cailloux dense autour du joueur
   }
 
   if (!forced) {
@@ -470,31 +983,53 @@ function updateStorm(dt) {
 }
 
 // ══════════════════════════════════════════════════
-//  ROCHERS DE TEMPÊTE — chutent depuis le sommet de l'arène et poussés par le vent ;
-//  au contact du hibou, punition de score (calqué sur le jeu 2D).
+//  ROCHERS DE TEMPÊTE — de VRAIS cailloux low-poly (icosaèdres taillés au bruit,
+//  comme le 🪨 du jeu 2D) qui tombent AUTOUR ET DEVANT le joueur, accélèrent en
+//  chute, sont emportés par le vent et soulèvent la poussière à l'impact.
+//  Au contact du hibou : punition de score + plaqué vers le sol.
 // ══════════════════════════════════════════════════
 let rocks = [];
 const ROCK_RADIUS = 1.1;
-const rockGeo = new THREE.IcosahedronGeometry(1, 0);
-const rockMat = new THREE.MeshStandardMaterial({ color: 0x5b4a3d, roughness: 1, flatShading: true });
+const ROCK_MAX    = 26;
+
+// 4 variantes de géométrie « taillées » une fois pour toutes : sommets perturbés
+// par un bruit fonction de leur POSITION (les sommets partagés bougent ensemble).
+const rockGeos = [];
+for (let vIdx = 0; vIdx < 4; vIdx++) {
+  const g = new THREE.IcosahedronGeometry(1, 1);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const vx = p.getX(i), vy = p.getY(i), vz = p.getZ(i);
+    const n = 0.72 + 0.5 * valueNoise(vx * 2.1 + vIdx * 37.7, vy * 2.3 + vz * 1.7);
+    p.setXYZ(i, vx * n, vy * n * 0.85, vz * n); // légèrement aplati : galet plutôt que boule
+  }
+  g.computeVertexNormals();
+  rockGeos.push(g);
+}
+const rockMats = [
+  new THREE.MeshStandardMaterial({ color: 0x5b544c, roughness: 1, flatShading: true }),
+  new THREE.MeshStandardMaterial({ color: 0x4a423a, roughness: 1, flatShading: true })
+];
 
 function newRock() {
-  const angle = rnd(0, Math.PI * 2);
-  const r = rnd(10, ARENA_RADIUS_XZ * 0.9);
-  const scale = rnd(0.8, 1.6);
-  const mesh = new THREE.Mesh(rockGeo, rockMat);
-  mesh.position.set(
-    ARENA_CENTER.x + Math.cos(angle) * r,
-    ARENA_CENTER.y + ARENA_RADIUS_Y * 0.95,
-    ARENA_CENTER.z + Math.sin(angle) * r
+  // Colonne de chute centrée un peu EN AVANT du hibou (l'ancienne version semait
+  // sur toute l'arène élargie : on ne voyait jamais tomber un seul caillou).
+  const lead = rnd(0.8, 3.2);
+  const x = owlGroup.position.x + velocity.x * lead + rnd(-70, 70);
+  const z = owlGroup.position.z + velocity.z * lead + rnd(-70, 70);
+  const scale = rnd(0.9, 2.3);
+  const mesh = new THREE.Mesh(
+    rockGeos[Math.floor(Math.random() * rockGeos.length)],
+    rockMats[Math.floor(Math.random() * rockMats.length)]
   );
+  mesh.position.set(x, Math.min(ARENA_CENTER.y + ARENA_RADIUS_Y * 0.95, owlGroup.position.y + rnd(55, 110)), z);
   mesh.scale.setScalar(scale);
   mesh.rotation.set(rnd(0, Math.PI * 2), rnd(0, Math.PI * 2), rnd(0, Math.PI * 2));
   scene.add(mesh);
   return {
     mesh, scale,
-    vy: rnd(14, 20),
-    rotSpeed: new THREE.Vector3(rnd(-2, 2), rnd(-2, 2), rnd(-2, 2))
+    vy: rnd(16, 24),
+    rotSpeed: new THREE.Vector3(rnd(-2.5, 2.5), rnd(-2.5, 2.5), rnd(-2.5, 2.5))
   };
 }
 function removeRock(i) {
@@ -504,163 +1039,129 @@ function removeRock(i) {
 function updateRocks(dt) {
   for (let i = rocks.length - 1; i >= 0; i--) {
     const rk = rocks[i];
+    rk.vy = Math.min(rk.vy + 14 * dt, 46); // la chute accélère (jusqu'à une vitesse terminale)
     rk.mesh.position.y -= rk.vy * dt;
     if (storm.active) {
-      rk.mesh.position.x += Math.cos(storm.windAngle) * storm.windForce * 0.5 * dt;
-      rk.mesh.position.z += Math.sin(storm.windAngle) * storm.windForce * 0.5 * dt;
+      rk.mesh.position.x += Math.cos(storm.windAngle) * storm.windForce * 3.5 * dt;
+      rk.mesh.position.z += Math.sin(storm.windAngle) * storm.windForce * 3.5 * dt;
     }
     rk.mesh.rotation.x += rk.rotSpeed.x * dt;
     rk.mesh.rotation.y += rk.rotSpeed.y * dt;
     rk.mesh.rotation.z += rk.rotSpeed.z * dt;
 
-    if (rk.mesh.position.y < ARENA_CENTER.y - ARENA_RADIUS_Y * 1.1) { removeRock(i); continue; }
+    // Impact au sol : gerbe de poussière (+ secousse si proche), puis disparition
+    if (rk.mesh.position.y - rk.scale * 0.4 < effectiveGroundY(rk.mesh.position.x, rk.mesh.position.z)) {
+      spawnFX3D(rk.mesh.position, 8 + Math.floor(rk.scale * 4), 'dust');
+      if (rk.mesh.position.distanceTo(owlGroup.position) < 40) screenShake = Math.max(screenShake, 5);
+      removeRock(i);
+      continue;
+    }
 
     if (rockInvul <= 0 && buffs.invincible <= 0 &&
         owlGroup.position.distanceTo(rk.mesh.position) < (ROCK_RADIUS * rk.scale + OWL_COLLIDE_RADIUS + 0.6)) {
       score = Math.max(0, score - 20);
       rockInvul = 0.35;
+      velocity.y -= 7; // le choc rabat le hibou vers le sol
       screenShake = Math.max(screenShake, 12);
       hitFlash    = Math.max(hitFlash, 0.4);
       spawnFX(rk.mesh.position, 10, 'death', '-20');
+      spawnFX3D(rk.mesh.position, 12, 'burst');
       removeRock(i);
     }
   }
 }
 
 // ══════════════════════════════════════════════════
-//  ARBRES PROCÉDURAUX (InstancedMesh) — feuillage multi-volumes pour silhouette naturelle
+//  FORÊTS — modèles GLB instanciés (pins, bouleau, feuillu), placés sur le terrain
+//  par masque de bruit : denses dans les vallées, absents au-dessus de TREE_LINE,
+//  jamais dans les lacs ni sur les pentes raides. Repli : cône+cylindre procédural.
 // ══════════════════════════════════════════════════
 let treeColliders = [];
-function makeTrees() {
-  const palettes = [
-    { trunk: 0x6b4d38, leaf: [0x2a7a3e, 0x36994e, 0x48b563] },
-    { trunk: 0x5a4230, leaf: [0x2f6a30, 0x3d8542, 0x4faa4d] },
-    { trunk: 0x63432c, leaf: [0x397048, 0x459858, 0x57b56a] }
-  ];
-  const count = 600; // densité adaptée à l'arène agrandie
-  treeColliders = [];
-  // Pas de "vertexColors: true" ici : sur un InstancedMesh, la couleur par instance
-  // (setColorAt/instanceColor) est automatiquement prise en compte par three.js.
-  // Activer vertexColors en plus déclenche la lecture d'un attribut de couleur PAR SOMMET
-  // qui n'existe pas sur ces géométries ; cet attribut manquant vaut 0 et multipliait donc
-  // la couleur finale par zéro — c'est ce qui rendait tronc/feuillage/calotte tout noirs.
-  const trunkMat  = new THREE.MeshStandardMaterial({ roughness: 1 });
-  const leafMat   = new THREE.MeshStandardMaterial({ roughness: 1 });
-  const leaf2Mat  = new THREE.MeshStandardMaterial({ roughness: 1 });
-  const capMat    = new THREE.MeshStandardMaterial({ roughness: 1 });
+const TREE_COUNT  = 3000;                        // forêt étendue à TOUTE l'arène (avant : rayon 340 seulement)
+const TREE_SPREAD = ARENA_RADIUS_XZ * 0.84;      // s'arrête avant les pentes de la muraille
 
-  // Tronc : légèrement tronconique et irrégulier (segments radiaux réduits pour rester léger).
-  const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.22, 0.4, 1, 6), trunkMat, count);
-  // Feuillage principal : cône dominant, présent sur tous les arbres.
-  const leaves = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 7), leafMat, count);
-  // Feuillage secondaire : second cône plus petit, décalé en XZ/Y, cassant la symétrie (≈65% des arbres).
-  const leaves2 = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 6), leaf2Mat, count);
-  // Calotte sommitale : sphère aplatie qui arrondit la pointe du cône (≈55% des arbres).
-  const cap = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 7, 5), capMat, count);
+// Repli si un modèle d'arbre manque : silhouette cône+cylindre équivalente.
+function makeFallbackTree(leafHex, trunkHex) {
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.22, 0.4, 3, 6),
+    new THREE.MeshStandardMaterial({ color: trunkHex, roughness: 1 })
+  );
+  trunk.position.y = 1.5;
+  const leaf = new THREE.Mesh(
+    new THREE.ConeGeometry(2, 5.5, 7),
+    new THREE.MeshStandardMaterial({ color: leafHex, roughness: 1 })
+  );
+  leaf.position.y = 5.5;
+  g.add(trunk, leaf);
+  return g;
+}
+
+function makeTrees() {
+  treeColliders = [];
+  // Types d'arbres : proto normalisé (hauteur ~9) + gabarit de collision relatif (0..1 de la hauteur).
+  const types = [
+    { proto: models.pine1, weight: 0.38, fallback: () => makeFallbackTree(0x1a3a17, 0x47301c) },
+    { proto: models.pine2, weight: 0.30, fallback: () => makeFallbackTree(0x16331a, 0x3f2b19) },
+    { proto: models.birch, weight: 0.20, fallback: () => makeFallbackTree(0x22421c, 0x8a8a80) },
+    { proto: models.tree1, weight: 0.12, fallback: () => makeFallbackTree(0x21421b, 0x4d331e) }
+  ].map(t => {
+    const src = t.proto ? t.proto.clone(true) : t.fallback();
+    const norm = normalizeModel(src, { height: 9, groundAlign: true });
+    // Gabarit de collision estimé depuis la boîte englobante du modèle normalisé.
+    const box = new THREE.Box3().setFromObject(norm);
+    const radiusXZ = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) / 2;
+    return {
+      norm,
+      matrices: [],
+      colliderProto: { trunkR: Math.max(0.28, radiusXZ * 0.14), leafR: radiusXZ * 0.72, leafBaseFrac: 0.22, height: 9 }
+    };
+  });
 
   const dummy = new THREE.Object3D();
-  const color = new THREE.Color();
-
-  for (let i = 0; i < count; i++) {
+  let placed = 0, attempts = 0;
+  while (placed < TREE_COUNT && attempts < TREE_COUNT * 20) {
+    attempts++;
     const angle = rnd(0, Math.PI * 2);
-    const r = rnd(15, 170);
+    const r = Math.sqrt(Math.random()) * TREE_SPREAD; // aire uniforme sur toute l'arène jouable
     const x = Math.cos(angle) * r, z = Math.sin(angle) * r;
-    const trunkH = rnd(4, 10);
-    const pal = palettes[i % 3];
+    if (r < 14) continue;                                    // clairière de départ
+    const h = terrainHeight(x, z);
+    if (h < WATER_Y + 0.8) continue;                         // pas d'arbres dans les lacs
+    if (h > TREE_LINE) continue;                             // au-dessus : roche/neige
+    const slope = Math.abs(terrainHeight(x + 2, z) - h) + Math.abs(terrainHeight(x, z + 2) - h);
+    if (slope > 2.2) continue;                               // pentes raides : pas de forêt
+    const nearShore = h < WATER_Y + 5; // berge : rive d'un lac, quelques mètres au-dessus de l'eau
+    if (!nearShore && forestDensity(x, z) < 0.42 && Math.random() > 0.15) continue; // masque de forêt (15% d'isolés), sauf en bordure de lac
 
-    // ── Tronc : inclinaison discrète + assombrissement aléatoire de teinte ──
-    const tiltX = rnd(-0.08, 0.08), tiltZ = rnd(-0.08, 0.08);
-    dummy.position.set(x, trunkH / 2, z);
-    dummy.rotation.set(tiltX, rnd(0, Math.PI * 2), tiltZ);
-    dummy.scale.set(rnd(0.85, 1.15), trunkH, rnd(0.85, 1.15));
-    dummy.updateMatrix();
-    trunks.setMatrixAt(i, dummy.matrix);
-    trunks.setColorAt(i, color.setHex(pal.trunk).multiplyScalar(rnd(0.75, 1.1)));
+    // Tirage pondéré du type
+    let pick = Math.random(), ti = 0;
+    const weights = [0.38, 0.30, 0.20, 0.12];
+    for (let i = 0; i < weights.length; i++) { pick -= weights[i]; if (pick <= 0) { ti = i; break; } }
+    const type = types[ti];
 
-    // ── Feuillage principal (cône) ──
-    const leafH = trunkH * 1.4, leafR = rnd(1.5, 2.6);
-    const leafBaseY = trunkH; // base du cône principal = sommet du tronc
-    const mainOffX = rnd(-0.15, 0.15), mainOffZ = rnd(-0.15, 0.15);
-    dummy.position.set(x + mainOffX, leafBaseY + leafH * 0.45, z + mainOffZ);
+    const s = rnd(0.7, 1.5);
+    dummy.position.set(x, h - 0.15, z); // très légèrement enterré pour épouser la pente
     dummy.rotation.set(0, rnd(0, Math.PI * 2), 0);
-    dummy.scale.set(leafR * rnd(0.9, 1.1), leafH * rnd(0.92, 1.08), leafR * rnd(0.9, 1.1));
+    dummy.scale.setScalar(s);
     dummy.updateMatrix();
-    leaves.setMatrixAt(i, dummy.matrix);
-    leaves.setColorAt(i, color.setHex(pal.leaf[Math.floor(Math.random() * 3)]));
+    type.matrices.push(dummy.matrix.clone());
 
-    // Étendue verticale/radiale réelle du volume principal (pour la collision).
-    let envTop = leafBaseY + leafH;               // pointe du cône principal
-    let envBase = leafBaseY;                        // base du cône principal
-    let envR = leafR + Math.max(Math.abs(mainOffX), Math.abs(mainOffZ));
-
-    // ── Feuillage secondaire : petit cône excentré, ~65% des arbres ──
-    const hasSecondary = Math.random() < 0.65;
-    if (hasSecondary) {
-      const leaf2R = leafR * rnd(0.45, 0.7);
-      const leaf2H = leafH * rnd(0.55, 0.8);
-      const secAngle = rnd(0, Math.PI * 2);
-      const secDist = leafR * rnd(0.35, 0.6);
-      const secOffX = Math.cos(secAngle) * secDist, secOffZ = Math.sin(secAngle) * secDist;
-      const secBaseY = leafBaseY + rnd(-leafH * 0.15, leafH * 0.1);
-      dummy.position.set(x + secOffX, secBaseY + leaf2H * 0.45, z + secOffZ);
-      dummy.rotation.set(0, rnd(0, Math.PI * 2), 0);
-      dummy.scale.set(leaf2R, leaf2H, leaf2R);
-      dummy.updateMatrix();
-      leaves2.setMatrixAt(i, dummy.matrix);
-      leaves2.setColorAt(i, color.setHex(pal.leaf[Math.floor(Math.random() * 3)]).multiplyScalar(rnd(0.9, 1.05)));
-
-      envTop  = Math.max(envTop, secBaseY + leaf2H);
-      envBase = Math.min(envBase, secBaseY);
-      envR    = Math.max(envR, leaf2R + Math.hypot(secOffX, secOffZ));
-    } else {
-      dummy.position.set(x, leafBaseY, z);
-      dummy.scale.set(0, 0, 0);
-      dummy.updateMatrix();
-      leaves2.setMatrixAt(i, dummy.matrix);
-      leaves2.setColorAt(i, color.setHex(0x000000));
-    }
-
-    // ── Calotte sommitale : arrondit la pointe du cône, ~55% des arbres ──
-    const hasCap = Math.random() < 0.55;
-    if (hasCap) {
-      const capR = leafR * rnd(0.32, 0.48);
-      const capY = leafBaseY + leafH * rnd(0.75, 0.95);
-      const capOffX = rnd(-leafR * 0.2, leafR * 0.2), capOffZ = rnd(-leafR * 0.2, leafR * 0.2);
-      dummy.position.set(x + capOffX, capY, z + capOffZ);
-      dummy.rotation.set(0, rnd(0, Math.PI * 2), 0);
-      dummy.scale.set(capR, capR * rnd(0.7, 0.9), capR);
-      dummy.updateMatrix();
-      cap.setMatrixAt(i, dummy.matrix);
-      cap.setColorAt(i, color.setHex(pal.leaf[Math.floor(Math.random() * 3)]).multiplyScalar(rnd(1.0, 1.15)));
-
-      envTop = Math.max(envTop, capY + capR * rnd(0.7, 0.9));
-      envR   = Math.max(envR, capR + Math.hypot(capOffX, capOffZ));
-    } else {
-      dummy.position.set(x, leafBaseY, z);
-      dummy.scale.set(0, 0, 0);
-      dummy.updateMatrix();
-      cap.setMatrixAt(i, dummy.matrix);
-      cap.setColorAt(i, color.setHex(0x000000));
-    }
-
-    // Collision : englobe la silhouette RÉELLE (cône principal + secondaire + calotte).
+    const cp = type.colliderProto;
     treeColliders.push({
       x, z,
-      trunkR: 0.32,
-      leafBase: envBase - leafH * 0.05,
-      leafTop: envTop,
-      leafR: envR
+      trunkR: cp.trunkR * s,
+      leafBase: h + cp.height * cp.leafBaseFrac * s,
+      leafTop:  h + cp.height * s,
+      leafR: cp.leafR * s,
+      groundY: h
     });
+    placed++;
   }
-  trunks.instanceMatrix.needsUpdate = true;
-  leaves.instanceMatrix.needsUpdate = true;
-  leaves2.instanceMatrix.needsUpdate = true;
-  cap.instanceMatrix.needsUpdate = true;
-  if (trunks.instanceColor) trunks.instanceColor.needsUpdate = true;
-  if (leaves.instanceColor) leaves.instanceColor.needsUpdate = true;
-  if (leaves2.instanceColor) leaves2.instanceColor.needsUpdate = true;
-  if (cap.instanceColor) cap.instanceColor.needsUpdate = true;
-  scene.add(trunks, leaves, leaves2, cap);
+
+  for (const type of types) {
+    if (type.matrices.length) scene.add(makeInstancedFromModel(type.norm, type.matrices));
+  }
 }
 
 // ══════════════════════════════════════════════════
@@ -713,10 +1214,39 @@ function buildOwl() {
   return { group: g, wings, body };
 }
 
-const owl = buildOwl();
-const owlGroup = owl.group;
+// owlGroup existe dès le boot (la caméra y est attachée) ; le visuel — modèle GLB
+// ou repli procédural — y est ajouté par setupOwlVisual() une fois les assets chargés.
+const owlGroup = new THREE.Group();
 owlGroup.visible = false;
 scene.add(owlGroup);
+
+// Lacet appliqué au modèle GLB pour aligner sa face sur l'avant du jeu (-Z).
+// barnowl.glb regarde vers +Z → demi-tour. Ajuster ici si le modèle change.
+const OWL_MODEL_YAW = Math.PI;
+let owl = { wings: null, body: null, bob: null }; // rempli par setupOwlVisual
+
+function setupOwlVisual() {
+  if (models.owl) {
+    // Normalisation par l'envergure (X) plutôt que la profondeur (Z) : ce modèle a les
+    // ailes largement déployées, une normalisation par longueur le rendrait démesuré.
+    const norm = normalizeModel(models.owl, { width: 2.6, groundAlign: false, yaw: OWL_MODEL_YAW });
+    norm.rotation.x = -0.25; // légère assiette piquée : posture de vol plutôt que perché
+    owlGroup.add(norm);
+    owl = { wings: null, body: null, bob: norm };
+
+    // Gabarit de collision dérivé de la boîte englobante réelle du modèle (et non de son
+    // envergure, qui inclut les ailes déployées) : le corps qui touche vraiment le décor
+    // est bien plus étroit/bas que les 2.6 de large utilisés pour la normalisation visuelle.
+    const box = new THREE.Box3().setFromObject(norm);
+    const size = box.getSize(new THREE.Vector3());
+    OWL_GROUND_CLEAR   = size.y / 2 + 0.15;
+    OWL_COLLIDE_RADIUS = Math.min(size.y, size.z) / 2;
+  } else {
+    const built = buildOwl();
+    owlGroup.add(built.group);
+    owl = { wings: built.wings, body: built.body, bob: built.group };
+  }
+}
 
 // Caméra rigidement attachée au hibou : elle hérite de TOUTE son orientation (roulis inclus).
 const CAMERA_LOCAL_OFFSET = new THREE.Vector3(0, 2, 6.5);
@@ -748,7 +1278,12 @@ function updateCameraClip() {
   for (let i = 1; i <= CAMERA_CLIP_SAMPLES; i++) {
     const t = (i / CAMERA_CLIP_SAMPLES) * maxDist;
     camClipPoint.copy(owlGroup.position).addScaledVector(camClipDir, t);
-    if (pointInsideAnyTree(camClipPoint)) { safeDist = Math.max(CAMERA_MIN_DIST, t - 0.5); break; }
+    // La caméra ne doit traverser ni le feuillage ni le relief du terrain
+    if (pointInsideAnyTree(camClipPoint) ||
+        camClipPoint.y < effectiveGroundY(camClipPoint.x, camClipPoint.z) + 0.4) {
+      safeDist = Math.max(CAMERA_MIN_DIST, t - 0.5);
+      break;
+    }
   }
   camera.position.copy(CAMERA_LOCAL_OFFSET).setLength(safeDist);
 }
@@ -759,10 +1294,17 @@ function updateFlap(dt, speedRatio) {
   const rate = 5 + 14 * speedRatio;
   flapPhase += rate * dt;
   const s = Math.sin(flapPhase);
-  const angle = -0.2 + s * amp;
-  owl.wings[0].rotation.z = -angle;
-  owl.wings[1].rotation.z = angle;
-  owl.body.position.y = Math.sin(flapPhase * 0.5) * 0.05;
+  if (owl.wings) {
+    // Repli procédural : vraies ailes articulées
+    const angle = -0.2 + s * amp;
+    owl.wings[0].rotation.z = -angle;
+    owl.wings[1].rotation.z = angle;
+    owl.body.position.y = Math.sin(flapPhase * 0.5) * 0.05;
+  } else if (owl.bob) {
+    // Modèle GLB statique : ondulation de vol (bob vertical + léger roulis)
+    owl.bob.position.y = Math.sin(flapPhase * 0.5) * 0.12;
+    owl.bob.rotation.z = s * 0.06 * (0.4 + 0.6 * speedRatio);
+  }
 }
 
 // ══════════════════════════════════════════════════
@@ -938,28 +1480,78 @@ document.addEventListener('pointerlockchange', () => {
   }
 });
 
-// Vitesses angulaires (rad/s) et sensibilité souris — ajustables en polish
-const YAW_RATE   = THREE.MathUtils.degToRad(60);
-const PITCH_RATE = THREE.MathUtils.degToRad(50);
-const ROLL_RATE  = THREE.MathUtils.degToRad(90);
-const MOUSE_MAX_DELTA  = 0.05;
+// ══════════════════════════════════════════════════
+//  MÉCANIQUE DU VOL — modèle aérodynamique
+//  Le hibou n'est plus « poussé tout droit » : on intègre un vrai VECTEUR
+//  VITESSE soumis à quatre forces (poussée, portance, traînée, pesanteur),
+//  avec incidence/décrochage et inertie de rotation. Les virages, montées,
+//  piqués et décrochages émergent de la physique, pas de règles ad hoc.
+// ══════════════════════════════════════════════════
 
-const THRUST_ACCEL  = 18;
-const BRAKE_DECEL   = 24;
-const MAX_SPEED     = 28;
-const CRUISE_SPEED  = 20;  // vitesse atteinte puis maintenue sur simple appui de ⚡ (pas besoin de rester appuyé)
-const GRAVITY_ACCEL = 14;  // bonus de vitesse (unités/s) en piqué complet, retiré en montée complète
-let speed = 0;
-let throttleTarget = 0;   // consigne de vitesse "moteur", changée seulement par un appui sur ⚡/✋
-let prevThrustHeld = false, prevBrakeHeld = false;
-const _tmpFwd = new THREE.Vector3(); // évite une allocation par frame dans updateFlight
+// Vitesses angulaires maximales commandées (rad/s) — la « barre », pas l'inertie.
+// Les 3 axes sont des commandes en VITESSE : aucun ne revient au neutre tout seul
+// quand on relâche — comme un vrai avion, il faut contre-braquer pour revenir à plat.
+const YAW_RATE   = THREE.MathUtils.degToRad(70);
+const PITCH_RATE = THREE.MathUtils.degToRad(55);
+const ROLL_RATE  = THREE.MathUtils.degToRad(200); // roulis vif, façon chasse
+const MOUSE_MAX_DELTA = 0.05;
+
+// — Moteur —
+const THRUST_ACCEL    = 28;   // poussée max (u/s²) le long du nez, rapportée à OWL_MASS
+const MAX_SPEED       = 34;   // repère HUD + amplitude du battement d'ailes
+const CRUISE_THROTTLE = 0.6;  // consigne fixée d'un simple appui sur ⚡ (0..1)
+const BRAKE_RATE      = 0.55; // baisse de la consigne (throttle/s) tant que Shift/✋ est tenu — décélération PROGRESSIVE
+const BRAKE_DRAG      = 0.9;  // traînée supplémentaire d'aérofrein pendant le freinage
+
+// — Masse & aérodynamique —
+// Toutes les forces ci-dessous sont calculées en newtons puis converties en
+// accélération par a = ΣF / OWL_MASS (2ᵉ loi de Newton, voir updateFlight §7).
+// Seule la pesanteur fait exception : son accélération ne dépend PAS de la masse
+// (un corps lourd et un corps léger tombent à la même vitesse) — c'est le POIDS
+// (P = OWL_MASS · GRAVITY) qui, lui, dépend de la masse.
+const OWL_MASS     = 1.6;     // kg — masse de référence du hibou
+const GRAVITY      = 9.8;     // pesanteur réelle (u/s²)
+const AIR_LIFT     = 0.05;    // portance dynamique de l'aile  ∝ v²·CL
+const AIR_DRAG     = 0.02;    // traînée parasite ∝ v² — cale la vitesse de croisière ~MAX_SPEED
+const INDUCED_DRAG = 0.03;    // traînée induite (prix de l'incidence/des virages) ∝ CL²·v
+const FLAP_LIFT    = 13;      // portance de battement d'ailes (basse vitesse, ∝ poussée)
+const FLAP_FADE    = 17;      // vitesse air au-delà de laquelle le battement ne porte plus
+const SIDE_GRIP    = 0.6;     // léger amortissement du dérapage latéral (ne doit pas tuer le virage)
+const STALL_AOA    = THREE.MathUtils.degToRad(18); // incidence critique de décrochage
+const CL_MAX       = 1.5;     // portance dynamique max juste avant le décrochage
+const CTRL_MIN_SPEED  = 7;    // sous cette vitesse air : gouvernes molles (autorité réduite)
+const CTRL_FULL_SPEED = 18;   // au-dessus : pleine autorité des gouvernes
+const ANG_RESPONSE = 7;       // inertie de rotation (vitesse de convergence vers la consigne)
+const WIND_ACCEL   = 3.1;     // conversion windForce (tempête) -> accélération : le vent SECOUE vraiment le hibou
+
+// — Décrochage en cloche : une chandelle verticale n'est plus tenable indéfiniment —
+// La poussée s'essouffle nez au zénith, la vitesse s'évanouit, l'aile lâche : abattée.
+const STALL_SPEED   = 9.5;   // vitesse air sous laquelle une montée cabrée décroche
+const STALL_RECOVER = 13;    // vitesse à retrouver (nez baissé) pour raccrocher l'aile
+let stallMode = false, stallTimer = 0;
+
+let speed = 0;                // module du vecteur vitesse (flap + HUD)
+let throttle = 0;             // consigne moteur 0..1 (⚡ = CRUISE_THROTTLE, ✋ = 0)
+let prevThrustHeld = false;
+const velocity = new THREE.Vector3();  // vecteur vitesse dans le repère monde
+const angRate  = new THREE.Vector3();  // vitesses angulaires courantes (x=tangage, y=lacet, z=roulis) rad/s
+
+// État de vol exposé au HUD (instruments)
+const flight = { aoa: 0, stall: false, climb: 0, throttle: 0 };
+
+// Vecteurs temporaires — zéro allocation par frame dans updateFlight
+const _fwd = new THREE.Vector3(), _up = new THREE.Vector3(), _right = new THREE.Vector3();
+const _acc = new THREE.Vector3(), _tmp = new THREE.Vector3(), _tgtAng = new THREE.Vector3();
+const _dir = new THREE.Vector3();
+const _UP_AXIS = new THREE.Vector3(0, 1, 0); // verticale monde (virage coordonné)
 
 function updateFlight(dt) {
+  // ── 1. Lecture des commandes ──────────────────────────────────────────
   let yawIn   = (keys['q'] || keys['arrowleft']  ? 1 : 0) - (keys['d'] || keys['arrowright'] ? 1 : 0);
   let pitchIn = (keys['s'] || keys['arrowdown']  ? 1 : 0) - (keys['z'] || keys['arrowup']    ? 1 : 0);
   let rollIn  = (keys['a'] ? 1 : 0) - (keys['e'] ? 1 : 0);
 
-  // Joystick tactile (mobile) : contrôle proportionnel du tangage/roulis, pas de lacet.
+  // Joystick tactile (mobile) : tangage/roulis proportionnels, pas de lacet.
   if (isMobile) {
     yawIn = 0;
     if (joystick.active) {
@@ -968,66 +1560,179 @@ function updateFlight(dt) {
     }
   }
 
-  let yawDelta   = yawIn * YAW_RATE * dt;
-  let pitchDelta = pitchIn * PITCH_RATE * dt;
-  const rollDelta = rollIn * ROLL_RATE * dt;
-
   const mouseSens = MOUSE_SENS_BASE * (mouseSensitivity / 0.5);
   const mdx = THREE.MathUtils.clamp(-mouseDX * mouseSens, -MOUSE_MAX_DELTA, MOUSE_MAX_DELTA);
   const mdy = THREE.MathUtils.clamp(-mouseDY * mouseSens, -MOUSE_MAX_DELTA, MOUSE_MAX_DELTA);
-  yawDelta   += mdx;
-  pitchDelta += mdy;
   mouseDX = 0; mouseDY = 0;
 
-  owlGroup.rotateY(yawDelta);
-  owlGroup.rotateX(pitchDelta);
-  owlGroup.rotateZ(rollDelta);
+  // ── 2. Dynamique de rotation : inertie + autorité selon la vitesse air ──
+  // Gouvernes molles à basse vitesse (un aéronef lent ne répond plus).
+  let authority = THREE.MathUtils.clamp(
+    (speed - CTRL_MIN_SPEED) / (CTRL_FULL_SPEED - CTRL_MIN_SPEED), 0.2, 1);
+  if (stallMode) authority *= 0.3; // aile décrochée : les gouvernes ne mordent presque plus
 
-  const speedBoost = buffs.speed > 0 ? 1.5 : 1;
-  const effMaxSpeed = MAX_SPEED * speedBoost;
-  const effAccel    = THRUST_ACCEL * speedBoost;
+  // Tangage, lacet & roulis : commande en VITESSE angulaire, avec inertie (le hibou
+  // n'est plus une girouette instantanée — il faut « emmancher » la rotation).
+  // Aucun axe ne « recentre » automatiquement quand on relâche : l'inclinaison
+  // tenue reste tenue, il faut contre-braquer pour revenir à plat, comme un vrai avion.
+  _tgtAng.set(pitchIn * PITCH_RATE, yawIn * YAW_RATE, rollIn * ROLL_RATE).multiplyScalar(authority);
+  const kAng = 1 - Math.exp(-ANG_RESPONSE * dt); // lissage exponentiel, stable quel que soit dt
+  angRate.lerp(_tgtAng, kAng);
+  owlGroup.rotateX(angRate.x * dt);
+  owlGroup.rotateY(angRate.y * dt);
+  owlGroup.rotateZ(angRate.z * dt);
+  owlGroup.rotateY(mdx); // souris = pilotage fin, appliqué directement (crisp)
+  owlGroup.rotateX(-mdy); // tangage inversé : souris vers le bas = cabrer, comme un manche
 
-  // Consigne de vitesse "moteur" : un simple appui (front montant) sur ⚡ ou ✋ la fixe,
-  // pas besoin de rester appuyé — elle ne change que sur un nouvel appui.
+  // ── 3. Repère local du hibou (nez / haut / droite) ──
+  const q = owlGroup.quaternion;
+  _fwd.set(0, 0, -1).applyQuaternion(q);
+  _up.set(0, 1, 0).applyQuaternion(q);
+  _right.set(1, 0, 0).applyQuaternion(q);
+  const curBank = Math.asin(THREE.MathUtils.clamp(_right.y, -1, 1)); // inclinaison réelle, lue depuis l'orientation
+
+  // ── 4. Poussée moteur : ⚡ fixe la consigne, Shift/✋ la réduit PROGRESSIVEMENT ──
+  // (l'ancien frein Ctrl coupait la consigne à zéro d'un coup : on décélère désormais en douceur)
   const thrustHeld = keys[' '] || touchThrust;
-  const brakeHeld  = keys['control'] || touchBrake;
-  if (thrustHeld && !prevThrustHeld) throttleTarget = CRUISE_SPEED;
-  if (brakeHeld  && !prevBrakeHeld)  throttleTarget = 0;
+  const brakeHeld  = keys['shift'] || touchBrake;
+  if (thrustHeld && !prevThrustHeld) throttle = Math.max(throttle, CRUISE_THROTTLE);
+  if (thrustHeld) throttle = Math.min(1, throttle + 0.8 * dt);
+  if (brakeHeld)  throttle = Math.max(0, throttle - BRAKE_RATE * dt);
   prevThrustHeld = thrustHeld;
-  prevBrakeHeld  = brakeHeld;
 
-  // Gravité : piquer (nez vers le bas) relève la vitesse effective visée au-dessus de la
-  // consigne moteur (donc on accélère en piqué) ; grimper l'abaisse. À plat, elle revient
-  // exactement à la consigne moteur, qui reste alors constante comme demandé.
-  const fwdDir = _tmpFwd.set(0, 0, -1).applyQuaternion(owlGroup.quaternion);
-  const diveFactor = THREE.MathUtils.clamp(-fwdDir.y, -1, 1);
-  const effTarget = THREE.MathUtils.clamp(throttleTarget * speedBoost + diveFactor * GRAVITY_ACCEL, 0, effMaxSpeed);
+  const speedBoost = buffs.speed > 0 ? 1.4 : 1;
+  // La poussée s'essouffle quand le nez pointe vers le zénith : un hibou n'est pas
+  // une fusée — c'est ce qui rend la chandelle intenable et amène le décrochage.
+  const climbFade = 1 - 0.85 * THREE.MathUtils.smoothstep(_fwd.y, 0.35, 0.9);
+  const thrust = throttle * THRUST_ACCEL * speedBoost * climbFade;
 
-  if (speed < effTarget) speed = Math.min(effTarget, speed + effAccel * dt);
-  else                    speed = Math.max(effTarget, speed - BRAKE_DECEL * dt);
+  // ── 5. Vitesse air & incidence (angle d'attaque) ──
+  const v      = velocity.length();
+  const vUp    = velocity.dot(_up);
+  const vFwd   = velocity.dot(_fwd);
+  const vRight = velocity.dot(_right);
+  // Incidence : angle entre la trajectoire et l'axe du nez, dans le plan de tangage.
+  // >0 = le hibou « cabre » (nez au-dessus du flux) → génère de la portance.
+  const aoa = v > 0.6 ? Math.atan2(-vUp, Math.abs(vFwd) + 1e-3) : 0;
 
-  owlGroup.translateZ(-speed * dt);
-
-  // Poussée du vent de tempête : déplacement additionnel indépendant de l'orientation
-  // du hibou, sur le plan horizontal XZ + légère composante verticale, AVANT le clamp
-  // pour que le vent ne puisse jamais éjecter le hibou hors de l'arène.
-  if (storm.active) {
-    const WIND_PUSH_SCALE = 0.6; // conversion windForce -> unités de monde/s
-    const push = storm.windForce * WIND_PUSH_SCALE * dt;
-    owlGroup.position.x += Math.cos(storm.windAngle) * push;
-    owlGroup.position.z += Math.sin(storm.windAngle) * push;
-    owlGroup.position.y += Math.sin(storm.gustPhase * 0.5) * push * 0.25; // turbulence verticale légère
+  // ── 6. Coefficient de portance : linéaire avec l'incidence, puis effondrement ──
+  const absAoa = Math.abs(aoa);
+  const stalling = absAoa > STALL_AOA;
+  let CL;
+  if (!stalling) {
+    CL = CL_MAX * (aoa / STALL_AOA);                 // régime linéaire
+  } else {
+    const over = Math.min(1, (absAoa - STALL_AOA) / STALL_AOA);
+    CL = Math.sign(aoa) * CL_MAX * (1 - 0.75 * over); // aile décrochée : la portance chute
   }
 
-  // Clamp dans le volume 3D (ellipsoïde + plancher)
-  const offset = owlGroup.position.clone().sub(ARENA_CENTER);
+  // ── 6bis. Décrochage « en cloche » : montée trop raide + vitesse évanouie → l'aile lâche.
+  // Abattée automatique (le nez tombe), buffeting, gouvernes molles (§2) le temps de
+  // reprendre de la vitesse en piqué. On ne peut donc PLUS monter à la verticale en continu.
+  const climbStall = _fwd.y > 0.45 && v < STALL_SPEED;
+  if (!stallMode && (stalling || climbStall)) { stallMode = true; stallTimer = 0.8; }
+  if (stallMode) {
+    stallTimer -= dt;
+    angRate.x = THREE.MathUtils.lerp(angRate.x, -1.5, 1 - Math.exp(-3.5 * dt)); // abattée : le nez plonge
+    angRate.z += rnd(-1, 1) * 2.4 * dt;                                          // tremblement de buffeting
+    screenShake = Math.max(screenShake, 2.5);
+    if (stallTimer <= 0 && v > STALL_RECOVER && _fwd.y < 0.25 && absAoa < STALL_AOA * 0.8) stallMode = false;
+  }
+
+  // ── 7. Bilan des forces, en newtons (2ᵉ loi de Newton : a = ΣF / masse) ──
+  _acc.set(0, -OWL_MASS * GRAVITY, 0);           // poids P = m·g (la pesanteur ne dépend pas de la masse)
+  _acc.addScaledVector(_fwd, thrust * OWL_MASS); // poussée le long du nez
+
+  // Portance : dynamique (aile, ∝ v²·CL) + battement (basse vitesse, ∝ poussée).
+  // Le battement ne porte plus quand le nez pointe au zénith : plus d'ascenseur vertical gratuit.
+  const dynLift  = AIR_LIFT * v * v * CL;
+  const flapLift = FLAP_LIFT * (0.35 + 0.65 * throttle) * Math.max(0, 1 - v / FLAP_FADE)
+                 * (1 - THREE.MathUtils.smoothstep(_fwd.y, 0.35, 0.8));
+  _acc.addScaledVector(_up, (dynLift + flapLift) * OWL_MASS);
+
+  // Traînée : parasite (∝ v²) + induite (∝ CL²), opposée à la vitesse.
+  // Le frein (Shift/✋) déploie des aérofreins : traînée renforcée, décélération en douceur.
+  if (v > 1e-3) {
+    const drag = AIR_DRAG * (brakeHeld ? 1 + BRAKE_DRAG : 1) * v * v + INDUCED_DRAG * CL * CL * v;
+    _acc.addScaledVector(velocity, (-drag / v) * OWL_MASS);
+  }
+
+  // Anti-dérapage : on gomme la glisse latérale → sensation « je vole », pas « je glisse »
+  _acc.addScaledVector(_right, -vRight * SIDE_GRIP * OWL_MASS);
+
+  // ── 8. Vent de tempête : bourrasques latérales + RABATTANT qui plaque vers le sol.
+  // Seul le hibou y est soumis (les ours, plaqués au relief, ne sont pas emportés).
+  if (storm.active) {
+    const w = storm.windForce * WIND_ACCEL * OWL_MASS;
+    _acc.x += Math.cos(storm.windAngle) * w;
+    _acc.z += Math.sin(storm.windAngle) * w;
+    _acc.y -= w * (0.55 + 0.35 * Math.sin(storm.gustPhase * 0.5)); // toujours vers le bas, pulsé par les rafales
+  }
+
+  _acc.divideScalar(OWL_MASS); // a = ΣF / m — c'est ici que la masse (1.6 kg) intervient réellement
+
+  // ── 9. Intégration semi-implicite du vecteur vitesse puis de la position ──
+  velocity.addScaledVector(_acc, dt);
+  const vmax = MAX_SPEED * speedBoost * 1.2;
+  if (velocity.lengthSq() > vmax * vmax) velocity.setLength(vmax);
+  owlGroup.position.addScaledVector(velocity, dt);
+  speed = velocity.length();
+
+  // Virage coordonné : une aile inclinée courbe la trajectoire au taux réel
+  // ω = g·tan(inclinaison)/v. On fait pivoter ENSEMBLE la trajectoire (composante
+  // horizontale de la vitesse) et le nez (autour de la verticale monde) → virage
+  // parfaitement coordonné, sans dérapage, franc et lisible. Le plafond sur tan()
+  // est repoussé à 83° (au lieu de 71,6°) pour qu'un virage « sur la tranche »
+  // reste de plus en plus serré à mesure qu'on incline plus fort (sensation chasse).
+  //
+  // Ce modèle de bank angle n'a de sens qu'en vol à peu près horizontal : dès que
+  // le nez pointe vers la verticale (montée cabrée, décrochage), l'angle d'inclinaison
+  // lu depuis l'orientation devient dégénéré (gimbal lock) et se met à osciller —
+  // on atténue donc cette correction à mesure que le nez approche de la verticale,
+  // pour éviter que la caméra ne « recentre » erratiquement pendant ces phases.
+  const levelness = 1 - THREE.MathUtils.clamp(Math.abs(_fwd.y) / 0.85, 0, 1);
+  if (speed > 3 && levelness > 0) {
+    const turnRate = GRAVITY * Math.tan(THREE.MathUtils.clamp(curBank, -1.45, 1.45)) / speed;
+    const a = turnRate * dt * levelness;
+    const ca = Math.cos(a), sa = Math.sin(a);
+    const vx = velocity.x, vz = velocity.z;
+    velocity.x = vx * ca + vz * sa;
+    velocity.z = -vx * sa + vz * ca;
+    owlGroup.rotateOnWorldAxis(_UP_AXIS, a);
+  }
+
+  // ── 10. Bordure ellipsoïde : résistance progressive (pas de téléportation) ──
+  // On freine la composante « sortante » de la vitesse de plus en plus fort à
+  // mesure qu'on approche du bord (comme un vent de face croissant), au lieu de
+  // clamper brutalement la position — ce qui donnait l'impression que la caméra
+  // se recentrait toute seule d'un coup en approchant de la limite.
+  const offset = _tmp.copy(owlGroup.position).sub(ARENA_CENTER);
   const f = ellipsoidFactor(owlGroup.position);
-  if (f > 1) owlGroup.position.copy(ARENA_CENTER.clone().add(offset.multiplyScalar(1 / f)));
-  if (owlGroup.position.y < FLOOR_Y) owlGroup.position.y = FLOOR_Y;
+  const pushStart = 1 - BOUNDARY_FADE_DIST / ARENA_RADIUS_XZ;
+  if (f > pushStart) {
+    _dir.copy(offset).normalize();
+    const vOut = velocity.dot(_dir);
+    if (vOut > 0) {
+      const strength = THREE.MathUtils.clamp((f - pushStart) / (1 - pushStart), 0, 1);
+      velocity.addScaledVector(_dir, -vOut * strength * Math.min(1, 6 * dt));
+    }
+    if (f > 1) owlGroup.position.copy(ARENA_CENTER).addScaledVector(offset, 1 / f); // garde-fou dur, en dernier recours
+  }
+  const groundY = effectiveGroundY(owlGroup.position.x, owlGroup.position.z) + OWL_GROUND_CLEAR;
+  if (owlGroup.position.y < groundY) {
+    owlGroup.position.y = groundY;
+    onGroundCrash();
+  }
+
+  // ── 11. État de vol pour les instruments du HUD ──
+  flight.aoa = aoa;
+  flight.stall = stalling || stallMode;
+  flight.climb = velocity.y;
+  flight.throttle = throttle;
 
   checkTreeCollision();
 
-  return speed / MAX_SPEED;
+  return THREE.MathUtils.clamp(speed / MAX_SPEED, 0, 1);
 }
 
 // Collision avec un arbre : grosse perte de score/nid + vitesse ramenée à zéro.
@@ -1059,6 +1764,7 @@ function checkTreeCollision() {
 
 function onTreeHit() {
   speed = 0;
+  velocity.set(0, 0, 0); // le crash casse net l'élan (le vecteur vitesse, pas juste le scalaire)
   score = Math.max(0, score - 15);
   nest = Math.max(0, nest - 30);
   combo = 1; comboTimer = 0;
@@ -1066,6 +1772,21 @@ function onTreeHit() {
   hitFlash = Math.max(hitFlash, 0.5);
   treeCooldown = TREE_HIT_COOLDOWN;
   spawnFX(owlGroup.position, 18, 'death', 'CRASH ! 🌳');
+}
+
+// Contact avec le sol (le sprite/modèle du hibou, pas la caméra) : crash fatal,
+// game over immédiat — contrairement aux arbres/ours, on ne relève pas de vie ici.
+function onGroundCrash() {
+  if (state !== S.PLAY) return;
+  best = Math.max(best, score);
+  state = S.OVER;
+  overReason = 'crash';
+  owlGroup.visible = false;
+  document.body.style.cursor = 'default';
+  if (document.pointerLockElement) document.exitPointerLock();
+  screenShake = Math.max(screenShake, 25);
+  hitFlash = Math.max(hitFlash, 0.6);
+  spawnFX(owlGroup.position, 24, 'death', '💥 CRASHÉ !');
 }
 
 // ══════════════════════════════════════════════════
@@ -1088,36 +1809,66 @@ for (const e of BRANCH_EMOJI) branchTextures[e] = emojiTexture(e);
 const bearTexture = emojiTexture('🐻', 160);
 const giftTexture = emojiTexture('🎁', 160);
 
+// Halo radial doux (blanc → transparent), teinté à l'usage : lueur des branches et
+// du cadeau, menace des ours, points ronds des particules 3D et des lucioles.
+function makeGlowTexture(size = 64) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const cctx = c.getContext('2d');
+  const g = cctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0,   'rgba(255,255,255,1)');
+  g.addColorStop(0.4, 'rgba(255,255,255,0.45)');
+  g.addColorStop(1,   'rgba(255,255,255,0)');
+  cctx.fillStyle = g;
+  cctx.fillRect(0, 0, size, size);
+  return new THREE.CanvasTexture(c);
+}
+const glowTexture = makeGlowTexture();
+
 // ══════════════════════════════════════════════════
 //  CADEAU BONUS (porté depuis hibou-et-nid.html, sans l'animation de roulette)
+//  L'ancien tirage (3 %/s, n'importe où dans l'arène x5) faisait qu'on n'en
+//  voyait JAMAIS : apparition désormais GARANTIE à intervalle régulier, près
+//  du joueur, signalée par un pilier de lumière doré visible de très loin.
 // ══════════════════════════════════════════════════
-const GIFT_COLLECT_RADIUS = 3;
-const GIFT_SPAWN_CHANCE_PER_SEC = 0.03;
+const GIFT_COLLECT_RADIUS = 3.5;
+const GIFT_PILLAR_H = 90;
+let giftCooldown = rnd(10, 16);
 
 function spawnGiftIfNeeded(dt) {
   if (giftItem) return;
   if (moon.state !== 'none') return;
   if (storm.active) return;
-  if (Math.random() < GIFT_SPAWN_CHANCE_PER_SEC * dt) {
-    const mat = new THREE.SpriteMaterial({ map: giftTexture, transparent: true });
-    const sprite = new THREE.Sprite(mat);
-    sprite.scale.set(2.4, 2.4, 1);
-    const pos = randomPointInArena(3, 68);
-    sprite.position.copy(pos);
-    scene.add(sprite);
+  giftCooldown -= dt;
+  if (giftCooldown > 0) return;
 
-    // Halo lumineux discret derrière le sprite (glow simulé)
-    const glowMat = new THREE.SpriteMaterial({
-      map: giftTexture, transparent: true, opacity: 0.35,
-      color: 0xffe066, depthWrite: false
-    });
-    const glow = new THREE.Sprite(glowMat);
-    glow.scale.set(4.2, 4.2, 1);
-    glow.position.copy(pos);
-    scene.add(glow);
+  const mat = new THREE.SpriteMaterial({ map: giftTexture, transparent: true });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(2.4, 2.4, 1);
+  const pos = collectibleSpawnPos(70, 260);
+  sprite.position.copy(pos);
+  scene.add(sprite);
 
-    giftItem = { sprite, glow, baseY: pos.y, w: rnd(0, Math.PI * 2) };
-  }
+  // Halo doré pulsé derrière le paquet
+  const glowMat = new THREE.SpriteMaterial({
+    map: glowTexture, transparent: true, opacity: 0.55,
+    color: 0xffd766, blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  const glow = new THREE.Sprite(glowMat);
+  glow.scale.set(7, 7, 1);
+  glow.position.copy(pos);
+  scene.add(glow);
+
+  // Pilier de lumière planté dans le sol : le phare qui rend le cadeau trouvable
+  const pillarMat = new THREE.MeshBasicMaterial({
+    color: 0xffd766, transparent: true, opacity: 0.22,
+    blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide
+  });
+  const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.7, GIFT_PILLAR_H, 10, 1, true), pillarMat);
+  pillar.position.set(pos.x, effectiveGroundY(pos.x, pos.z) + GIFT_PILLAR_H / 2, pos.z);
+  scene.add(pillar);
+
+  giftItem = { sprite, glow, pillar, baseY: pos.y, w: rnd(0, Math.PI * 2) };
 }
 
 function removeGift() {
@@ -1125,21 +1876,36 @@ function removeGift() {
   giftItem.sprite.material.dispose();
   scene.remove(giftItem.glow);
   giftItem.glow.material.dispose();
+  scene.remove(giftItem.pillar);
+  giftItem.pillar.geometry.dispose();
+  giftItem.pillar.material.dispose();
   giftItem = null;
+  giftCooldown = rnd(18, 28); // prochain cadeau garanti
 }
 
 function updateGift(dt) {
   spawnGiftIfNeeded(dt);
   if (!giftItem) return;
 
+  // Distancé (le joueur est parti à l'autre bout) : le cadeau le rejoint
+  if (giftItem.sprite.position.distanceTo(owlGroup.position) > 650) {
+    const p = collectibleSpawnPos(80, 250);
+    giftItem.sprite.position.copy(p);
+    giftItem.baseY = p.y;
+    giftItem.pillar.position.set(p.x, effectiveGroundY(p.x, p.z) + GIFT_PILLAR_H / 2, p.z);
+  }
+
   giftItem.w += dt * 2.2;
   giftItem.sprite.position.y = giftItem.baseY + Math.sin(giftItem.w) * 0.4;
   giftItem.glow.position.copy(giftItem.sprite.position);
   const pulse = 1 + Math.sin(giftItem.w * 1.7) * 0.12;
   giftItem.sprite.scale.set(2.4 * pulse, 2.4 * pulse, 1);
-  giftItem.glow.scale.set(4.2 * pulse, 4.2 * pulse, 1);
+  giftItem.glow.scale.set(7 * pulse, 7 * pulse, 1);
+  giftItem.pillar.material.opacity = 0.16 + 0.1 * (0.5 + 0.5 * Math.sin(giftItem.w * 1.3));
+  giftItem.pillar.rotation.y += dt * 0.6;
 
   if (owlGroup.position.distanceTo(giftItem.sprite.position) < GIFT_COLLECT_RADIUS) {
+    spawnFX3D(giftItem.sprite.position, 26, 'sparkle');
     const loot = rollLoot();
     initLootboxScroll(loot);
     state       = S.LOOT;
@@ -1219,10 +1985,41 @@ function updateLootbox(dt) {
 
 // ══════════════════════════════════════════════════
 //  BRANCHES / NID / SCORE / COMBO
+//  L'arène x5 rendait les branches introuvables (semées au hasard dans tout le
+//  volume) : elles apparaissent désormais AUTOUR et DEVANT le hibou, plutôt
+//  près du sol, brillent d'un halo, et sont recyclées quand on les distance.
 // ══════════════════════════════════════════════════
 const ROTTEN_LIFE = 600, ROTTEN_CHANCE = 0.08;
 const COLLECT_RADIUS = 3;
+const BRANCH_COUNT = 14;
+const BRANCH_RECYCLE_DIST = 420;
 let branches = [];
+
+// Position de spawn d'un collectible : autour du hibou, avec un biais DEVANT lui
+// et un biais VERS LE SOL (la récolte tire naturellement le vol vers le bas).
+function collectibleSpawnPos(minDist, maxDist) {
+  let angle;
+  if (velocity.lengthSq() > 4 && Math.random() < 0.6) {
+    angle = Math.atan2(velocity.z, velocity.x) + rnd(-0.9, 0.9); // dans le cône de route
+  } else {
+    angle = rnd(0, Math.PI * 2);
+  }
+  const dist = rnd(minDist, maxDist);
+  const p = new THREE.Vector3(
+    owlGroup.position.x + Math.cos(angle) * dist, 0,
+    owlGroup.position.z + Math.sin(angle) * dist);
+  // Rabattu vers le centre si le tirage sort de l'arène (près de la muraille)
+  const f = Math.hypot(p.x - ARENA_CENTER.x, p.z - ARENA_CENTER.z) / ARENA_RADIUS_XZ;
+  if (f > 0.85) {
+    p.x = ARENA_CENTER.x + (p.x - ARENA_CENTER.x) * 0.85 / f;
+    p.z = ARENA_CENTER.z + (p.z - ARENA_CENTER.z) * 0.85 / f;
+  }
+  const g = effectiveGroundY(p.x, p.z);
+  p.y = Math.random() < 0.6
+    ? g + rnd(2.5, 14)                               // ras du sol / cime des arbres
+    : Math.min(g + rnd(15, 70), COLLECTIBLE_MAX_Y);  // plein ciel
+  return p;
+}
 
 function newBranch() {
   const e = BRANCH_EMOJI[Math.floor(Math.random() * 4)];
@@ -1231,14 +2028,25 @@ function newBranch() {
   if (rotten) mat.color.set(0x99775a);
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(2, 2, 1);
-  const pos = randomPointInArena(3, 68);
+  const pos = collectibleSpawnPos(35, 210);
   sprite.position.copy(pos);
   scene.add(sprite);
-  return { sprite, rotten, w: rnd(0, Math.PI * 2), ws: rotten ? rnd(0.06, 0.11) : rnd(0.03, 0.07), age: 0, baseY: pos.y };
+
+  // Halo : vert tendre pour les saines, brun terne pour les pourries (lisible de loin)
+  const glowMat = new THREE.SpriteMaterial({
+    map: glowTexture, color: rotten ? 0x8a6a20 : 0x66ff66, transparent: true,
+    opacity: rotten ? 0.28 : 0.5, blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  const glow = new THREE.Sprite(glowMat);
+  glow.scale.setScalar(2.3); // relatif au sprite parent (échelle 2) → ~4.6 unités monde
+  sprite.add(glow);
+
+  return { sprite, glowMat, rotten, w: rnd(0, Math.PI * 2), ws: rotten ? rnd(0.06, 0.11) : rnd(0.03, 0.07), age: 0, baseY: pos.y };
 }
 function removeBranch(i) {
   scene.remove(branches[i].sprite);
   branches[i].sprite.material.dispose();
+  branches[i].glowMat.dispose();
   branches.splice(i, 1);
 }
 
@@ -1248,6 +2056,14 @@ function updateBranches() {
     const br = branches[i];
     br.w += br.ws;
     br.sprite.position.y = br.baseY + Math.sin(br.w) * 0.4;
+    br.glowMat.opacity = (br.rotten ? 0.28 : 0.5) + Math.sin(br.w * 2) * 0.14; // halo qui respire
+
+    // Recyclage : une branche laissée trop loin derrière revient près du hibou
+    if (br.sprite.position.distanceTo(owlGroup.position) > BRANCH_RECYCLE_DIST) {
+      const p = collectibleSpawnPos(60, 230);
+      br.sprite.position.copy(p);
+      br.baseY = p.y;
+    }
 
     if (br.rotten) {
       br.age++;
@@ -1270,6 +2086,7 @@ function updateBranches() {
         }
         screenShake = Math.min(4 + combo * 0.5, 15);
         spawnFX(br.sprite.position, 12, 'collect', `+${gain}`);
+        spawnFX3D(br.sprite.position, 14, 'collect'); // gerbe dorée dans la scène
         combo = Math.max(1, combo) + 1; comboTimer = MAX_COMBO_TIME;
         while (bears.length < bearTarget()) bears.push(newBear());
       }
@@ -1281,9 +2098,45 @@ function updateBranches() {
 }
 
 // ══════════════════════════════════════════════════
-//  OURS
+//  RASE-MOTTES — voler BAS et VITE rapporte en continu : la carotte qui attire
+//  le joueur au sol, entre les arbres et le relief (du risque contre des points).
+// ══════════════════════════════════════════════════
+const SKIM_ALT = 8, SKIM_MIN_SPEED = 13;
+let skimTimer = 0, skimActive = false;
+
+function updateSkim(dt) {
+  const alt = owlGroup.position.y - effectiveGroundY(owlGroup.position.x, owlGroup.position.z);
+  skimActive = alt < SKIM_ALT && speed > SKIM_MIN_SPEED;
+  if (!skimActive) { skimTimer = 0; return; }
+  skimTimer += dt;
+  if (skimTimer >= 1) { // +2 par seconde passée au ras du sol (x5 avec le buff ✨)
+    skimTimer -= 1;
+    const gain = 2 * (buffs.multi > 0 ? 5 : 1);
+    score += gain;
+    nest += 1;
+    if (nest >= 100) {
+      nest %= 100; lives++;
+      spawnFX(owlGroup.position, 30, 'collect', '+1 VIE ! ❤️');
+      screenShake = 15;
+    }
+    spawnFX(owlGroup.position, 5, 'collect', `+${gain} 🪶`);
+    spawnFX3D(owlGroup.position, 5, 'dust'); // poussière soulevée dans le sillage
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  OURS — modèle GLB cloné par ours (géométrie/matériaux partagés), orienté vers
+//  sa direction de déplacement. Repli : sprite emoji 🐻 d'origine.
 // ══════════════════════════════════════════════════
 let bears = [];
+// Lacet du modèle GLB pour que l'ours regarde vers +Z (convention lookAt de three.js).
+const BEAR_MODEL_YAW = 0;
+let bearProto = null; // gabarit normalisé, cloné pour chaque ours
+function setupBearProto() {
+  if (!models.bear) return;
+  bearProto = normalizeModel(models.bear, { height: 1, groundAlign: false, yaw: BEAR_MODEL_YAW });
+}
+
 function bearTarget() {
   if (moon.state === 'blood') return 18;
   if (moon.state === 'full')  return 12;
@@ -1291,33 +2144,61 @@ function bearTarget() {
 }
 
 function newBear() {
-  const mat = new THREE.SpriteMaterial({ map: bearTexture, transparent: true });
-  const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(2.6, 2.6, 1);
+  let sprite;
+  if (bearProto) {
+    sprite = bearProto.clone(true); // clone léger : géométries et matériaux partagés
+    sprite.scale.setScalar(2.6);
+  } else {
+    const mat = new THREE.SpriteMaterial({ map: bearTexture, transparent: true });
+    sprite = new THREE.Sprite(mat);
+    sprite.scale.set(2.6, 2.6, 1);
+  }
 
-  const angle = rnd(0, Math.PI * 2);
-  const elev = rnd(-0.4, 0.4);
-  const distR = rnd(40, 60);
-  const dir = new THREE.Vector3(Math.cos(angle) * Math.cos(elev), Math.sin(elev), Math.sin(angle) * Math.cos(elev));
+  // Halo de menace : lueur rouge additive allumée pendant la préparation et la
+  // charge — le télégraphe qui rend la charge lisible et esquivable (au virage).
+  const menaceMat = new THREE.SpriteMaterial({
+    map: glowTexture, color: 0xff2211, transparent: true, opacity: 0,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  const menaceGlow = new THREE.Sprite(menaceMat);
+  menaceGlow.scale.setScalar(1.6);
+  sprite.add(menaceGlow);
+
+  // Une fois sur deux, l'ours apparaît DEVANT le hibou, sur sa trajectoire :
+  // fuir tout droit, c'est foncer dans les prochains.
+  let dir;
+  if (Math.random() < 0.5 && velocity.lengthSq() > 4) {
+    dir = velocity.clone().normalize().applyAxisAngle(_UP_AXIS, rnd(-0.7, 0.7));
+    dir.y = THREE.MathUtils.clamp(dir.y + rnd(-0.3, 0.3), -0.5, 0.5);
+    dir.normalize();
+  } else {
+    const angle = rnd(0, Math.PI * 2);
+    const elev = rnd(-0.4, 0.4);
+    dir = new THREE.Vector3(Math.cos(angle) * Math.cos(elev), Math.sin(elev), Math.sin(angle) * Math.cos(elev));
+  }
+  const distR = rnd(42, 65);
   let pos = owlGroup.position.clone().add(dir.multiplyScalar(distR));
   const offset = pos.clone().sub(ARENA_CENTER);
   const f = ellipsoidFactor(pos);
   if (f > 1) offset.multiplyScalar(0.95 / f);
   pos = ARENA_CENTER.clone().add(offset);
-  pos.y = THREE.MathUtils.clamp(pos.y, 3, 68);
+  pos.y = Math.max(effectiveGroundY(pos.x, pos.z) + 2.5,
+                   Math.min(pos.y, ARENA_CENTER.y + ARENA_RADIUS_Y * 0.55));
   sprite.position.copy(pos);
   scene.add(sprite);
 
-  const updateDelay = rnd(20, 80);
   const isFullMoon  = moon.state === 'full';
   const isBloodMoon = moon.state === 'blood';
   return {
-    sprite,
+    sprite, menaceMat,
     life: isBloodMoon ? rnd(400, 900) : isFullMoon ? rnd(300, 600) : rnd(1000, 2000),
-    spdBase: (isBloodMoon ? 20 : isFullMoon ? 14 : 9) + Math.min(score * 0.18, 13), // unités / seconde (voir updateBears, mouvement mis à l'échelle par dt)
-    target: owlGroup.position.clone(),
-    updateDelay, updateTimer: Math.floor(rnd(0, updateDelay)),
-    drift: new THREE.Vector3(rnd(-1, 1), rnd(-1, 1), rnd(-1, 1)).normalize().multiplyScalar(rnd(0.3, 1.4)),
+    spdBase: (isBloodMoon ? 22 : isFullMoon ? 16 : 11) + Math.min(score * 0.15, 10), // unités/s (mouvement mis à l'échelle par dt)
+    lead: rnd(0.5, 1.5),         // anticipation : l'ours vise là où le hibou SERA, pas là où il est
+    drift: new THREE.Vector3(),
+    driftTimer: 0,
+    mode: 'stalk', modeTimer: 0, // stalk → windup (télégraphe) → lunge (charge) → recover
+    lungeCooldown: rnd(1.5, 3.5),
+    lungeDir: new THREE.Vector3(),
     bob: rnd(0, Math.PI * 2),
     spawnPulse: 1,
     spawnGrace: 90 // frames d'immunité après l'apparition, pour ne pas mourir dans la seconde qui suit
@@ -1325,9 +2206,14 @@ function newBear() {
 }
 function removeBear(i) {
   scene.remove(bears[i].sprite);
-  bears[i].sprite.material.dispose();
+  if (bears[i].sprite.isSprite) bears[i].sprite.material.dispose(); // le GLB partage ses matériaux : ne pas les détruire
+  bears[i].menaceMat.dispose(); // le halo de menace, lui, est propre à chaque ours
   bears.splice(i, 1);
 }
+
+const BEAR_LUNGE_RANGE = 38; // distance de déclenchement de la charge
+const BEAR_LUNGE_SPEED = 31; // vitesse de charge : plus vite que la croisière du hibou
+const _bearAim = new THREE.Vector3(), _bearMove = new THREE.Vector3();
 
 function updateBears(dt) {
   for (let i = bears.length - 1; i >= 0; i--) {
@@ -1342,20 +2228,62 @@ function updateBears(dt) {
     if (b.spawnGrace > 0) b.spawnGrace--;
     b.bob += 0.12;
     if (b.spawnPulse > 0) b.spawnPulse = Math.max(0, b.spawnPulse - 0.05);
-    b.sprite.scale.setScalar(2.6 * (1 - b.spawnPulse * 0.6));
 
-    b.updateTimer--;
-    if (b.updateTimer <= 0) {
-      b.updateTimer = b.updateDelay;
-      b.drift.set(rnd(-1, 1), rnd(-1, 1), rnd(-1, 1)).normalize().multiplyScalar(rnd(0.3, 1.4));
-      b.target.copy(owlGroup.position);
+    const slowMul = buffs.slow > 0 ? 0.3 : 1;
+    const dist = b.sprite.position.distanceTo(owlGroup.position);
+
+    // Poursuite avec ANTICIPATION, réévaluée à chaque frame : l'ours coupe la
+    // trajectoire au lieu de suivre bêtement — la ligne droite ne le sème plus.
+    b.driftTimer -= dt;
+    if (b.driftTimer <= 0) {
+      b.driftTimer = rnd(0.5, 2);
+      b.drift.set(rnd(-1, 1), rnd(-0.6, 0.6), rnd(-1, 1)).normalize().multiplyScalar(rnd(2, 9));
     }
-    // Déplacement normalisé vers la cible, à vitesse constante en unités/seconde (mis à l'échelle par dt).
-    const toTarget = b.target.clone().sub(b.sprite.position).add(b.drift.clone().multiplyScalar(30));
-    const d = toTarget.length() || 1;
-    const spd = b.spdBase * (buffs.slow > 0 ? 0.3 : 1);
-    b.sprite.position.add(toTarget.multiplyScalar((spd * dt) / d));
+    _bearAim.copy(owlGroup.position).addScaledVector(velocity, b.lead).add(b.drift);
+
+    let spd = b.spdBase * slowMul;
+    _bearMove.copy(_bearAim).sub(b.sprite.position);
+
+    // Machine à états : traque → préparation (télégraphe rouge) → CHARGE en ligne
+    // figée (esquivable au virage serré) → récupération, puis cooldown.
+    b.modeTimer -= dt;
+    b.lungeCooldown -= dt;
+    if (b.mode === 'stalk') {
+      if (dist < BEAR_LUNGE_RANGE && b.lungeCooldown <= 0 && b.spawnGrace <= 0) {
+        b.mode = 'windup'; b.modeTimer = 0.45;
+      }
+    } else if (b.mode === 'windup') {
+      spd *= 0.25; // se ramasse sur lui-même avant de bondir
+      if (b.modeTimer <= 0) {
+        b.mode = 'lunge'; b.modeTimer = 0.85;
+        b.lungeDir.copy(_bearAim).sub(b.sprite.position).normalize();
+      }
+    } else if (b.mode === 'lunge') {
+      spd = Math.max(BEAR_LUNGE_SPEED, b.spdBase * 1.5) * slowMul;
+      _bearMove.copy(b.lungeDir);
+      if (b.modeTimer <= 0) { b.mode = 'recover'; b.modeTimer = 1.1; b.lungeCooldown = rnd(2.2, 4); }
+    } else if (b.mode === 'recover') {
+      spd *= 0.45;
+      if (b.modeTimer <= 0) b.mode = 'stalk';
+    }
+
+    // Télégraphe visuel : halo rouge pulsé + ours qui « gonfle » avant la charge
+    const menaceTarget = b.mode === 'windup' ? 0.85 + 0.15 * Math.sin(b.bob * 4)
+                       : b.mode === 'lunge'  ? 0.55 : 0;
+    b.menaceMat.opacity = THREE.MathUtils.lerp(b.menaceMat.opacity, menaceTarget, 0.25);
+    const menace = b.mode === 'windup' ? 1.25 : b.mode === 'lunge' ? 1.12 : 1;
+    b.sprite.scale.setScalar(2.6 * (1 - b.spawnPulse * 0.6) * menace);
+
+    const d = _bearMove.length() || 1;
+    b.sprite.position.addScaledVector(_bearMove, (spd * dt) / d);
     b.sprite.position.y += Math.sin(b.bob) * 0.02;
+    // Jamais sous le terrain (les ours volants restent des ours polis)
+    b.sprite.position.y = Math.max(b.sprite.position.y, effectiveGroundY(b.sprite.position.x, b.sprite.position.z) + 1.2);
+    // Le modèle 3D regarde dans sa direction de déplacement (le sprite de repli, lui, fait toujours face caméra)
+    if (!b.sprite.isSprite && _bearMove.lengthSq() > 1e-6) {
+      _tmp.copy(b.sprite.position).add(_bearMove);
+      b.sprite.lookAt(_tmp);
+    }
 
     if (owlInvul <= 0 && buffs.invincible <= 0 && b.spawnGrace <= 0 && owlGroup.position.distanceTo(b.sprite.position) < COLLECT_RADIUS + 1) {
       lives--;
@@ -1364,6 +2292,7 @@ function updateBears(dt) {
       if (lives <= 0) {
         best = Math.max(best, score);
         state = S.OVER;
+        overReason = 'eaten';
         owlGroup.visible = false;
         document.body.style.cursor = 'default';
         if (document.pointerLockElement) document.exitPointerLock();
@@ -1432,6 +2361,7 @@ function drawHUD() {
   if (buffs.speed      > 0) { hctx.fillStyle = '#00ffff'; hctx.font = 'bold 13px system-ui'; hctx.fillText('⚡ VITESSE',       24, buffY); buffY += 16; }
   if (buffs.slow       > 0) { hctx.fillStyle = '#00ffff'; hctx.font = 'bold 13px system-ui'; hctx.fillText('❄️ GELÉS',        24, buffY); buffY += 16; }
   if (buffs.invincible > 0) { hctx.fillStyle = '#ffd700'; hctx.font = 'bold 13px system-ui'; hctx.fillText('🦉 INVINCIBLE !', 24, buffY); buffY += 16; }
+  if (skimActive)           { hctx.fillStyle = '#8fe06a'; hctx.font = 'bold 13px system-ui'; hctx.fillText('🪶 RASE-MOTTES +2/s', 24, buffY); buffY += 16; }
 
   if (combo > 1 && comboTimer > 0 && buffs.multi === 0) {
     hctx.fillStyle = '#ffaa00'; hctx.font = 'bold 13px system-ui';
@@ -1460,6 +2390,42 @@ function drawHUD() {
     hctx.restore();
   }
 
+  // ── Instruments de vol (haut-droite) : vitesse air, altitude, poussée, vario ──
+  {
+    hctx.save();
+    const w = hudCanvas.width;
+    const pw = 146, ph = 96, px = w - pw - 12, py = 12;
+    rrect(px, py, pw, ph, 12, 'rgba(8,8,35,0.82)', 'rgba(100,90,220,0.4)');
+    hctx.textBaseline = 'middle';
+    hctx.font = '11px system-ui'; hctx.fillStyle = '#9fb0d8'; hctx.textAlign = 'left';
+    hctx.fillText('Vitesse',  px + 12, py + 18);
+    hctx.fillText('Altitude', px + 12, py + 38);
+    hctx.fillText('Poussée',  px + 12, py + 58);
+    hctx.fillText('Vario',    px + 12, py + 78);
+
+    hctx.textAlign = 'right'; hctx.font = 'bold 12px system-ui'; hctx.fillStyle = '#e8ecff';
+    hctx.fillText(Math.round(speed) + ' u/s', px + pw - 12, py + 18);
+    hctx.fillText(Math.max(0, Math.round(owlGroup.position.y - effectiveGroundY(owlGroup.position.x, owlGroup.position.z))) + ' m', px + pw - 12, py + 38);
+    hctx.fillText(Math.round(flight.throttle * 100) + ' %', px + pw - 12, py + 58);
+    const climb = flight.climb;
+    hctx.fillStyle = climb > 0.3 ? '#8fe06a' : climb < -0.3 ? '#ff9a6a' : '#e8ecff';
+    hctx.fillText((climb >= 0 ? '▲ ' : '▼ ') + Math.abs(climb).toFixed(1), px + pw - 12, py + 78);
+    hctx.restore();
+  }
+
+  // ── Alerte décrochage (clignotante) ──
+  if (flight.stall && state === S.PLAY) {
+    const w = hudCanvas.width, h = hudCanvas.height;
+    if (Math.floor(Date.now() / 220) % 2 === 0) {
+      hctx.save();
+      rrect(w / 2 - 110, h - 92, 220, 40, 12, 'rgba(60,10,10,0.9)', 'rgba(255,90,60,0.95)');
+      hctx.fillStyle = '#ffd0c0'; hctx.font = 'bold 18px system-ui';
+      hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+      hctx.fillText('⚠ DÉCROCHAGE', w / 2, h - 72);
+      hctx.restore();
+    }
+  }
+
   if (moon.state === 'blood') {
     hctx.save();
     const w = hudCanvas.width;
@@ -1485,6 +2451,53 @@ function drawHUD() {
     hctx.fillText('🌬️ TEMPÊTE : ' + Math.ceil(Math.max(0, storm.timer)) + 's', w / 2, 32);
     hctx.restore();
   }
+
+  // ── Boussole d'objectifs : flèches en bord d'écran vers le cadeau et la
+  //    branche saine la plus proche quand ils sont hors champ ──
+  if (state === S.PLAY && moon.state === 'none') {
+    if (giftItem) drawTargetIndicator(giftItem.sprite.position, '#ffd700', '🎁');
+    let nearest = null, nd = Infinity;
+    for (const br of branches) {
+      if (br.rotten) continue;
+      const d2 = br.sprite.position.distanceToSquared(owlGroup.position);
+      if (d2 < nd) { nd = d2; nearest = br; }
+    }
+    if (nearest) drawTargetIndicator(nearest.sprite.position, '#7ec850', '🌿');
+  }
+}
+
+// Flèche-boussole plaquée au bord de l'écran, pointant vers un objectif hors champ.
+const _indTmp = new THREE.Vector3();
+function drawTargetIndicator(worldPos, color, label) {
+  const W = hudCanvas.width, H = hudCanvas.height;
+  _indTmp.copy(worldPos).project(camera);
+  const behind = _indTmp.z > 1;
+  let sx = (_indTmp.x * 0.5 + 0.5) * W;
+  let sy = (-_indTmp.y * 0.5 + 0.5) * H;
+  if (behind) { sx = W - sx; sy = H - sy; } // projeté derrière la caméra : direction inversée
+  const margin = 48;
+  if (!behind && sx > margin && sx < W - margin && sy > margin && sy < H - margin) return; // visible : pas de flèche
+
+  const cx = W / 2, cy = H / 2;
+  let dx = sx - cx, dy = sy - cy;
+  const len = Math.hypot(dx, dy) || 1;
+  dx /= len; dy /= len;
+  // Point d'accroche sur le cadre intérieur de l'écran
+  const kx = (W / 2 - margin) / Math.abs(dx || 1e-6);
+  const ky = (H / 2 - margin) / Math.abs(dy || 1e-6);
+  const k = Math.min(kx, ky);
+  const ex = cx + dx * k, ey = cy + dy * k;
+
+  hctx.save();
+  hctx.globalAlpha = 0.9;
+  hctx.translate(ex, ey);
+  hctx.rotate(Math.atan2(dy, dx));
+  hctx.fillStyle = color;
+  hctx.beginPath(); hctx.moveTo(16, 0); hctx.lineTo(2, -8); hctx.lineTo(2, 8); hctx.closePath(); hctx.fill();
+  hctx.rotate(-Math.atan2(dy, dx));
+  hctx.font = '17px serif'; hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+  hctx.fillText(label, -dx * 16, -dy * 16);
+  hctx.restore();
 }
 
 function drawStart() {
@@ -1499,15 +2512,23 @@ function drawStart() {
   hctx.fillText('HIBOU 3D', cx, cy - 100);
   hctx.fillStyle = '#cbc3dd'; hctx.font = '14px system-ui';
   if (isMobile) {
-    hctx.fillText('Joystick (bas gauche) = tangage / roulis', cx, cy - 50);
-    hctx.fillText('⚡ = accélérer   ✋ = freiner', cx, cy - 28);
+    hctx.fillText('Joystick = tangage / inclinaison', cx, cy - 54);
+    hctx.fillText('Incline pour virer, contre-incline pour redresser', cx, cy - 34);
+    hctx.fillText('⚡ = accélérer   ✋ = freiner (progressif)', cx, cy - 14);
+    hctx.fillStyle = '#ffb0a0'; hctx.font = '12px system-ui';
+    hctx.fillText('Trop lent ou trop cabré = décrochage !', cx, cy + 8);
+    hctx.fillStyle = '#ffe08a';
+    hctx.fillText('Vole en rase-mottes parmi les lucioles : +2/s !', cx, cy + 28);
   } else {
-    hctx.fillText('Q / D ou ← / → = lacet (yaw)', cx, cy - 50);
-    hctx.fillText('Z / S ou ↑ / ↓ = tangage (pitch)', cx, cy - 28);
-    hctx.fillText('A / E = roulis (roll)', cx, cy - 6);
-    hctx.fillText('Espace = accélérer   Ctrl = freiner', cx, cy + 20);
-    hctx.fillText('Souris (verrouillée) = pilotage additionnel', cx, cy + 44);
-    hctx.fillText('[O] = régler la sensibilité souris', cx, cy + 66);
+    hctx.fillText('Q / D ou ← / → = lacet   A / E = incliner (virer)', cx, cy - 54);
+    hctx.fillText('S / Z = cabrer / piquer   (on tire pour monter)', cx, cy - 32);
+    hctx.fillText('Espace = accélérer   Shift = freiner (progressif)', cx, cy - 10);
+    hctx.fillText('Souris (verrouillée) = pilotage fin   [O] = sensibilité', cx, cy + 12);
+    hctx.fillStyle = '#ffb0a0'; hctx.font = '12px system-ui';
+    hctx.fillText('Monter trop raide tue ta vitesse : DÉCROCHAGE —', cx, cy + 40);
+    hctx.fillText('le nez tombe, pique pour raccrocher l\'aile.', cx, cy + 58);
+    hctx.fillStyle = '#ffe08a';
+    hctx.fillText('Rase le sol parmi les lucioles : +2/s. Suis les flèches 🎁 🌿', cx, cy + 78);
   }
   hctx.fillStyle = '#fff'; hctx.font = 'bold 18px system-ui';
   hctx.fillText('Clique ou appuie sur une touche', cx, cy + 100);
@@ -1523,7 +2544,7 @@ function drawOver() {
   rrect(cx - 150, cy - 180, 300, 360, 28, 'rgba(22,8,30,0.97)', 'rgba(255,70,70,0.8)');
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
   hctx.fillStyle = '#ffaaaa'; hctx.font = '900 32px system-ui';
-  hctx.fillText('MANGÉ !', cx, cy - 100);
+  hctx.fillText(overReason === 'crash' ? 'CRASHÉ !' : 'MANGÉ !', cx, cy - 100);
   hctx.fillStyle = '#e8e5ff'; hctx.font = '18px system-ui';
   hctx.fillText('Score final : ' + score, cx, cy - 30);
   if (best > 0) {
@@ -1733,29 +2754,42 @@ function drawOverlay() {
 //  INIT / RESET
 // ══════════════════════════════════════════════════
 function beginGame() {
+  if (!assetsReady) return; // le monde n'est pas encore construit (modèles en cours de chargement)
   state = S.PLAY;
   document.body.style.cursor = 'none';
-  score = 0; nest = 0; combo = 1; comboTimer = 0; lives = 1;
+  score = 0; nest = 0; combo = 1; comboTimer = 0; lives = 1; overReason = 'eaten';
   screenShake = 0; hitFlash = 0; owlInvul = 60; treeCooldown = 0;
   speed = MAX_SPEED * 0.55; // décolle déjà lancé
 
   owlGroup.position.set(ARENA_CENTER.x, 16, ARENA_CENTER.z); // altitude basse au départ
   owlGroup.quaternion.identity();
   owlGroup.visible = true;
+  // État de vol initial : lancé vers l'avant (−Z), moteur en croisière, rotations à plat.
+  velocity.set(0, 0, -speed);
+  angRate.set(0, 0, 0);
+  throttle = CRUISE_THROTTLE;
+  flight.aoa = 0; flight.stall = false; flight.climb = 0; flight.throttle = throttle;
   requestFlightPointerLock();
 
-  for (const br of branches) { scene.remove(br.sprite); br.sprite.material.dispose(); }
-  for (const b of bears)     { scene.remove(b.sprite);  b.sprite.material.dispose(); }
+  for (const br of branches) { scene.remove(br.sprite); br.sprite.material.dispose(); br.glowMat.dispose(); }
+  for (const b of bears)     { scene.remove(b.sprite);  if (b.sprite.isSprite) b.sprite.material.dispose(); b.menaceMat.dispose(); }
   for (let i = rocks.length - 1; i >= 0; i--) removeRock(i);
   rockInvul = 0;
-  branches = Array.from({ length: 8 }, newBranch);
+  branches = Array.from({ length: BRANCH_COUNT }, newBranch);
   bears = [newBear(), newBear()];
   particles = [];
   moon  = { state: 'none', timer: 0, next: 15, fillProgress: 0 };
   storm = { active: false, timer: 0, next: rnd(20, 30), windAngle: 0, windForce: 0, gustPhase: 0, rockSpawnTimer: 0 };
 
   if (giftItem) removeGift();
+  giftCooldown = rnd(8, 14); // premier cadeau garanti au bout de quelques secondes
   buffs = { speed: 0, multi: 0, slow: 0, invincible: 0 };
+
+  // État de vol/effets annexes remis à neuf
+  stallMode = false; stallTimer = 0;
+  skimTimer = 0; skimActive = false;
+  trailAccum = 0;
+  for (const d of fireflyData) anchorFirefly(d); // la nuée rejoint la clairière de départ
 }
 
 // ══════════════════════════════════════════════════
@@ -1782,26 +2816,28 @@ function update() {
     updateRocks(dt);
     const speedRatio = updateFlight(dt);
     updateFlap(dt, speedRatio);
+    updateSkim(dt);
+    updateBoostTrail(dt);
     updateBranches();
     updateBears(dt);
     updateGift(dt);
     updateBoundaryGrid();
-    updateWindParticles(dt);
     updateCameraClip();
     owlGroup.visible = !(owlInvul > 0 && Math.floor(Date.now() / 80) % 2 !== 0);
   } else if (state === S.LOOT) {
     mouseDX = 0; mouseDY = 0;
     boundaryGrid.visible = false;
-    windParticles.visible = false;
     updateLootbox(dt);
   } else {
     mouseDX = 0; mouseDY = 0;
     boundaryGrid.visible = false;
-    windParticles.visible = false;
   }
   updateMoonVisual(dt);
   updateStars(dt);
+  updateClouds(dt);
   updateParticles();
+  updateFX3D(dt);      // les gerbes 3D finissent de retomber même en pause/game over
+  updateFireflies(dt); // la nuée scintille aussi sur les écrans de menu
 }
 
 function render() {
@@ -1815,12 +2851,64 @@ function loop() {
   requestAnimationFrame(loop);
 }
 
+// ── Boot : écran de chargement pendant le fetch des GLB, puis construction du monde ──
+function drawLoading() {
+  hctx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
+  hctx.save();
+  hctx.fillStyle = '#04040e';
+  hctx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+  hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+  hctx.font = '54px serif';
+  hctx.fillText('🦉', hudCanvas.width / 2, hudCanvas.height / 2 - 40);
+  hctx.fillStyle = '#cbc3ff'; hctx.font = 'bold 18px system-ui';
+  hctx.fillText('Chargement des modèles 3D…', hudCanvas.width / 2, hudCanvas.height / 2 + 20);
+  hctx.restore();
+}
+
+// Sonde de debug/test (lecture seule) : état du jeu inspectable depuis la console.
+window.__hibouDebug = () => ({
+  state, score, lives, assetsReady,
+  pos: owlGroup.position.toArray().map(v => Math.round(v * 10) / 10),
+  groundY: Math.round(effectiveGroundY(owlGroup.position.x, owlGroup.position.z) * 10) / 10,
+  speed: Math.round(speed * 10) / 10,
+  stall: stallMode,
+  skim: skimActive,
+  trees: treeColliders.length,
+  bears: bears.length,
+  bearModes: bears.map(b => b.mode),
+  rocks: rocks.length,
+  branches: branches.length,
+  nearestBranch: branches.length
+    ? Math.round(Math.min(...branches.map(b => b.sprite.position.distanceTo(owlGroup.position))))
+    : null,
+  gift: giftItem ? Math.round(giftItem.sprite.position.distanceTo(owlGroup.position)) : null,
+  giftCooldown: Math.round(giftCooldown * 10) / 10,
+  clouds: cloudSets.reduce((n, s) => n + s.data.length, 0),
+  usingModels: {
+    owl: !!models.owl, bear: !!models.bear, moon: !!models.moon,
+    trees: !!(models.pine1 || models.pine2 || models.birch || models.tree1),
+    mountains: !!(models.mountains || models.mountainGroup),
+    clouds: !!(models.cloud1 || models.cloud2 || models.cloud3)
+  }
+});
+
 resize();
-makeSky();
-makeTrees();
-makeBoundaryGrid();
-makeWindParticles();
-loop();
+drawLoading();
+loadAssets().then(() => {
+  makeSky();
+  makeTerrain();
+  makeMountainScenery();
+  makeClouds();
+  makeTrees();
+  setupOwlVisual();
+  setupBearProto();
+  makeBoundaryGrid();
+  makeFX3D();
+  makeFireflies();
+  assetsReady = true;
+  loop();
+});
+}; // fin window.__hibouStart
 </script>
 </body>
 </html>

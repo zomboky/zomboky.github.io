@@ -1,6 +1,6 @@
 {
   "example": true,
-  "note": "Exemple de démonstration — pas une donnée satellite réelle. La fluorescence solaire induite (SIF) n'a pas de produit temps réel dans le catalogue Earth Engine standard. Sources réelles identifiées : TROPOSIF (S5P/TROPOMI, mai 2018 – mars 2021 uniquement, https://data-portal.s5p-pal.com/products/troposif.html) ou GOSIF (dérivé OCO-2 + MODIS, 0.05°, 8 jours, continu). Voir README.md § Fluorescence.",
+  "note": "Exemple de démonstration — pas une donnée satellite réelle. Sert de repli tant que data/sif_cache.json n'a pas encore été produit par scripts/refresh-gosif-cache.js (ingestion réelle GOSIF v2, voir README.md § Fluorescence). TROPOSIF (S5P/TROPOMI) a été écarté : arrêté depuis mars 2021, donc inadapté à un tableau de bord vivant.",
   "unit": "mW/m2/sr/nm (SIF a 743nm, valeurs d'exemple)",
   "series": {
     "brazil_cinturao": [

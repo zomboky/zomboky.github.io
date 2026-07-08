@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Submarine — Deep Exploration</title>
+<link rel="shortcut icon" type="image/x-icon" href="https://raw.githubusercontent.com/zomboky/zomboky.github.io/master/docs/assets/icons/ours.png">
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    height: 100%;
+    background: #01121a;
+    font-family: monospace;
+    color: #cfe9ff;
+  }
+  canvas { display: block; }
+
+  #overlay {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 10;
+    background: rgba(2, 14, 22, 0.55);
+    border: 1px solid #1e4a5c;
+    padding: 8px 12px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    line-height: 1.5;
+    text-shadow: 0 0 6px rgba(0, 200, 255, 0.4);
+    pointer-events: none;
+  }
+  #overlay .title {
+    color: #7ff0ff;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+  #overlay .hint { opacity: 0.7; }
+
+  #back {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 10;
+    background: rgba(2, 14, 22, 0.55);
+    color: #cfe9ff;
+    border: 1px solid #1e4a5c;
+    padding: 8px 14px;
+    font-family: monospace;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+  #back:hover { background: rgba(0, 60, 90, 0.7); color: #7ff0ff; }
+
+  #loader {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #01121a;
+    z-index: 20;
+    letter-spacing: 3px;
+    color: #7ff0ff;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loader">◐ DIVING ◑</div>
+
+<div id="overlay">
+  <div class="title">◈ DSV-01 · Deep Explorer</div>
+  <div>Depth: <span id="depth">—</span> m</div>
+  <div class="hint">Drag: rotate · Wheel: zoom</div>
+</div>
+
+<a id="back" href="index.html">← Retour</a>
+
+<!-- Import map pour Three.js et OrbitControls via unpkg -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ============================================================
+   SCÈNE, CAMÉRA, RENDERER
+   ============================================================ */
+const scene = new THREE.Scene();
+
+// Fog exponentiel : simule la densité de l'eau et limite la vision
+scene.fog = new THREE.FogExp2(0x032838, 0.035);
+scene.background = new THREE.Color(0x021520);
+
+const camera = new THREE.PerspectiveCamera(
+  55,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  400
+);
+camera.position.set(14, 6, 18);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.85;
+document.body.appendChild(renderer.domElement);
+
+/* ============================================================
+   CONTRÔLES ORBITE
+   ============================================================ */
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 8;
+controls.maxDistance = 60;
+controls.maxPolarAngle = Math.PI * 0.85;
+controls.target.set(0, 0, 0);
+
+/* ============================================================
+   ÉCLAIRAGE — soleil vertical + ambiante bleutée
+   ============================================================ */
+
+// Ambient très douce, teinte cyan profond
+const ambient = new THREE.AmbientLight(0x1a4a6a, 0.35);
+scene.add(ambient);
+
+// Soleil : DirectionalLight venant du haut, teinte cyan/vert marin
+const sun = new THREE.DirectionalLight(0x9adfff, 1.1);
+sun.position.set(6, 30, 4);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far = 60;
+sun.shadow.camera.left = -20;
+sun.shadow.camera.right = 20;
+sun.shadow.camera.top = 20;
+sun.shadow.camera.bottom = -20;
+scene.add(sun);
+
+// HemisphereLight : différencie ciel (haut) et fond marin (bas)
+const hemi = new THREE.HemisphereLight(0x2f7fb8, 0x011a24, 0.5);
+scene.add(hemi);
+
+/* ============================================================
+   SURFACE DE L'EAU — plan supérieur vu de dessous, shader custom
+   ============================================================ */
+const surfaceGeo = new THREE.PlaneGeometry(400, 400, 32, 32);
+const surfaceMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uTime: { value: 0 },
+    uColorA: { value: new THREE.Color(0x0a3550) },
+    uColorB: { value: new THREE.Color(0x7fcfff) },
+  },
+  side: THREE.DoubleSide,
+  transparent: true,
+  depthWrite: false,
+  vertexShader: `
+    uniform float uTime;
+    varying vec2 vUv;
+    varying float vWave;
+    void main() {
+      vUv = uv;
+      vec3 p = position;
+      // Ondulations sinusoïdales pour simuler les vagues
+      float wave = sin(p.x * 0.15 + uTime * 0.9) * 0.6
+                 + cos(p.y * 0.18 + uTime * 0.7) * 0.4;
+      p.z += wave;
+      vWave = wave;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform vec3 uColorA;
+    uniform vec3 uColorB;
+    uniform float uTime;
+    varying vec2 vUv;
+    varying float vWave;
+    void main() {
+      // Rayons animés qui percent la surface (caustiques stylisées)
+      float rays = sin(vUv.x * 40.0 + uTime * 0.5)
+                 * cos(vUv.y * 40.0 - uTime * 0.4);
+      rays = smoothstep(0.6, 1.0, rays * 0.5 + 0.5);
+      vec3 col = mix(uColorA, uColorB, 0.4 + vWave * 0.3 + rays * 0.5);
+      float alpha = 0.55 + rays * 0.3;
+      gl_FragColor = vec4(col, alpha);
+    }
+  `,
+});
+const surface = new THREE.Mesh(surfaceGeo, surfaceMat);
+surface.rotation.x = -Math.PI / 2;
+surface.position.y = 22;
+scene.add(surface);
+
+/* ============================================================
+   FOND MARIN — plan sombre avec ondulations douces
+   ============================================================ */
+const floorGeo = new THREE.PlaneGeometry(300, 300, 40, 40);
+// Perturbation aléatoire des sommets pour un fond irrégulier
+const posAttr = floorGeo.attributes.position;
+for (let i = 0; i < posAttr.count; i++) {
+  const x = posAttr.getX(i);
+  const y = posAttr.getY(i);
+  const z = Math.sin(x * 0.15) * 0.8 + Math.cos(y * 0.12) * 0.9 + (Math.random() - 0.5) * 0.6;
+  posAttr.setZ(i, z);
+}
+floorGeo.computeVertexNormals();
+
+const floorMat = new THREE.MeshStandardMaterial({
+  color: 0x0a2028,
+  roughness: 0.95,
+  metalness: 0.05,
+});
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -12;
+floor.receiveShadow = true;
+scene.add(floor);
+
+/* ============================================================
+   SOUS-MARIN — construction procédurale via primitives
+   ============================================================ */
+const submarine = new THREE.Group();
+
+// Matériau principal : jaune industriel, un peu métallique
+const hullMat = new THREE.MeshStandardMaterial({
+  color: 0xf2c400,
+  roughness: 0.55,
+  metalness: 0.4,
+});
+const darkMat = new THREE.MeshStandardMaterial({
+  color: 0x111418,
+  roughness: 0.4,
+  metalness: 0.85,
+});
+const glassMat = new THREE.MeshStandardMaterial({
+  color: 0x88ddff,
+  roughness: 0.1,
+  metalness: 0.6,
+  transparent: true,
+  opacity: 0.7,
+  emissive: 0x2a5566,
+  emissiveIntensity: 0.4,
+});
+const trimMat = new THREE.MeshStandardMaterial({
+  color: 0xc44400,
+  roughness: 0.6,
+  metalness: 0.3,
+});
+
+// Coque principale : cylindre couché sur l'axe X
+const bodyGeo = new THREE.CylinderGeometry(1.4, 1.4, 6, 32, 1);
+const body = new THREE.Mesh(bodyGeo, hullMat);
+body.rotation.z = Math.PI / 2;
+body.castShadow = true;
+body.receiveShadow = true;
+submarine.add(body);
+
+// Nez avant : demi-sphère à l'avant
+const noseGeo = new THREE.SphereGeometry(1.4, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+const nose = new THREE.Mesh(noseGeo, hullMat);
+nose.rotation.z = -Math.PI / 2;
+nose.position.x = 3;
+nose.castShadow = true;
+submarine.add(nose);
+
+// Queue arrière : cône effilé
+const tailGeo = new THREE.ConeGeometry(1.4, 2, 32);
+const tail = new THREE.Mesh(tailGeo, hullMat);
+tail.rotation.z = Math.PI / 2;
+tail.position.x = -4;
+tail.castShadow = true;
+submarine.add(tail);
+
+// Bande de flottaison (trim) autour de la coque
+const trimGeo = new THREE.TorusGeometry(1.42, 0.09, 12, 48);
+const trim = new THREE.Mesh(trimGeo, trimMat);
+trim.rotation.y = Math.PI / 2;
+submarine.add(trim);
+
+// Kiosque (tour de commandement) : boîte arrondie sur le dessus
+const towerGeo = new THREE.CylinderGeometry(0.7, 0.9, 1.4, 20);
+const tower = new THREE.Mesh(towerGeo, hullMat);
+tower.position.set(-0.2, 1.6, 0);
+tower.castShadow = true;
+submarine.add(tower);
+
+// Dôme vitré au sommet du kiosque
+const domeGeo = new THREE.SphereGeometry(0.7, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+const dome = new THREE.Mesh(domeGeo, glassMat);
+dome.position.set(-0.2, 2.3, 0);
+submarine.add(dome);
+
+// Périscope : mince tige + tête
+const periMastGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.6, 8);
+const periMast = new THREE.Mesh(periMastGeo, darkMat);
+periMast.position.set(0.2, 3.1, 0);
+submarine.add(periMast);
+
+const periHeadGeo = new THREE.BoxGeometry(0.3, 0.2, 0.35);
+const periHead = new THREE.Mesh(periHeadGeo, darkMat);
+periHead.position.set(0.2, 3.95, 0);
+submarine.add(periHead);
+
+// Hublots latéraux : petits disques lumineux sur la coque
+const portholeGeo = new THREE.CircleGeometry(0.22, 20);
+const portholeMat = new THREE.MeshStandardMaterial({
+  color: 0xffe8a0,
+  emissive: 0xffcc55,
+  emissiveIntensity: 0.9,
+  roughness: 0.3,
+});
+for (let i = -2; i <= 2; i++) {
+  const p1 = new THREE.Mesh(portholeGeo, portholeMat);
+  p1.position.set(i * 0.9, 0.3, 1.41);
+  submarine.add(p1);
+  const p2 = new THREE.Mesh(portholeGeo, portholeMat);
+  p2.position.set(i * 0.9, 0.3, -1.41);
+  p2.rotation.y = Math.PI;
+  submarine.add(p2);
+}
+
+// Ailerons arrière : verticaux et horizontaux (empennage cruciforme)
+const finVertGeo = new THREE.BoxGeometry(1.4, 1.6, 0.08);
+const finV = new THREE.Mesh(finVertGeo, hullMat);
+finV.position.set(-3.6, 0, 0);
+finV.castShadow = true;
+submarine.add(finV);
+
+const finHorizGeo = new THREE.BoxGeometry(1.4, 0.08, 1.6);
+const finH = new THREE.Mesh(finHorizGeo, hullMat);
+finH.position.set(-3.6, 0, 0);
+finH.castShadow = true;
+submarine.add(finH);
+
+// Arbre de l'hélice
+const shaftGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.8, 12);
+const shaft = new THREE.Mesh(shaftGeo, darkMat);
+shaft.rotation.z = Math.PI / 2;
+shaft.position.set(-5.2, 0, 0);
+submarine.add(shaft);
+
+// Hélice : 4 pales dans un groupe séparé pour rotation animée
+const propeller = new THREE.Group();
+propeller.position.set(-5.6, 0, 0);
+submarine.add(propeller);
+
+const bladeGeo = new THREE.BoxGeometry(0.05, 1.2, 0.3);
+for (let i = 0; i < 4; i++) {
+  const blade = new THREE.Mesh(bladeGeo, darkMat);
+  blade.rotation.x = (i * Math.PI) / 2;
+  // Léger vrillage des pales pour l'illusion d'un pas d'hélice
+  blade.geometry = blade.geometry.clone();
+  const bpos = blade.geometry.attributes.position;
+  for (let j = 0; j < bpos.count; j++) {
+    const y = bpos.getY(j);
+    bpos.setZ(j, bpos.getZ(j) + y * 0.15);
+  }
+  bpos.needsUpdate = true;
+  blade.geometry.computeVertexNormals();
+  propeller.add(blade);
+}
+// Moyeu central de l'hélice
+const hubGeo = new THREE.SphereGeometry(0.18, 12, 8);
+const hub = new THREE.Mesh(hubGeo, darkMat);
+propeller.add(hub);
+
+// Phares avant : deux SpotLights éclairant l'eau devant le sous-marin
+const headlightMat = new THREE.MeshStandardMaterial({
+  color: 0xfff4c8,
+  emissive: 0xffedb0,
+  emissiveIntensity: 1.4,
+});
+const headlightGeo = new THREE.CircleGeometry(0.2, 16);
+
+function makeHeadlight(zOff) {
+  const lampMesh = new THREE.Mesh(headlightGeo, headlightMat);
+  lampMesh.position.set(3.1, -0.3, zOff);
+  lampMesh.rotation.y = Math.PI / 2;
+  submarine.add(lampMesh);
+
+  const spot = new THREE.SpotLight(0xfff2c0, 8, 40, Math.PI / 7, 0.5, 1.4);
+  spot.position.set(3.2, -0.3, zOff);
+  spot.target.position.set(20, -3, zOff);
+  spot.castShadow = true;
+  spot.shadow.mapSize.set(512, 512);
+  submarine.add(spot);
+  submarine.add(spot.target);
+  return spot;
+}
+makeHeadlight(0.55);
+makeHeadlight(-0.55);
+
+scene.add(submarine);
+
+/* ============================================================
+   PARTICULES — plancton / bulles flottant lentement vers le haut
+   ============================================================ */
+const particleCount = 800;
+const positions = new Float32Array(particleCount * 3);
+const speeds = new Float32Array(particleCount);
+for (let i = 0; i < particleCount; i++) {
+  positions[i * 3]     = (Math.random() - 0.5) * 80;
+  positions[i * 3 + 1] = (Math.random() - 0.5) * 34;
+  positions[i * 3 + 2] = (Math.random() - 0.5) * 80;
+  speeds[i] = 0.5 + Math.random() * 1.5;
+}
+const particleGeo = new THREE.BufferGeometry();
+particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+// Texture procédurale de bulle : gradient radial
+const bubbleCanvas = document.createElement('canvas');
+bubbleCanvas.width = bubbleCanvas.height = 64;
+const bctx = bubbleCanvas.getContext('2d');
+const grd = bctx.createRadialGradient(32, 32, 2, 32, 32, 30);
+grd.addColorStop(0, 'rgba(255,255,255,1)');
+grd.addColorStop(0.4, 'rgba(180,230,255,0.6)');
+grd.addColorStop(1, 'rgba(80,180,220,0)');
+bctx.fillStyle = grd;
+bctx.fillRect(0, 0, 64, 64);
+const bubbleTex = new THREE.CanvasTexture(bubbleCanvas);
+
+const particleMat = new THREE.PointsMaterial({
+  size: 0.5,
+  map: bubbleTex,
+  transparent: true,
+  opacity: 0.7,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+  color: 0xbfeaff,
+});
+const particles = new THREE.Points(particleGeo, particleMat);
+scene.add(particles);
+
+/* ============================================================
+   RAYONS DE LUMIÈRE (God rays stylisés) — quelques quads très allongés
+   ============================================================ */
+const rayGroup = new THREE.Group();
+const rayMat = new THREE.MeshBasicMaterial({
+  color: 0x9adfff,
+  transparent: true,
+  opacity: 0.06,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+});
+for (let i = 0; i < 12; i++) {
+  const w = 1 + Math.random() * 2;
+  const rayGeo = new THREE.PlaneGeometry(w, 40);
+  const ray = new THREE.Mesh(rayGeo, rayMat);
+  ray.position.set(
+    (Math.random() - 0.5) * 60,
+    5,
+    (Math.random() - 0.5) * 60
+  );
+  ray.rotation.z = (Math.random() - 0.5) * 0.4;
+  ray.rotation.y = Math.random() * Math.PI;
+  rayGroup.add(ray);
+}
+scene.add(rayGroup);
+
+/* ============================================================
+   BOUCLE D'ANIMATION
+   ============================================================ */
+const clock = new THREE.Clock();
+const depthEl = document.getElementById('depth');
+const loaderEl = document.getElementById('loader');
+
+// Cache le loader dès la première frame
+requestAnimationFrame(() => {
+  loaderEl.style.transition = 'opacity 0.6s';
+  loaderEl.style.opacity = '0';
+  setTimeout(() => loaderEl.remove(), 700);
+});
+
+function animate() {
+  const t = clock.getElapsedTime();
+
+  // Hélice tourne en continu
+  propeller.rotation.x = t * 6;
+
+  // Flottaison sinusoïdale du sous-marin (courants marins)
+  submarine.position.y = Math.sin(t * 0.6) * 0.6;
+  submarine.position.z = Math.cos(t * 0.4) * 0.5;
+  submarine.rotation.z = Math.sin(t * 0.5) * 0.04;
+  submarine.rotation.y = Math.sin(t * 0.25) * 0.05;
+
+  // Surface ondulée : maj de l'uniform temps
+  surfaceMat.uniforms.uTime.value = t;
+
+  // Particules : montée lente et wrap quand elles atteignent la surface
+  const pos = particles.geometry.attributes.position.array;
+  for (let i = 0; i < particleCount; i++) {
+    pos[i * 3 + 1] += 0.008 * speeds[i];
+    // Petite dérive horizontale
+    pos[i * 3]     += Math.sin(t * 0.3 + i) * 0.002;
+    pos[i * 3 + 2] += Math.cos(t * 0.25 + i) * 0.002;
+    if (pos[i * 3 + 1] > 20) {
+      pos[i * 3 + 1] = -14;
+      pos[i * 3]     = (Math.random() - 0.5) * 80;
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 80;
+    }
+  }
+  particles.geometry.attributes.position.needsUpdate = true;
+
+  // Rayons : légère respiration d'opacité
+  rayMat.opacity = 0.05 + Math.sin(t * 0.5) * 0.02;
+
+  // Profondeur affichée (fictive, basée sur y de la caméra)
+  depthEl.textContent = Math.max(0, Math.round(120 - camera.position.y * 3));
+
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+animate();
+
+/* ============================================================
+   RESIZE
+   ============================================================ */
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+
+</body>
+</html>

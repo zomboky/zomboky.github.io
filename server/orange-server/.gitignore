@@ -1,1 +1,6 @@
 node_modules/
+data/gosif-cache/
+data/sif_cache.json
+data/dashboard.local.json
+data/trioza_occurrences.json
+scripts/__pycache__/

@@ -16,6 +16,9 @@ l'utilisateur (à revisiter si le style dérive) :
 - https://spacesandwich.neocities.org/
 - https://sunnysvideo.neocities.org/
 
+Pour les assets (gifs, textures, doodles, images rétro) :
+- https://www.cameronsworld.net/ (archive/collection impressionnante de gifs et images du vieux web, librement consultable)
+
 Ce qu'on en retient : fond texturé/tuilé (souvent un gif), police
 monospace ou pixel, curseur personnalisé, bandeau "under construction"
 avec texte clignotant + marquee défilant, boutons façon vieux bouton

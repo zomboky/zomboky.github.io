@@ -174,3 +174,67 @@ body {
   align-items: center;        /* aligne verticalement */
   gap: 2rem;                  /* espace entre les éléments */
 }
+
+/* boutons style neon arcade — distinct du retro-button gris Windows */
+@keyframes neon-flicker {
+  0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% { opacity: 1; }
+  20%, 22%, 24%, 55% { opacity: 0.7; }
+}
+
+.neon-button {
+  display: inline-block;
+  font-family: monospace;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  text-decoration: none;
+  color: #cc44ff;
+  background: #0a000f;
+  border: 2px solid #cc44ff;
+  padding: 0.65rem 1.4rem;
+  box-shadow: 0 0 6px #cc44ff, 0 0 14px #8800cc, inset 0 0 8px rgba(204,68,255,0.12);
+  text-shadow: 0 0 8px #cc44ff, 0 0 18px #aa00ff;
+  image-rendering: pixelated;
+  animation: neon-flicker 6s infinite;
+}
+
+.neon-button:hover {
+  color: #e880ff;
+  background: #140020;
+  box-shadow: 0 0 14px #cc44ff, 0 0 30px #aa00ff, 0 0 60px #8800cc, inset 0 0 14px rgba(204,68,255,0.28);
+  text-shadow: 0 0 14px #e880ff, 0 0 28px #cc44ff, 0 0 50px #aa00ff;
+  animation: none;
+}
+
+.neon-button-gold {
+  color: #ffaa00;
+  background: #0f0800;
+  border-color: #ffcc00;
+  box-shadow: 0 0 6px #ffaa00, 0 0 14px #cc6600, inset 0 0 8px rgba(255,170,0,0.12);
+  text-shadow: 0 0 8px #ffcc00, 0 0 18px #ff8800;
+  animation: neon-flicker 4s 1.5s infinite;
+}
+
+.neon-button-gold:hover {
+  color: #ffe066;
+  background: #1a0f00;
+  box-shadow: 0 0 14px #ffcc00, 0 0 30px #ff8800, 0 0 60px #cc4400, inset 0 0 14px rgba(255,200,0,0.28);
+  text-shadow: 0 0 14px #ffe066, 0 0 28px #ffaa00, 0 0 50px #ff6600;
+  animation: none;
+}
+
+/* badge "NEW" pour la promo v6.2 */
+.version-badge {
+  display: inline-block;
+  font-family: monospace;
+  font-size: 0.7em;
+  font-weight: bold;
+  color: #0a000f;
+  background: #ffaa00;
+  padding: 0.15em 0.45em;
+  margin-left: 0.5em;
+  vertical-align: middle;
+  letter-spacing: 1px;
+  text-shadow: none;
+  box-shadow: 0 0 6px #ff8800;
+}

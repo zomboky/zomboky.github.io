@@ -1,0 +1,12 @@
+[Unit]
+Description=Rafraîchit le cache GOSIF (fluorescence SIF) pour orange-server
+After=network.target
+
+[Service]
+Type=oneshot
+User=oranged
+Group=oranged
+Environment=GOSIF_PYTHON_BIN=/usr/bin/python3
+WorkingDirectory=/opt/orange-server
+ExecStart=/usr/bin/node /opt/orange-server/scripts/refresh-gosif-cache.js
+TimeoutStartSec=3600
