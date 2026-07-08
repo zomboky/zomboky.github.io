@@ -21,6 +21,7 @@ const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 const { spawnSync } = require('child_process');
+const fetch = require('node-fetch');
 
 const BASE_URL = 'https://data.globalecology.unh.edu/data/GOSIF_v2/8day/';
 const CACHE_DIR = path.join(__dirname, '..', 'data', 'gosif-cache');
