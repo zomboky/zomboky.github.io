@@ -527,7 +527,7 @@ function updateBoundaryGrid() {
 //  si un fichier manque (hors-ligne, 404…). Voir docs/models/CREDITS.md.
 // ══════════════════════════════════════════════════
 const MODEL_URLS = {
-  owl:           'models/barnowl.glb',
+  owl:           'modele-hibou/OwlWings_animation.glb',
   bear:          'models/bear.glb',
   moon:          'models/moon.glb',
   pine1:         'models/pine1.glb',
@@ -541,6 +541,7 @@ const MODEL_URLS = {
   cloud3:        'models/cloud3.glb'
 };
 const models = {};
+const modelClips = {}; // clips d'animation (le cas échéant) du .glb, indexés comme MODEL_URLS
 let assetsReady = false;
 
 async function loadAssets() {
@@ -548,8 +549,12 @@ async function loadAssets() {
   const entries = Object.entries(MODEL_URLS);
   const results = await Promise.allSettled(entries.map(([, url]) => loader.loadAsync(url)));
   results.forEach((res, i) => {
-    if (res.status === 'fulfilled') models[entries[i][0]] = res.value.scene;
-    else console.warn('Modèle 3D indisponible (repli procédural) :', entries[i][0], res.reason);
+    if (res.status === 'fulfilled') {
+      models[entries[i][0]] = res.value.scene;
+      if (res.value.animations && res.value.animations.length) modelClips[entries[i][0]] = res.value.animations;
+    } else {
+      console.warn('Modèle 3D indisponible (repli procédural) :', entries[i][0], res.reason);
+    }
   });
 }
 
@@ -1224,15 +1229,32 @@ scene.add(owlGroup);
 // barnowl.glb regarde vers +Z → demi-tour. Ajuster ici si le modèle change.
 const OWL_MODEL_YAW = Math.PI;
 let owl = { wings: null, body: null, bob: null }; // rempli par setupOwlVisual
+let owlMixer = null, owlAction = null; // pilotage de l'animation de vol du modèle GLB (voir updateFlap)
 
 function setupOwlVisual() {
   if (models.owl) {
+    // Modèle "ailes seules" (12139_OwlWings, voir docs/modele-hibou) : pas de matériau
+    // exporté dans le .glb, on lui donne une teinte plume plausible.
+    models.owl.traverse(o => {
+      if (o.isMesh) {
+        o.material = new THREE.MeshStandardMaterial({ color: 0x8a6a3f, roughness: 0.85, side: THREE.DoubleSide });
+      }
+    });
     // Normalisation par l'envergure (X) plutôt que la profondeur (Z) : ce modèle a les
     // ailes largement déployées, une normalisation par longueur le rendrait démesuré.
     const norm = normalizeModel(models.owl, { width: 2.6, groundAlign: false, yaw: OWL_MODEL_YAW });
     norm.rotation.x = -0.25; // légère assiette piquée : posture de vol plutôt que perché
     owlGroup.add(norm);
     owl = { wings: null, body: null, bob: norm };
+
+    // Anime le clip de battement d'ailes du .glb (WingsArmatureAction) — sa vitesse de
+    // lecture est recalée sur la vitesse de vol dans updateFlap(), pas ici.
+    const clips = modelClips.owl;
+    if (clips && clips.length) {
+      owlMixer = new THREE.AnimationMixer(norm);
+      owlAction = owlMixer.clipAction(clips[0]);
+      owlAction.play();
+    }
 
     // Gabarit de collision dérivé de la boîte englobante réelle du modèle (et non de son
     // envergure, qui inclut les ailes déployées) : le corps qui touche vraiment le décor
@@ -1289,7 +1311,18 @@ function updateCameraClip() {
 }
 
 let flapPhase = 0;
+// Bornes de cadence du clip GLB (en multiplicateur de sa vitesse de lecture d'origine) :
+// quasi figé (glissé) à l'arrêt, battement rapide à pleine vitesse — jamais totalement
+// nul pour garder un frémissement d'ailes même immobile.
+const FLAP_CLIP_RATE_MIN = 0.25;
+const FLAP_CLIP_RATE_MAX = 3.2;
 function updateFlap(dt, speedRatio) {
+  if (owlMixer) {
+    // Modèle GLB animé : la vitesse de lecture du clip suit la vitesse de vol du hibou.
+    owlMixer.timeScale = FLAP_CLIP_RATE_MIN + (FLAP_CLIP_RATE_MAX - FLAP_CLIP_RATE_MIN) * speedRatio;
+    owlMixer.update(dt);
+    return;
+  }
   const amp  = 0.5 + 0.7 * speedRatio;
   const rate = 5 + 14 * speedRatio;
   flapPhase += rate * dt;
@@ -1301,7 +1334,7 @@ function updateFlap(dt, speedRatio) {
     owl.wings[1].rotation.z = angle;
     owl.body.position.y = Math.sin(flapPhase * 0.5) * 0.05;
   } else if (owl.bob) {
-    // Modèle GLB statique : ondulation de vol (bob vertical + léger roulis)
+    // Modèle GLB statique (pas de clip) : ondulation de vol (bob vertical + léger roulis)
     owl.bob.position.y = Math.sin(flapPhase * 0.5) * 0.12;
     owl.bob.rotation.z = s * 0.06 * (0.4 + 0.6 * speedRatio);
   }
