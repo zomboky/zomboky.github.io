@@ -5,6 +5,7 @@ import { createFlightState, stepFlight } from './physics.js';
 import { createWorld, SPAWN_X, SPAWN_Z, GROUND_Y } from './world.js';
 import * as hud from './hud.js';
 import { saveDesign, loadDesign as fetchDesign } from './save.js';
+import { createTouchControls, isTouchDevice } from './touch-controls.js';
 
 const STATE = { HANGAR: 'hangar', FLIGHT: 'flight' };
 let appState = STATE.HANGAR;
@@ -70,6 +71,16 @@ document.getElementById('btn-load-confirm').addEventListener('click', () => {
 document.getElementById('btn-fly').addEventListener('click', () => enterFlight());
 document.getElementById('btn-back-hangar').addEventListener('click', () => enterHangar());
 
+// Panneau hangar rétractable : replié par défaut sur petit écran / tactile,
+// où il recouvre trop de la vue 3D nécessaire pour taper sur les markers.
+const hangarUi = document.getElementById('hangar-ui');
+const hangarToggle = document.getElementById('hangar-toggle');
+if (window.innerWidth < 640 || isTouchDevice()) hangarUi.classList.add('collapsed');
+hangarToggle.addEventListener('click', () => hangarUi.classList.toggle('collapsed'));
+
+// ── Contrôles tactiles (vol) ──
+const touch = isTouchDevice() ? createTouchControls({ mount: document.getElementById('flight-hud') }) : null;
+
 // ── Monde + vol ──
 let world = null;
 let flightRig = null;
@@ -99,8 +110,10 @@ function enterFlight() {
   flightState = createFlightState(spawnPos, new THREE.Quaternion());
 
   document.getElementById('hangar-ui').hidden = true;
+  document.getElementById('hangar-toggle').hidden = true;
   document.getElementById('flight-hud').hidden = false;
   appState = STATE.FLIGHT;
+  touch?.show();
 }
 
 function enterHangar() {
@@ -108,9 +121,11 @@ function enterHangar() {
   if (world) world.group.visible = false;
   scene.background = new THREE.Color(0x0e1218);
   document.getElementById('hangar-ui').hidden = false;
+  document.getElementById('hangar-toggle').hidden = false;
   document.getElementById('flight-hud').hidden = true;
   builder.show();
   appState = STATE.HANGAR;
+  touch?.hide();
 }
 
 // ── Contrôles clavier ──
@@ -124,12 +139,21 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
 
 function readInput() {
-  return {
+  const kb = {
     pitch: (keys['arrowup'] || keys['z'] ? 1 : 0) - (keys['arrowdown'] || keys['s'] ? 1 : 0),
     roll: (keys['arrowright'] || keys['d'] ? 1 : 0) - (keys['arrowleft'] || keys['q'] ? 1 : 0),
     yaw: (keys['e'] ? 1 : 0) - (keys['a'] ? 1 : 0),
     throttleUp: !!keys[' '],
     brake: !!keys['shift'],
+  };
+  if (!touch) return kb;
+  const t = touch.getInput();
+  return {
+    pitch: THREE.MathUtils.clamp(kb.pitch + t.pitch, -1, 1),
+    roll: THREE.MathUtils.clamp(kb.roll + t.roll, -1, 1),
+    yaw: THREE.MathUtils.clamp(kb.yaw + t.yaw, -1, 1),
+    throttleUp: kb.throttleUp || t.throttleUp,
+    brake: kb.brake || t.brake,
   };
 }
 
