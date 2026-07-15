@@ -1468,6 +1468,7 @@ window.addEventListener('keydown', e => {
     if (e.key === 'Escape') { exitMultiplayerToStart(); return; }
     if (e.key === 'Enter' && mp) { mp.quickJoin(); return; }
     if ((e.key === 'p' || e.key === 'P') && mp) { mp.changePseudo(); return; }
+    if (e.key === 'k' || e.key === 'K') { enterSoloMultiplayerTest(); return; }
     return;
   }
   if (e.key === 'Escape') { settingsOpen = false; return; }
@@ -2710,6 +2711,13 @@ function clearMultiplayerWorld() {
   setLocalCannon(false);
   wingDamage.left = 1; wingDamage.right = 1;
   mouseFireHeld = false; mpFireAccum = 0;
+}
+
+// Test solo hors-ligne (touche [K] dans le salon) : lance directement une manche
+// multijoueur sans serveur, pour essayer le canon/les munitions sans les ours.
+function enterSoloMultiplayerTest() {
+  if (!assetsReady) return;
+  beginMultiplayerGame('brown');
 }
 
 // Partie rejointe (message 'joined' du serveur) : lance la manche multijoueur.
