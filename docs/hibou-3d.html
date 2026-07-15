@@ -86,6 +86,8 @@
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from './three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as skeletonClone } from './three/examples/jsm/utils/SkeletonUtils.js';
+import { initMultiplayer, auraColorHex } from './scripts/hibou3d-multiplayer.js';
 
 // Le jeu ne démarre qu'après vérification d'un token délivré par le serveur.
 // window.__hibouStart(token) est appelé par hibou3d-lock.js une fois le token
@@ -107,7 +109,7 @@ window.__hibouStart = async function (token) {
 // ══════════════════════════════════════════════════
 //  ÉTAT DU JEU
 // ══════════════════════════════════════════════════
-const S = { START: 0, PLAY: 1, OVER: 2, PAUSED: 3, LOOT: 4 };
+const S = { START: 0, PLAY: 1, OVER: 2, PAUSED: 3, LOOT: 4, MP_LOBBY: 5, MP_DEAD: 6 };
 let state = S.START;
 
 const MAX_COMBO_TIME = 120;
@@ -482,6 +484,7 @@ scene.fog = new THREE.Fog(0x0c1030, ARENA_RADIUS_XZ * 0.55, ARENA_RADIUS_XZ * 1.
 
 let OWL_GROUND_CLEAR = 1.2; // garde au sol : sous (terrain + marge) = crash — recalculé sur le vrai modèle dans setupOwlVisual()
 let OWL_COLLIDE_RADIUS = 0.3; // rayon de collision décor — idem, affiné sur le vrai modèle
+let OWL_HITBOX = { w: 2.6, h: 1.2, d: 1.6 }; // boîte englobante (multijoueur : classement tête/ailes/corps des impacts)
 const TREE_HIT_COOLDOWN  = 45;
 // Plafond d'altitude des branches/cadeaux : même proportion qu'avant (130 sur une
 // arène de hauteur 210) rapportée à la nouvelle ARENA_RADIUS_Y (x3).
@@ -1263,6 +1266,7 @@ function setupOwlVisual() {
     const size = box.getSize(new THREE.Vector3());
     OWL_GROUND_CLEAR   = size.y / 2 + 0.15;
     OWL_COLLIDE_RADIUS = Math.min(size.y, size.z) / 2;
+    OWL_HITBOX = { w: size.x, h: size.y, d: size.z };
   } else {
     const built = buildOwl();
     owlGroup.add(built.group);
@@ -1456,8 +1460,19 @@ if (isMobile) {
 window.addEventListener('keydown', e => {
   keys[e.key.toLowerCase()] = true;
   if (e.key === ' ' || ARROW_KEYS.includes(e.key.toLowerCase())) e.preventDefault();
+  // Bascule du mode triche dev (indicateurs de position des adversaires) —
+  // volontairement absente des écrans d'aide.
+  if (e.ctrlKey && e.shiftKey && (e.key === 'X' || e.key === 'x')) { toggleDevEsp(); return; }
   if (e.key === 'o' || e.key === 'O') { toggleSettings(); return; }
+  if (state === S.MP_LOBBY) {
+    if (e.key === 'Escape') { exitMultiplayerToStart(); return; }
+    if (e.key === 'Enter' && mp) { mp.quickJoin(); return; }
+    if ((e.key === 'p' || e.key === 'P') && mp) { mp.changePseudo(); return; }
+    return;
+  }
   if (e.key === 'Escape') { settingsOpen = false; return; }
+  if ((e.key === 'm' || e.key === 'M') && (state === S.START || state === S.OVER) && !isMobile) { enterMultiplayerLobby(); return; }
+  if (multiplayerMode && state === S.PAUSED && e.key === 'Backspace') { leaveMultiplayerGame(); return; }
   if (state === S.START || state === S.OVER) beginGame();
   else if (state === S.PAUSED) requestFlightPointerLock();
 });
@@ -1477,8 +1492,8 @@ window.addEventListener('pointermove', e => {
   }
   if (sliderDrag) handleSliderDrag(e.clientX);
 });
-window.addEventListener('pointerup',     e => { if (isMobile) return; sliderDrag = false; });
-window.addEventListener('pointercancel', e => { if (isMobile) return; sliderDrag = false; });
+window.addEventListener('pointerup',     e => { if (e.button === 0) mouseFireHeld = false; if (isMobile) return; sliderDrag = false; });
+window.addEventListener('pointercancel', e => { mouseFireHeld = false; if (isMobile) return; sliderDrag = false; });
 window.addEventListener('pointerdown', e => {
   if (isMobile) return; // tactile géré par touchstart/touchmove/touchend natifs
   if (settingsOpen) {
@@ -1494,6 +1509,8 @@ window.addEventListener('pointerdown', e => {
     }
     return;
   }
+  if (state === S.MP_LOBBY) { if (mp) mp.onLobbyClick(e.clientX, e.clientY); return; }
+  if (multiplayerMode && state === S.PLAY && e.button === 0) mouseFireHeld = true;
   if (state === S.START || state === S.OVER) beginGame();
   else if (state === S.PLAY || state === S.PAUSED) requestFlightPointerLock();
 });
@@ -1608,12 +1625,16 @@ function updateFlight(dt) {
   // n'est plus une girouette instantanée — il faut « emmancher » la rotation).
   // Aucun axe ne « recentre » automatiquement quand on relâche : l'inclinaison
   // tenue reste tenue, il faut contre-braquer pour revenir à plat, comme un vrai avion.
-  _tgtAng.set(pitchIn * PITCH_RATE, yawIn * YAW_RATE, rollIn * ROLL_RATE).multiplyScalar(authority);
+  // Multijoueur : des ailes abîmées (balles reçues) réduisent l'autorité de
+  // roulis, et une asymétrie gauche/droite tire le roulis vers l'aile touchée.
+  // En solo wingDamage reste à {1,1} : les termes ci-dessous sont neutres.
+  const wingAvg = (wingDamage.left + wingDamage.right) / 2;
+  _tgtAng.set(pitchIn * PITCH_RATE, yawIn * YAW_RATE, rollIn * ROLL_RATE * wingAvg).multiplyScalar(authority);
   const kAng = 1 - Math.exp(-ANG_RESPONSE * dt); // lissage exponentiel, stable quel que soit dt
   angRate.lerp(_tgtAng, kAng);
   owlGroup.rotateX(angRate.x * dt);
   owlGroup.rotateY(angRate.y * dt);
-  owlGroup.rotateZ(angRate.z * dt);
+  owlGroup.rotateZ((angRate.z + (wingDamage.right - wingDamage.left) * WING_DMG_TORQUE) * dt);
   owlGroup.rotateY(mdx); // souris = pilotage fin, appliqué directement (crisp)
   owlGroup.rotateX(-mdy); // tangage inversé : souris vers le bas = cabrer, comme un manche
 
@@ -1681,7 +1702,7 @@ function updateFlight(dt) {
   const dynLift  = AIR_LIFT * v * v * CL;
   const flapLift = FLAP_LIFT * (0.35 + 0.65 * throttle) * Math.max(0, 1 - v / FLAP_FADE)
                  * (1 - THREE.MathUtils.smoothstep(_fwd.y, 0.35, 0.8));
-  _acc.addScaledVector(_up, (dynLift + flapLift) * OWL_MASS);
+  _acc.addScaledVector(_up, (dynLift + flapLift) * wingAvg * OWL_MASS); // wingAvg : portance amputée si les ailes sont touchées (multijoueur)
 
   // Traînée : parasite (∝ v²) + induite (∝ CL²), opposée à la vitesse.
   // Le frein (Shift/✋) déploie des aérofreins : traînée renforcée, décélération en douceur.
@@ -1811,6 +1832,7 @@ function onTreeHit() {
 // game over immédiat — contrairement aux arbres/ours, on ne relève pas de vie ici.
 function onGroundCrash() {
   if (state !== S.PLAY) return;
+  if (multiplayerMode) { mpDie('crash'); return; } // en multijoueur : cooldown de respawn, pas de game over solo
   best = Math.max(best, score);
   state = S.OVER;
   overReason = 'crash';
@@ -2171,6 +2193,7 @@ function setupBearProto() {
 }
 
 function bearTarget() {
+  if (multiplayerMode) return 0; // multijoueur : les ours disparaissent (tous les sites de spawn passent par ce plafond)
   if (moon.state === 'blood') return 18;
   if (moon.state === 'full')  return 12;
   return Math.min(2 + Math.floor(score / 15), 10);
@@ -2339,6 +2362,410 @@ function updateBears(dt) {
 }
 
 // ══════════════════════════════════════════════════
+//  MULTIJOUEUR — canon, balles, munitions, dégâts d'aile, mort/respawn, auras.
+//  Le réseau, le lobby et les hiboux distants vivent dans
+//  scripts/hibou3d-multiplayer.js (module initialisé au boot, objet `mp`).
+//  Voir plans/hibou3d-multiplayer.md pour l'architecture d'ensemble.
+// ══════════════════════════════════════════════════
+let mp = null;                    // API du module réseau (initMultiplayer au boot)
+let multiplayerMode = false;      // gate global : ours à 0, munitions au lieu des branches, etc.
+let wingDamage = { left: 1, right: 1 }; // 1 = aile intacte — lu chaque frame par updateFlight()
+let mpAmmo = 150;                 // munitions restantes dans le canon
+let mpRespawnTimer = 0;
+let mpDeathCause = 'headshot';    // 'headshot' | 'crash' — titre de l'écran de mort
+let mouseFireHeld = false;        // clic gauche maintenu (tir)
+let mpFireAccum = 0;              // accumulateur de cadence (100 coups/s)
+
+const MP_RESPAWN_DELAY = 15;      // s — cooldown avant réapparition
+const MP_MAG_CAP = 150;           // taille du chargeur
+const MP_FIRE_RATE = 100;         // coups/s (6000 coups/min)
+const MP_BULLET_SPEED = 120;      // u/s (~3,5× MAX_SPEED : esquivable mais rapide)
+const MP_BULLET_LIFE = 2.5;       // s de vol (~300 u de portée)
+const MP_BULLET_MAX = 400;        // plafond de sprites (balles locales + tracers adverses)
+const MP_AMMO_CRATE_COUNT = 3;    // pool de caisses — bien plus rare que les 14 branches du solo
+const MP_AMMO_GRANT = 60;        // munitions par caisse (le serveur fait foi via 'ammo')
+const WING_HIT_MULT = 0.6;        // chaque balle dans une aile multiplie sa perf par 0.6…
+const WING_DAMAGE_FLOOR = 0.25;   // …avec un plancher : le vol reste possible, juste pénible
+const WING_DMG_TORQUE = 0.6;      // rad/s de dérive de roulis vers l'aile abîmée (à dégât max)
+
+let devEspEnabled = false;        // mode triche dev : position des adversaires sur le HUD
+try { devEspEnabled = localStorage.getItem('h3d_dev_esp') === '1'; } catch (_e) { /* stockage indisponible */ }
+function toggleDevEsp() {
+  devEspEnabled = !devEspEnabled;
+  try { localStorage.setItem('h3d_dev_esp', devEspEnabled ? '1' : '0'); } catch (_e) { /* stockage indisponible */ }
+}
+
+const ammoCrateTexture = emojiTexture('📦', 160);
+
+// ── Aura colorée : halo additif enfant du groupe d'un hibou — même technique
+//    que le halo de menace des ours et le halo du cadeau ──
+function makeAuraSprite(colorHex) {
+  const mat = new THREE.SpriteMaterial({
+    map: glowTexture, color: colorHex, transparent: true, opacity: 0.55,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.setScalar(3.4);
+  return { sprite, mat };
+}
+let localAura = null;
+function setLocalAura(colorName) {
+  removeLocalAura();
+  localAura = makeAuraSprite(auraColorHex(colorName));
+  owlGroup.add(localAura.sprite);
+}
+function removeLocalAura() {
+  if (!localAura) return;
+  owlGroup.remove(localAura.sprite);
+  localAura.mat.dispose();
+  localAura = null;
+}
+
+// ── Canon : petit cylindre procédural sous le ventre, pointé vers l'avant (-Z),
+//    même esprit que le hibou procédural de secours buildOwl() ──
+function makeCannonMesh() {
+  const g = new THREE.Group();
+  const barrel = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.05, 0.08, 0.55, 8),
+    new THREE.MeshStandardMaterial({ color: 0x3a3f4a, roughness: 0.5, metalness: 0.7 })
+  );
+  barrel.rotation.x = Math.PI / 2; // l'axe du cylindre (Y) bascule le long de -Z
+  g.add(barrel);
+  g.position.set(0, -0.28, -0.55);
+  return g;
+}
+let localCannon = null;
+function setLocalCannon(on) {
+  if (on && !localCannon) { localCannon = makeCannonMesh(); owlGroup.add(localCannon); }
+  else if (!on && localCannon) { owlGroup.remove(localCannon); localCannon = null; }
+}
+
+// ── Hibou distant : clone visuel du modèle GLB local (géométries/matériaux
+//    partagés ; SkeletonUtils re-clone le squelette pour que l'animation de
+//    battement fonctionne indépendamment sur chaque clone) ──
+function makeRemoteOwlVisual() {
+  if (models.owl && owl.bob) {
+    const obj = skeletonClone(owl.bob);
+    let mixer = null;
+    const clips = modelClips.owl;
+    if (clips && clips.length) {
+      mixer = new THREE.AnimationMixer(obj);
+      mixer.clipAction(clips[0]).play();
+    }
+    obj.add(makeCannonMesh());
+    return { obj, mixer };
+  }
+  const built = buildOwl(); // repli procédural, comme pour le hibou local
+  built.group.add(makeCannonMesh());
+  return { obj: built.group, mixer: null };
+}
+
+// ── Balles : projectiles réels (pas de hitscan). Les balles locales testent la
+//    collision contre les hiboux distants ; les tracers adverses (relayés par
+//    le serveur) sont purement cosmétiques — c'est le TIREUR qui fait foi. ──
+const bulletMatLocal = new THREE.SpriteMaterial({
+  map: glowTexture, color: 0xfff0a0, transparent: true, opacity: 0.95,
+  blending: THREE.AdditiveBlending, depthWrite: false
+});
+const bulletMatRemote = new THREE.SpriteMaterial({
+  map: glowTexture, color: 0xff8040, transparent: true, opacity: 0.9,
+  blending: THREE.AdditiveBlending, depthWrite: false
+});
+let bullets = []; // { sprite, vel, remote, life }
+function spawnBullet(originPos, dir, isRemote) {
+  if (bullets.length >= MP_BULLET_MAX) removeBullet(0); // recycle la plus ancienne
+  const sprite = new THREE.Sprite(isRemote ? bulletMatRemote : bulletMatLocal); // matériaux PARTAGÉS : rien à disposer par balle
+  sprite.scale.setScalar(0.5);
+  sprite.position.copy(originPos);
+  scene.add(sprite);
+  bullets.push({ sprite, vel: dir.clone().multiplyScalar(MP_BULLET_SPEED), remote: isRemote, life: MP_BULLET_LIFE });
+}
+function removeBullet(i) {
+  scene.remove(bullets[i].sprite);
+  bullets.splice(i, 1);
+}
+function clearBullets() {
+  for (const b of bullets) scene.remove(b.sprite);
+  bullets = [];
+}
+
+// Impact classé en tête / aile gauche / aile droite / corps, par position dans
+// le repère LOCAL du hibou touché (boîte englobante OWL_HITBOX, avant = -Z,
+// droite du hibou = +X).
+const _hitLocal = new THREE.Vector3();
+function classifyHitLocation(remoteObj, worldPos) {
+  _hitLocal.copy(worldPos);
+  remoteObj.worldToLocal(_hitLocal);
+  if (Math.abs(_hitLocal.x) > OWL_HITBOX.w * 0.2) {
+    return _hitLocal.x > 0 ? 'right-wing' : 'left-wing';
+  }
+  if (_hitLocal.z < -OWL_HITBOX.d * 0.15 && _hitLocal.y > -OWL_HITBOX.h * 0.1) return 'head';
+  return 'body';
+}
+
+// Une balle à 120 u/s parcourt ~2 u par frame : on teste la distance du hibou
+// au SEGMENT parcouru cette frame, pas seulement au point d'arrivée, sinon la
+// balle « saute » à travers la hitbox une fois sur deux.
+const _segA = new THREE.Vector3(), _segAB = new THREE.Vector3(), _segClosest = new THREE.Vector3();
+function segmentDistanceTo(center, a, b) {
+  _segAB.copy(b).sub(a);
+  const len2 = _segAB.lengthSq();
+  let t = 0;
+  if (len2 > 1e-8) t = THREE.MathUtils.clamp(_segClosest.copy(center).sub(a).dot(_segAB) / len2, 0, 1);
+  _segClosest.copy(a).addScaledVector(_segAB, t);
+  return _segClosest.distanceTo(center);
+}
+
+function updateBullets(dt) {
+  const remoteOwls = mp ? mp.remotesList() : [];
+  const hitRadius = Math.max(1.3, OWL_COLLIDE_RADIUS * 2.5);
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    b.life -= dt;
+    _segA.copy(b.sprite.position);
+    b.sprite.position.addScaledVector(b.vel, dt);
+    if (b.life <= 0 || b.sprite.position.y < effectiveGroundY(b.sprite.position.x, b.sprite.position.z)) {
+      removeBullet(i);
+      continue;
+    }
+    if (b.remote) continue;
+    for (const r of remoteOwls) {
+      if (!r.alive) continue;
+      if (segmentDistanceTo(r.obj.position, _segA, b.sprite.position) > hitRadius) continue;
+      const location = classifyHitLocation(r.obj, b.sprite.position);
+      mp.sendHit(r.id, location); // la victime applique elle-même l'effet en recevant le relais
+      spawnFX(b.sprite.position, 8, 'death', location === 'head' ? '🎯 TÊTE !' : '');
+      removeBullet(i);
+      break;
+    }
+  }
+}
+
+// Tir : clic gauche (ou F) maintenu — cadence exacte via accumulateur, pour ne
+// pas dépendre du framerate (100 coups/s ≈ 1,7 balle par frame à 60 fps).
+const _fireDir = new THREE.Vector3(), _firePos = new THREE.Vector3();
+function updateMPFire(dt) {
+  const fireHeld = mouseFireHeld || keys['f'];
+  if (!fireHeld || mpAmmo <= 0) { mpFireAccum = 0; return; }
+  mpFireAccum += dt * MP_FIRE_RATE;
+  const n = Math.min(Math.floor(mpFireAccum), mpAmmo, 6);
+  mpFireAccum -= Math.floor(mpFireAccum);
+  if (n <= 0) return;
+  _fireDir.set(0, 0, -1).applyQuaternion(owlGroup.quaternion);
+  _firePos.set(0, -0.28, -0.9);
+  owlGroup.localToWorld(_firePos); // bouche du canon
+  for (let i = 0; i < n; i++) {
+    spawnBullet(_firePos, _fireDir, false);
+    mpAmmo--;
+    mp.sendFire();
+  }
+}
+
+// Tracer cosmétique d'un tir adverse (message 'fire' relayé par le serveur).
+const _tracerPos = new THREE.Vector3();
+function onMPRemoteFire(pos, dir) {
+  _tracerPos.copy(pos).addScaledVector(dir, 1.2);
+  spawnBullet(_tracerPos, dir, true);
+}
+
+// ── Caisses de munitions : réutilisent la mécanique des branches (placement
+//    via collectibleSpawnPos, recyclage à distance, ramassage par proximité)
+//    mais en pool bien plus petit — elles REMPLACENT les branches en multijoueur ──
+let ammoCrates = [];
+function newAmmoCrate() {
+  const mat = new THREE.SpriteMaterial({ map: ammoCrateTexture, transparent: true });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(2.2, 2.2, 1);
+  const pos = collectibleSpawnPos(60, 260);
+  sprite.position.copy(pos);
+  scene.add(sprite);
+  const glowMat = new THREE.SpriteMaterial({
+    map: glowTexture, color: 0xffa030, transparent: true, opacity: 0.5,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  const glow = new THREE.Sprite(glowMat);
+  glow.scale.setScalar(2.4);
+  sprite.add(glow);
+  return { sprite, glowMat, w: rnd(0, Math.PI * 2), ws: rnd(0.03, 0.07), baseY: pos.y };
+}
+function removeAmmoCrate(i) {
+  scene.remove(ammoCrates[i].sprite);
+  ammoCrates[i].sprite.material.dispose();
+  ammoCrates[i].glowMat.dispose();
+  ammoCrates.splice(i, 1);
+}
+function clearAmmoCrates() { while (ammoCrates.length) removeAmmoCrate(0); }
+function resetAmmoCrates() {
+  clearAmmoCrates();
+  ammoCrates = Array.from({ length: MP_AMMO_CRATE_COUNT }, newAmmoCrate);
+}
+function updateAmmoCrates() {
+  for (let i = ammoCrates.length - 1; i >= 0; i--) {
+    const c = ammoCrates[i];
+    c.w += c.ws;
+    c.sprite.position.y = c.baseY + Math.sin(c.w) * 0.4;
+    c.glowMat.opacity = 0.5 + Math.sin(c.w * 2) * 0.14;
+    if (c.sprite.position.distanceTo(owlGroup.position) > BRANCH_RECYCLE_DIST) {
+      const p = collectibleSpawnPos(80, 260);
+      c.sprite.position.copy(p);
+      c.baseY = p.y;
+    }
+    if (owlGroup.position.distanceTo(c.sprite.position) < COLLECT_RADIUS) {
+      mpAmmo = Math.min(MP_MAG_CAP, mpAmmo + MP_AMMO_GRANT); // optimiste — le serveur confirme via 'ammo'
+      mp.sendPickupAmmo();
+      spawnFX(c.sprite.position, 12, 'collect', '+' + MP_AMMO_GRANT + ' 📦');
+      screenShake = Math.max(screenShake, 4);
+      removeAmmoCrate(i);
+      ammoCrates.push(newAmmoCrate());
+    }
+  }
+}
+
+// ── Mort / respawn multijoueur : touche à la tête (ou crash au sol) → écran de
+//    mort 15 s → réapparition automatique à un point aléatoire de l'arène ──
+function mpDie(cause) {
+  if (state !== S.PLAY || !multiplayerMode) return;
+  mpDeathCause = cause;
+  mpRespawnTimer = MP_RESPAWN_DELAY;
+  state = S.MP_DEAD;
+  owlGroup.visible = false;
+  velocity.set(0, 0, 0);
+  document.body.style.cursor = 'default';
+  if (document.pointerLockElement) document.exitPointerLock();
+  screenShake = Math.max(screenShake, 25);
+  hitFlash = Math.max(hitFlash, 0.6);
+  spawnFX(owlGroup.position, 24, 'death', cause === 'headshot' ? '💥 TÊTE TOUCHÉE !' : '💥 CRASHÉ !');
+  if (mp) mp.sendDied(cause);
+}
+
+function mpSpawnLocalOwl() {
+  const angle = rnd(0, Math.PI * 2);
+  const dist = rnd(0, ARENA_RADIUS_XZ * 0.75);
+  const x = ARENA_CENTER.x + Math.cos(angle) * dist;
+  const z = ARENA_CENTER.z + Math.sin(angle) * dist;
+  owlGroup.position.set(x, effectiveGroundY(x, z) + rnd(25, 60), z);
+  owlGroup.quaternion.identity();
+  owlGroup.rotateY(rnd(0, Math.PI * 2)); // cap aléatoire
+  owlGroup.visible = true;
+  speed = MAX_SPEED * 0.55;
+  velocity.set(0, 0, -speed).applyQuaternion(owlGroup.quaternion);
+  angRate.set(0, 0, 0);
+  throttle = CRUISE_THROTTLE;
+  flight.aoa = 0; flight.stall = false; flight.climb = 0; flight.throttle = throttle;
+  stallMode = false; stallTimer = 0;
+  wingDamage.left = 1; wingDamage.right = 1;
+  mpAmmo = MP_MAG_CAP;
+  owlInvul = 90;   // protection de spawn (clignotement), comme en solo
+  treeCooldown = 0;
+  mouseFireHeld = false; mpFireAccum = 0;
+}
+
+function doMPRespawn() {
+  mpSpawnLocalOwl();
+  state = S.PLAY;
+  document.body.style.cursor = 'none';
+  requestFlightPointerLock();
+  if (mp) mp.sendRespawn();
+}
+
+// Balle reçue sur MON hibou (relais 'hit' du serveur) : c'est toujours la
+// victime qui applique l'effet sur elle-même — jamais le client du tireur.
+function onMPHitMe(location) {
+  if (!multiplayerMode || state !== S.PLAY) return;
+  if (owlInvul > 0) return; // protection de spawn
+  if (location === 'head') { mpDie('headshot'); return; }
+  if (location === 'left-wing')  wingDamage.left  = Math.max(WING_DAMAGE_FLOOR, wingDamage.left  * WING_HIT_MULT);
+  if (location === 'right-wing') wingDamage.right = Math.max(WING_DAMAGE_FLOOR, wingDamage.right * WING_HIT_MULT);
+  screenShake = Math.max(screenShake, location === 'body' ? 6 : 12);
+  hitFlash = Math.max(hitFlash, location === 'body' ? 0.2 : 0.35);
+  if (location === 'left-wing')  spawnFX(owlGroup.position, 10, 'death', 'AILE GAUCHE 🩸');
+  if (location === 'right-wing') spawnFX(owlGroup.position, 10, 'death', 'AILE DROITE 🩸');
+}
+
+// ── Entrée / sortie du mode multijoueur ──
+function enterMultiplayerLobby() {
+  if (!mp || !assetsReady) return;
+  multiplayerMode = true;
+  state = S.MP_LOBBY;
+  document.body.style.cursor = 'default';
+  if (document.pointerLockElement) document.exitPointerLock();
+  // Purge les ours d'une éventuelle session solo précédente
+  while (bears.length) removeBear(0);
+  mp.enterLobby();
+}
+
+function exitMultiplayerToStart() {
+  if (mp) mp.leaveMultiplayer();
+  clearMultiplayerWorld();
+  multiplayerMode = false;
+  state = S.START;
+  owlGroup.visible = false;
+  document.body.style.cursor = 'default';
+}
+
+function clearMultiplayerWorld() {
+  clearBullets();
+  clearAmmoCrates();
+  removeLocalAura();
+  setLocalCannon(false);
+  wingDamage.left = 1; wingDamage.right = 1;
+  mouseFireHeld = false; mpFireAccum = 0;
+}
+
+// Partie rejointe (message 'joined' du serveur) : lance la manche multijoueur.
+function beginMultiplayerGame(colorName) {
+  if (!assetsReady) return;
+  multiplayerMode = true;
+  state = S.PLAY;
+  document.body.style.cursor = 'none';
+  score = 0; nest = 0; combo = 1; comboTimer = 0; lives = 1;
+  screenShake = 0; hitFlash = 0;
+
+  // Purge des systèmes solo : pas d'ours, pas de branches/cadeau/lune/tempête.
+  for (const br of branches) { scene.remove(br.sprite); br.sprite.material.dispose(); br.glowMat.dispose(); }
+  branches = [];
+  while (bears.length) removeBear(0);
+  for (let i = rocks.length - 1; i >= 0; i--) removeRock(i);
+  rockInvul = 0;
+  if (giftItem) removeGift();
+  giftCooldown = Infinity;
+  moon  = { state: 'none', timer: 0, next: Infinity, fillProgress: 0 };
+  storm = { active: false, timer: 0, next: Infinity, windAngle: 0, windForce: 0, gustPhase: 0, rockSpawnTimer: 0 };
+  buffs = { speed: 0, multi: 0, slow: 0, invincible: 0 };
+  particles = [];
+  skimTimer = 0; skimActive = false; trailAccum = 0;
+
+  setLocalAura(colorName);
+  setLocalCannon(true);
+  resetAmmoCrates();
+  clearBullets();
+  mpSpawnLocalOwl();
+  requestFlightPointerLock();
+}
+
+// Quitter la partie en cours (Retour arrière depuis la pause) : retour au salon.
+function leaveMultiplayerGame() {
+  if (mp) mp.leaveRoom();
+  clearMultiplayerWorld();
+  state = S.MP_LOBBY;
+  document.body.style.cursor = 'default';
+  owlGroup.visible = false;
+  if (document.pointerLockElement) document.exitPointerLock();
+}
+
+// Sortie de partie subie (déconnexion serveur en pleine manche) : retour salon.
+function onMPLeftRoom() {
+  if (!multiplayerMode) return;
+  clearMultiplayerWorld();
+  if (state === S.PLAY || state === S.MP_DEAD || state === S.PAUSED) {
+    state = S.MP_LOBBY;
+    owlGroup.visible = false;
+    document.body.style.cursor = 'default';
+    if (document.pointerLockElement) document.exitPointerLock();
+  }
+}
+
+// ══════════════════════════════════════════════════
 //  PARTICULES (texte flottant / éclats) — 2D écran, projetées depuis la 3D à la création
 // ══════════════════════════════════════════════════
 let particles = [];
@@ -2381,6 +2808,10 @@ function rrect(x, y, w, h, r, fill, stroke, lw) {
 
 function drawHUD() {
   hctx.save();
+  if (multiplayerMode) {
+    drawMPStatusBox();
+    hctx.restore();
+  } else {
   rrect(12, 12, 230, 100, 14, 'rgba(8,8,35,0.82)', 'rgba(100,90,220,0.4)');
   hctx.fillStyle = '#dde'; hctx.font = 'bold 16px system-ui';
   hctx.textAlign = 'left'; hctx.textBaseline = 'middle';
@@ -2414,6 +2845,7 @@ function drawHUD() {
   hctx.fillStyle = '#fff'; hctx.font = 'bold 9px system-ui'; hctx.textAlign = 'center';
   hctx.fillText('NID ' + nest + '% ➔ +1 ❤️', 117, barY + 5);
   hctx.restore();
+  }
 
   if (!isMobile) {
     hctx.save();
@@ -2487,7 +2919,7 @@ function drawHUD() {
 
   // ── Boussole d'objectifs : flèches en bord d'écran vers le cadeau et la
   //    branche saine la plus proche quand ils sont hors champ ──
-  if (state === S.PLAY && moon.state === 'none') {
+  if (state === S.PLAY && moon.state === 'none' && !multiplayerMode) {
     if (giftItem) drawTargetIndicator(giftItem.sprite.position, '#ffd700', '🎁');
     let nearest = null, nd = Infinity;
     for (const br of branches) {
@@ -2497,6 +2929,82 @@ function drawHUD() {
     }
     if (nearest) drawTargetIndicator(nearest.sprite.position, '#7ec850', '🌿');
   }
+
+  // ── Multijoueur : croix de visée fixe, boussole vers la caisse de munitions
+  //    la plus proche, et indicateurs de triche dev (position des adversaires) ──
+  if (multiplayerMode && state === S.PLAY) {
+    drawCrosshair();
+    let nearestCrate = null, ncd = Infinity;
+    for (const c of ammoCrates) {
+      const d2 = c.sprite.position.distanceToSquared(owlGroup.position);
+      if (d2 < ncd) { ncd = d2; nearestCrate = c; }
+    }
+    if (nearestCrate) drawTargetIndicator(nearestCrate.sprite.position, '#ffa030', '📦');
+    if (devEspEnabled && mp) mp.drawEsp();
+  }
+}
+
+// Panneau haut-gauche du multijoueur : munitions, état des ailes, joueurs de la partie.
+function drawMPStatusBox() {
+  const rosterList = mp ? mp.roster() : [];
+  const boxH = 68 + rosterList.length * 18;
+  rrect(12, 12, 230, boxH, 14, 'rgba(8,8,35,0.82)', 'rgba(100,90,220,0.4)');
+  hctx.fillStyle = '#dde'; hctx.font = 'bold 15px system-ui';
+  hctx.textAlign = 'left'; hctx.textBaseline = 'middle';
+  hctx.fillText('Munitions : ' + mpAmmo + ' / ' + MP_MAG_CAP, 24, 32);
+  hctx.font = '11px system-ui'; hctx.fillStyle = '#9fb0d8';
+  hctx.fillText('Ailes', 24, 54);
+  rrect(62, 50, 70, 8, 4, 'rgba(255,255,255,0.12)');
+  rrect(62, 50, 70 * wingDamage.left, 8, 4, wingDamage.left > 0.7 ? '#8fe06a' : '#ff9a6a');
+  rrect(142, 50, 70, 8, 4, 'rgba(255,255,255,0.12)');
+  rrect(142, 50, 70 * wingDamage.right, 8, 4, wingDamage.right > 0.7 ? '#8fe06a' : '#ff9a6a');
+  let yy = 76;
+  hctx.font = 'bold 12px system-ui';
+  for (const p of rosterList) {
+    hctx.fillStyle = mp.colorCss(p.color);
+    hctx.fillText('●', 24, yy);
+    hctx.fillStyle = p.alive ? '#e8ecff' : '#888899';
+    hctx.fillText(p.pseudo + (p.alive ? '' : ' 💀'), 40, yy);
+    yy += 18;
+  }
+}
+
+// Croix verte fixe : projection à l'écran d'un point constant loin devant le
+// canon (repère LOCAL du hibou) — elle ne « vise » rien, elle matérialise
+// simplement l'axe du canon, solidaire du hibou.
+const _boresight = new THREE.Vector3();
+function drawCrosshair() {
+  _boresight.set(0, -0.28, -60);
+  owlGroup.localToWorld(_boresight);
+  const s = worldToScreen(_boresight);
+  hctx.save();
+  hctx.strokeStyle = '#3aff3a'; hctx.lineWidth = 1.6; hctx.globalAlpha = 0.9;
+  hctx.beginPath();
+  hctx.moveTo(s.x - 9, s.y); hctx.lineTo(s.x - 3, s.y);
+  hctx.moveTo(s.x + 3, s.y); hctx.lineTo(s.x + 9, s.y);
+  hctx.moveTo(s.x, s.y - 9); hctx.lineTo(s.x, s.y - 3);
+  hctx.moveTo(s.x, s.y + 3); hctx.lineTo(s.x, s.y + 9);
+  hctx.stroke();
+  hctx.restore();
+}
+
+// Écran de mort multijoueur : pas de « clique pour rejouer » — la réapparition
+// est automatique au bout du compte à rebours, à un point aléatoire de la carte.
+function drawMPDead() {
+  const W = hudCanvas.width, H = hudCanvas.height;
+  hctx.save();
+  hctx.fillStyle = 'rgba(255,0,0,0.25)'; hctx.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2;
+  rrect(cx - 170, cy - 140, 340, 280, 28, 'rgba(22,8,30,0.97)', 'rgba(255,70,70,0.8)');
+  hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+  hctx.fillStyle = '#ffaaaa'; hctx.font = '900 30px system-ui';
+  hctx.fillText(mpDeathCause === 'crash' ? 'CRASHÉ !' : 'TÊTE TOUCHÉE !', cx, cy - 80);
+  hctx.font = '55px serif'; hctx.fillText('💀', cx, cy - 15);
+  hctx.fillStyle = '#e8e5ff'; hctx.font = 'bold 18px system-ui';
+  hctx.fillText('Réapparition dans ' + Math.ceil(Math.max(0, mpRespawnTimer)) + ' s', cx, cy + 55);
+  hctx.fillStyle = '#cbc3dd'; hctx.font = '13px system-ui';
+  hctx.fillText('(automatique, position aléatoire)', cx, cy + 85);
+  hctx.restore();
 }
 
 // Flèche-boussole plaquée au bord de l'écran, pointant vers un objectif hors champ.
@@ -2566,6 +3074,10 @@ function drawStart() {
   hctx.fillStyle = '#fff'; hctx.font = 'bold 18px system-ui';
   hctx.fillText('Clique ou appuie sur une touche', cx, cy + 100);
   hctx.fillText('pour décoller', cx, cy + 124);
+  if (!isMobile) {
+    hctx.fillStyle = '#9be0ff'; hctx.font = 'bold 13px system-ui';
+    hctx.fillText('[M] = Multijoueur (combat aérien à 4, clic = tir)', cx, cy + 156);
+  }
   hctx.restore();
 }
 
@@ -2589,6 +3101,10 @@ function drawOver() {
   hctx.font = '45px serif'; hctx.fillText(medal, cx, cy + 50);
   hctx.fillStyle = '#fff'; hctx.font = 'bold 18px system-ui';
   hctx.fillText('Clique ou appuie pour rejouer', cx, cy + 135);
+  if (!isMobile) {
+    hctx.fillStyle = '#9be0ff'; hctx.font = 'bold 12px system-ui';
+    hctx.fillText('[M] = Multijoueur', cx, cy + 160);
+  }
   hctx.restore();
 }
 
@@ -2605,7 +3121,7 @@ function drawPaused() {
   hctx.fillText('Clique ou appuie sur une touche', cx, cy + 10);
   hctx.fillText('pour reprendre le pilotage', cx, cy + 32);
   hctx.fillStyle = '#cbc3dd'; hctx.font = '13px system-ui';
-  hctx.fillText('(verrouillage souris relâché)', cx, cy + 58);
+  hctx.fillText(multiplayerMode ? '[Retour arrière] = quitter la partie' : '(verrouillage souris relâché)', cx, cy + 58);
   hctx.restore();
 }
 
@@ -2751,6 +3267,8 @@ function drawOverlay() {
 
   if (state === S.START) {
     drawStart();
+  } else if (state === S.MP_LOBBY) {
+    if (mp) mp.drawLobby();
   } else {
     for (const p of particles) {
       hctx.save(); hctx.globalAlpha = Math.max(0, p.life);
@@ -2768,6 +3286,7 @@ function drawOverlay() {
     }
     drawHUD();
     if (state === S.OVER) drawOver();
+    else if (state === S.MP_DEAD) drawMPDead();
     else if (state === S.PAUSED && !settingsOpen) drawPaused();
     else if (state === S.LOOT) drawLootbox();
     if (isMobile && state === S.PLAY) drawMobileControls();
@@ -2788,6 +3307,11 @@ function drawOverlay() {
 // ══════════════════════════════════════════════════
 function beginGame() {
   if (!assetsReady) return; // le monde n'est pas encore construit (modèles en cours de chargement)
+  if (multiplayerMode) { // retour au solo : on coupe proprement le multijoueur
+    if (mp) mp.leaveMultiplayer();
+    clearMultiplayerWorld();
+    multiplayerMode = false;
+  }
   state = S.PLAY;
   document.body.style.cursor = 'none';
   score = 0; nest = 0; combo = 1; comboTimer = 0; lives = 1; overReason = 'eaten';
@@ -2844,16 +3368,25 @@ function update() {
     buffs.multi      = Math.max(0, buffs.multi      - dt);
     buffs.slow       = Math.max(0, buffs.slow       - dt);
     buffs.invincible = Math.max(0, buffs.invincible - dt);
-    updateMoon(dt);
-    updateStorm(dt);
-    updateRocks(dt);
+    if (!multiplayerMode) {
+      updateMoon(dt);
+      updateStorm(dt);
+      updateRocks(dt);
+    }
     const speedRatio = updateFlight(dt);
     updateFlap(dt, speedRatio);
-    updateSkim(dt);
     updateBoostTrail(dt);
-    updateBranches();
-    updateBears(dt);
-    updateGift(dt);
+    if (multiplayerMode) {
+      // Multijoueur : canon/balles/caisses remplacent branches/ours/cadeau/rase-mottes
+      updateMPFire(dt);
+      updateBullets(dt);
+      updateAmmoCrates();
+    } else {
+      updateSkim(dt);
+      updateBranches();
+      updateBears(dt);
+      updateGift(dt);
+    }
     updateBoundaryGrid();
     updateCameraClip();
     owlGroup.visible = !(owlInvul > 0 && Math.floor(Date.now() / 80) % 2 !== 0);
@@ -2861,10 +3394,19 @@ function update() {
     mouseDX = 0; mouseDY = 0;
     boundaryGrid.visible = false;
     updateLootbox(dt);
+  } else if (state === S.MP_DEAD) {
+    mouseDX = 0; mouseDY = 0;
+    boundaryGrid.visible = false;
+    updateBullets(dt); // les balles en vol finissent leur course pendant l'écran de mort
+    mpRespawnTimer -= dt;
+    if (mpRespawnTimer <= 0) doMPRespawn();
   } else {
     mouseDX = 0; mouseDY = 0;
     boundaryGrid.visible = false;
   }
+  // Réseau multijoueur : interpolation des hiboux distants + envoi de l'état
+  // local — tourne aussi en salon, en pause et sur l'écran de mort.
+  if (mp && multiplayerMode) mp.update(dt);
   updateMoonVisual(dt);
   updateStars(dt);
   updateClouds(dt);
@@ -2901,6 +3443,12 @@ function drawLoading() {
 // Sonde de debug/test (lecture seule) : état du jeu inspectable depuis la console.
 window.__hibouDebug = () => ({
   state, score, lives, assetsReady,
+  multiplayerMode, mpAmmo, wingDamage: { ...wingDamage },
+  mpRespawnTimer: Math.round(mpRespawnTimer * 10) / 10,
+  bullets: bullets.length, ammoCrates: ammoCrates.length,
+  mpInRoom: mp ? mp.inRoom() : false,
+  mpRemotes: mp ? mp.remotesList().length : 0,
+  devEsp: devEspEnabled,
   pos: owlGroup.position.toArray().map(v => Math.round(v * 10) / 10),
   groundY: Math.round(effectiveGroundY(owlGroup.position.x, owlGroup.position.z) * 10) / 10,
   speed: Math.round(speed * 10) / 10,
@@ -2938,6 +3486,25 @@ loadAssets().then(() => {
   makeBoundaryGrid();
   makeFX3D();
   makeFireflies();
+
+  // Multijoueur : le module réseau reçoit via `hooks` les seules références du
+  // jeu dont il a besoin (tout l'état vit dans la closure __hibouStart).
+  mp = initMultiplayer({
+    THREE, scene,
+    hudCanvas, hctx, rrect, drawTargetIndicator,
+    makeRemoteOwlVisual, makeAuraSprite,
+    getMyState: () => ({
+      pos: owlGroup.position, quat: owlGroup.quaternion, vel: velocity,
+      alive: state !== S.MP_DEAD,
+    }),
+    onJoined: (color) => beginMultiplayerGame(color),
+    onLeftRoom: onMPLeftRoom,
+    onHitMe: (location) => onMPHitMe(location),
+    onAmmo: (n) => { mpAmmo = n; },
+    onRemoteFire: onMPRemoteFire,
+    spawnFX,
+  });
+
   assetsReady = true;
   loop();
 });

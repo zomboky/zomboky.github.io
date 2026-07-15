@@ -1,0 +1,16 @@
+{
+  "name": "hibou3d-server",
+  "version": "1.0.0",
+  "description": "Serveur WebSocket relais pour le multijoueur de Hibou 3D (zomboky.github.io)",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
