@@ -72,6 +72,20 @@ jobs:
             sudo chown oranged:oranged /var/lib/orange-server
             cd /var/www/html
 
+            # --- Flight-sim design storage API (sauvegarde/partage d'avions
+            # par code court, voir server/flight-server/README.md) ---
+            id -u flightd >/dev/null 2>&1 || sudo useradd -r -s /sbin/nologin flightd
+
+            sudo rm -rf /opt/flight-server
+            sudo mkdir -p /opt/flight-server
+            sudo cp -R /var/www/html/server/flight-server/. /opt/flight-server/
+            cd /opt/flight-server
+            sudo npm install --omit=dev
+            sudo chown -R flightd:flightd /opt/flight-server
+            sudo mkdir -p /var/lib/flight-server/designs
+            sudo chown -R flightd:flightd /var/lib/flight-server
+            cd /var/www/html
+
             sudo cp -R docs/* .
 
             sudo rm -rf server
@@ -84,15 +98,17 @@ jobs:
             sudo cp /opt/orange-server/deploy/orange-ingest.timer /etc/systemd/system/orange-ingest.timer
             sudo cp /opt/orange-server/deploy/orange-gosif.service /etc/systemd/system/orange-gosif.service
             sudo cp /opt/orange-server/deploy/orange-gosif.timer /etc/systemd/system/orange-gosif.timer
+            sudo cp /opt/flight-server/deploy/flight-server.service /etc/systemd/system/flight-server.service
             sudo systemctl daemon-reload
-            sudo systemctl enable chess-server orange-server orange-ingest.timer orange-gosif.timer
-            sudo systemctl restart chess-server orange-server
+            sudo systemctl enable chess-server orange-server orange-ingest.timer orange-gosif.timer flight-server
+            sudo systemctl restart chess-server orange-server flight-server
             sudo systemctl restart orange-ingest.timer
             sudo systemctl restart orange-gosif.timer
             sudo systemctl start --no-block orange-gosif.service || true
 
             sudo cp /opt/chess-server/deploy/chess-ws.conf /etc/httpd/conf.d/chess-ws.conf
             sudo cp /opt/orange-server/deploy/orange-api.conf /etc/httpd/conf.d/orange-api.conf
+            sudo cp /opt/flight-server/deploy/flight-api.conf /etc/httpd/conf.d/flight-api.conf
             sudo setsebool -P httpd_can_network_connect 1 || true
             sudo apachectl configtest
             sudo systemctl reload httpd

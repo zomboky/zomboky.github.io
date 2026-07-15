@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>✈️ Simulateur de vol</title>
+
+<!-- importmap : mappe 'three' vers le build local (docs/three/), même convention que space.html/hibou-3d.html -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "./three/build/three.module.min.js"
+  }
+}
+</script>
+
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0e1218; font-family: 'Segoe UI', Roboto, sans-serif; }
+  canvas#flight-canvas { position: fixed; inset: 0; display: block; }
+
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: 1px solid #3d5a80;
+    background: #16283d;
+    color: #e6f0fa;
+    border-radius: 4px;
+    padding: 0.45rem 0.7rem;
+    font-size: 0.85rem;
+  }
+  button:hover:not(:disabled) { background: #23405f; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.selected { background: #3f8ae0; border-color: #79b6ff; color: #05131f; font-weight: bold; }
+
+  /* ── Hangar ── */
+  #hangar-ui {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(340px, 92vw);
+    background: rgba(10, 16, 26, 0.88); border-left: 1px solid #274462;
+    color: #e6f0fa; padding: 0.9rem; overflow-y: auto; z-index: 5;
+    display: flex; flex-direction: column; gap: 0.7rem;
+  }
+  #hangar-ui h1 { font-size: 1rem; }
+  #part-categories, #part-list, #hangar-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  #part-list { border-top: 1px dashed #274462; padding-top: 0.5rem; }
+  #hangar-hint { font-size: 0.78rem; color: #ffb454; min-height: 1.1em; }
+  #hangar-stats { font-size: 0.82rem; line-height: 1.6; background: #0a1420; border: 1px solid #23374d; border-radius: 4px; padding: 0.5rem 0.7rem; }
+  #hangar-stats span { color: #79c8ff; }
+  #hangar-message { font-size: 0.82rem; color: #7fdc8f; }
+  #hangar-message.error { color: #ff8a80; }
+  #btn-fly { background: #1f7a3d; border-color: #3fae67; font-weight: bold; }
+  #save-panel, #load-panel { font-size: 0.85rem; background: #0a1420; border: 1px solid #23374d; border-radius: 4px; padding: 0.5rem 0.7rem; }
+  #save-code { color: #ffd23f; font-family: monospace; font-size: 1.05rem; letter-spacing: 2px; }
+  #load-code-input { font-family: monospace; background: #04070c; color: #e6f0fa; border: 1px solid #3d5a80; padding: 0.35rem; width: 8em; text-transform: uppercase; }
+
+  /* ── HUD de vol ── */
+  #flight-hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; color: #e6f0fa; font-family: monospace; }
+  #flight-instruments {
+    position: absolute; bottom: 1rem; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 1.1rem; background: rgba(10, 16, 26, 0.7); border: 1px solid #274462;
+    border-radius: 6px; padding: 0.6rem 1.1rem; font-size: 0.95rem; text-align: center;
+  }
+  #flight-instruments div span:first-child { display: block; font-size: 0.65rem; color: #79c8ff; letter-spacing: 1px; }
+  #hud-stall { position: absolute; top: 1rem; left: 50%; transform: translateX(-50%); color: #ff5252; font-weight: bold; font-size: 1.2rem; text-shadow: 0 0 6px #000; }
+  #hud-ground { position: absolute; top: 1rem; right: 1rem; color: #7fdc8f; font-size: 0.85rem; }
+  #hud-help { position: absolute; top: 1rem; left: 1rem; font-size: 0.72rem; color: #b8c9d9; max-width: 22em; line-height: 1.5; }
+  #btn-back-hangar { position: absolute; top: 1rem; right: 1rem; margin-top: 1.6rem; pointer-events: auto; }
+</style>
+</head>
+<body>
+
+<canvas id="flight-canvas"></canvas>
+
+<div id="hangar-ui">
+  <h1>✈️ Hangar</h1>
+  <div id="part-categories"></div>
+  <div id="part-list"></div>
+  <p id="hangar-hint"></p>
+  <div id="hangar-stats">
+    Masse : <span id="stat-mass">-</span><br>
+    Poussée : <span id="stat-thrust">-</span><br>
+    Surface alaire : <span id="stat-wingarea">-</span><br>
+    Pièces : <span id="stat-parts">-</span>
+  </div>
+  <p id="hangar-message"></p>
+  <div id="hangar-actions">
+    <button id="btn-remove" disabled>Retirer la pièce</button>
+    <button id="btn-reset">Nouvel avion</button>
+    <button id="btn-save">Sauvegarder</button>
+    <button id="btn-load-toggle">Charger un code</button>
+  </div>
+  <div id="save-panel" hidden>
+    Code de sauvegarde : <span id="save-code"></span>
+    <button id="btn-copy-code">Copier</button>
+  </div>
+  <div id="load-panel" hidden>
+    <input id="load-code-input" placeholder="CODE" maxlength="8">
+    <button id="btn-load-confirm">Charger</button>
+  </div>
+  <button id="btn-fly" disabled>Décoller !</button>
+</div>
+
+<div id="flight-hud" hidden>
+  <p id="hud-help">Tangage : ↑/↓ ou Z/S · Roulis : ←/→ ou Q/D · Lacet : A/E · Poussée : Espace · Frein : Maj · Échap : retour au hangar</p>
+  <p id="hud-stall" hidden>⚠ DÉCROCHAGE</p>
+  <p id="hud-ground" hidden>Au sol</p>
+  <button id="btn-back-hangar">Retour au hangar</button>
+  <div id="flight-instruments">
+    <div><span>VITESSE</span><span id="hud-speed">0 km/h</span></div>
+    <div><span>ALTITUDE</span><span id="hud-altitude">0 m</span></div>
+    <div><span>MOTEUR</span><span id="hud-throttle">0 %</span></div>
+  </div>
+</div>
+
+<script type="module" src="scripts/flight-sim/main.js"></script>
+</body>
+</html>

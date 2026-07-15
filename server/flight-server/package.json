@@ -1,0 +1,16 @@
+{
+  "name": "flight-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "API de sauvegarde/partage des avions du simulateur de vol (zomboky.github.io/flight-sim.html)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
