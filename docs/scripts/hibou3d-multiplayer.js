@@ -521,7 +521,7 @@ export function initMultiplayer(hooks) {
       quickJoinRect = { x: bx, y: by, w: bw, h: bh };
 
       hctx.fillStyle = '#cbc3dd'; hctx.font = '13px system-ui';
-      hctx.fillText('[Échap] Retour au menu', W / 2, py + ph - 20);
+      hctx.fillText('[Échap] Retour au menu   —   [K] Test solo (sans ours)', W / 2, py + ph - 20);
       hctx.restore();
     },
 
