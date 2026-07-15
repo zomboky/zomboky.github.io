@@ -65,3 +65,5 @@ automatiquement un numéro de version incrémenté au projet concerné (ex:
   la conversation, le signaler avant de pousser.
 - Ne jamais utiliser `--force` sur le push.
 - Ne pas committer de fichiers non liés au projet concerné.
+
+
