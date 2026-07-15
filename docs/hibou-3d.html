@@ -144,6 +144,23 @@ let screenShake = 0, hitFlash = 0;
 
 const rnd = (a, b) => a + Math.random() * (b - a);
 
+// PRNG déterministe (mulberry32) — utilisé UNIQUEMENT pour le placement des
+// arbres (makeTrees) : cette disposition doit être identique sur tous les
+// navigateurs pour que la carte soit la même en multijoueur. Le reste du jeu
+// (rochers, effets, loot…) continue d'utiliser Math.random(), aléatoire par
+// session, ce qui ne pose pas de problème car ces éléments sont dynamiques.
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const treeRng = mulberry32(20260715);
+const treeRnd = (a, b) => a + treeRng() * (b - a);
+
 // ══════════════════════════════════════════════════
 //  CANVAS / RENDERER / SCÈNE
 // ══════════════════════════════════════════════════
@@ -637,7 +654,11 @@ const RING_FULL  = ARENA_RADIUS_XZ * 1.18; // altitude de crête atteinte ici
 const RING_BASE  = 240;                    // hauteur minimale de la muraille
 const RING_VAR   = 260;                    // relief supplémentaire des sommets (bruit)
 
-const terrainSeed = Math.random() * 1000;
+// Seed fixe (pas Math.random()) : le terrain doit être identique sur tous les
+// navigateurs, sinon en multijoueur chaque client voit un sol différent — les
+// hiboux distants (positionnés selon LEUR sol) se retrouvent enterrés sous
+// le nôtre et deviennent invisibles.
+const terrainSeed = 483.271;
 
 function hashNoise(ix, iz) {
   const n = Math.sin(ix * 127.1 + iz * 311.7 + terrainSeed * 17.3) * 43758.5453;
@@ -1130,8 +1151,8 @@ function makeTrees() {
   let placed = 0, attempts = 0;
   while (placed < TREE_COUNT && attempts < TREE_COUNT * 20) {
     attempts++;
-    const angle = rnd(0, Math.PI * 2);
-    const r = Math.sqrt(Math.random()) * TREE_SPREAD; // aire uniforme sur toute l'arène jouable
+    const angle = treeRnd(0, Math.PI * 2);
+    const r = Math.sqrt(treeRng()) * TREE_SPREAD; // aire uniforme sur toute l'arène jouable
     const x = Math.cos(angle) * r, z = Math.sin(angle) * r;
     if (r < 14) continue;                                    // clairière de départ
     const h = terrainHeight(x, z);
@@ -1140,17 +1161,17 @@ function makeTrees() {
     const slope = Math.abs(terrainHeight(x + 2, z) - h) + Math.abs(terrainHeight(x, z + 2) - h);
     if (slope > 2.2) continue;                               // pentes raides : pas de forêt
     const nearShore = h < WATER_Y + 5; // berge : rive d'un lac, quelques mètres au-dessus de l'eau
-    if (!nearShore && forestDensity(x, z) < 0.42 && Math.random() > 0.15) continue; // masque de forêt (15% d'isolés), sauf en bordure de lac
+    if (!nearShore && forestDensity(x, z) < 0.42 && treeRng() > 0.15) continue; // masque de forêt (15% d'isolés), sauf en bordure de lac
 
     // Tirage pondéré du type
-    let pick = Math.random(), ti = 0;
+    let pick = treeRng(), ti = 0;
     const weights = [0.38, 0.30, 0.20, 0.12];
     for (let i = 0; i < weights.length; i++) { pick -= weights[i]; if (pick <= 0) { ti = i; break; } }
     const type = types[ti];
 
-    const s = rnd(0.7, 1.5);
+    const s = treeRnd(0.7, 1.5);
     dummy.position.set(x, h - 0.15, z); // très légèrement enterré pour épouser la pente
-    dummy.rotation.set(0, rnd(0, Math.PI * 2), 0);
+    dummy.rotation.set(0, treeRnd(0, Math.PI * 2), 0);
     dummy.scale.setScalar(s);
     dummy.updateMatrix();
     type.matrices.push(dummy.matrix.clone());
@@ -1462,7 +1483,7 @@ window.addEventListener('keydown', e => {
   if (e.key === ' ' || ARROW_KEYS.includes(e.key.toLowerCase())) e.preventDefault();
   // Bascule du mode triche dev (indicateurs de position des adversaires) —
   // volontairement absente des écrans d'aide.
-  if (e.ctrlKey && e.shiftKey && (e.key === 'X' || e.key === 'x')) { toggleDevEsp(); return; }
+  if (e.key === 'i' || e.key === 'I') { toggleDevEsp(); return; }
   if (e.key === 'o' || e.key === 'O') { toggleSettings(); return; }
   if (state === S.MP_LOBBY) {
     if (e.key === 'Escape') { exitMultiplayerToStart(); return; }
