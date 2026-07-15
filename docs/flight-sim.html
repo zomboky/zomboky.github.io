@@ -34,12 +34,23 @@
   button.selected { background: #3f8ae0; border-color: #79b6ff; color: #05131f; font-weight: bold; }
 
   /* ── Hangar ── */
+  #hangar-toggle {
+    position: fixed; top: 0.7rem; right: 0.7rem; z-index: 6;
+    width: 2.4rem; height: 2.4rem; padding: 0; font-size: 1.1rem; line-height: 1;
+  }
   #hangar-ui {
     position: fixed; top: 0; right: 0; bottom: 0; width: min(340px, 92vw);
     background: rgba(10, 16, 26, 0.88); border-left: 1px solid #274462;
     color: #e6f0fa; padding: 0.9rem; overflow-y: auto; z-index: 5;
     display: flex; flex-direction: column; gap: 0.7rem;
+    transition: transform 0.25s ease;
   }
+  /* Le sélecteur d'ID display:flex ci-dessus a une priorité de cascade plus
+     forte que la règle UA [hidden]{display:none} : sans cette redéclaration
+     explicite, `hangarUi.hidden = true` (voir enterFlight() dans main.js) ne
+     masque jamais visuellement le panneau. */
+  #hangar-ui[hidden] { display: none; }
+  #hangar-ui.collapsed { transform: translateX(100%); }
   #hangar-ui h1 { font-size: 1rem; }
   #part-categories, #part-list, #hangar-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; }
   #part-list { border-top: 1px dashed #274462; padding-top: 0.5rem; }
@@ -65,11 +76,56 @@
   #hud-ground { position: absolute; top: 1rem; right: 1rem; color: #7fdc8f; font-size: 0.85rem; }
   #hud-help { position: absolute; top: 1rem; left: 1rem; font-size: 0.72rem; color: #b8c9d9; max-width: 22em; line-height: 1.5; }
   #btn-back-hangar { position: absolute; top: 1rem; right: 1rem; margin-top: 1.6rem; pointer-events: auto; }
+
+  /* ── Contrôles tactiles de vol (créés dynamiquement par touch-controls.js) ── */
+  #touch-controls[hidden] { display: none; }
+  #tc-joystick-zone {
+    position: fixed; left: 0; bottom: 0; width: 46vw; height: 46vh;
+    pointer-events: auto; touch-action: none;
+  }
+  #tc-joystick-base, #tc-joystick-knob {
+    position: fixed; border-radius: 50%; pointer-events: none;
+    transform: translate(-50%, -50%); opacity: 0; transition: opacity 0.1s ease;
+  }
+  #tc-joystick-base { width: 120px; height: 120px; border: 2px solid rgba(230, 240, 250, 0.35); background: rgba(20, 30, 45, 0.25); }
+  #tc-joystick-knob { width: 56px; height: 56px; background: rgba(121, 198, 255, 0.55); border: 2px solid #79c8ff; }
+
+  #tc-yaw-left, #tc-yaw-right, #tc-throttle, #tc-brake {
+    position: fixed; pointer-events: auto; touch-action: none;
+    border-radius: 50%; font-size: 1.3rem; background: rgba(20, 30, 45, 0.55);
+    border: 2px solid #3d5a80; color: #e6f0fa;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
+  #tc-yaw-left.pressed, #tc-yaw-right.pressed, #tc-throttle.pressed, #tc-brake.pressed {
+    background: rgba(63, 138, 224, 0.75); border-color: #79b6ff;
+  }
+  /* Une seule colonne le long du bord droit (frein en bas, poussée puis lacet
+     au-dessus) : reste entièrement à droite de la zone de joystick (46vw),
+     aucun chevauchement entre boutons ni avec le joystick, quelle que soit
+     l'étroitesse de l'écran. */
+  #tc-throttle, #tc-brake { right: 1rem; width: 74px; height: 74px; }
+  #tc-yaw-left, #tc-yaw-right { width: 54px; height: 54px; right: 1.6rem; }
+  #tc-brake { bottom: 1rem; }
+  #tc-throttle { bottom: 8rem; }
+  #tc-yaw-right { bottom: 14.5rem; }
+  #tc-yaw-left { bottom: 20rem; }
+
+  /* ── Ajustements pour pointeurs tactiles (aide clavier inutile, place pour les contrôles) ── */
+  @media (pointer: coarse) {
+    #hud-help { display: none; }
+    #flight-instruments {
+      bottom: auto; top: 1rem; left: 0.7rem; transform: none;
+      flex-direction: column; gap: 0.3rem; padding: 0.5rem 0.7rem; font-size: 0.85rem; text-align: left;
+    }
+    #hangar-ui button, .part-btn, .cat-btn { min-height: 44px; padding: 0.6rem 0.9rem; }
+  }
 </style>
 </head>
 <body>
 
 <canvas id="flight-canvas"></canvas>
+
+<button id="hangar-toggle" aria-label="Afficher/masquer la palette">☰</button>
 
 <div id="hangar-ui">
   <h1>✈️ Hangar</h1>

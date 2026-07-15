@@ -45,7 +45,15 @@ export function computeLocalPositions(parts) {
     const parentPos = resolve(part.parent);
     const parentDef = getPartDef(byUid.get(part.parent).id);
     const offset = parentDef.nodes()[part.node] || [0, 0, 0];
-    const v = parentPos.clone().add(new THREE.Vector3(offset[0], offset[1], offset[2]));
+    // Pour les pièces dont l'origine locale n'est PAS déjà à leur point
+    // d'attache (fuselage/moteur, centrés — voir mountOffset() dans
+    // parts.js), il faut aussi décaler par leur propre demi-étendue pour que
+    // ce soit leur face, et non leur centre, qui touche le nœud du parent.
+    const childDef = getPartDef(part.id);
+    const mount = childDef.mountOffset ? childDef.mountOffset(part.node) : [0, 0, 0];
+    const v = parentPos.clone()
+      .add(new THREE.Vector3(offset[0], offset[1], offset[2]))
+      .add(new THREE.Vector3(mount[0], mount[1], mount[2]));
     pos.set(uid, v);
     return v;
   }

@@ -40,6 +40,21 @@ function fuselageNodes(radius, length) {
   };
 }
 
+// Décalage à appliquer au CENTRE d'une pièce dont la géométrie est centrée
+// avec une étendue le long de Z (fuselage, moteur) quand elle est posée sur
+// le nœud 'front'/'back' d'un parent : sans ce décalage, son origine (le
+// centre) coïnciderait avec la face du parent au lieu de sa propre face
+// opposée, provoquant un recouvrement pouvant aller jusqu'à la moitié de sa
+// longueur (visible en chaînant deux fuselages). Les pièces dont l'origine
+// locale est déjà à leur point d'attache (nez, aile, gouverne — géométrie
+// translatée dans leurs fonctions *Geometry ci-dessus) n'ont pas besoin de
+// cette méthode et gardent un décalage nul par défaut.
+function zExtentMountOffset(length, nodeName) {
+  if (nodeName === 'front') return [0, 0, -length / 2];
+  if (nodeName === 'back') return [0, 0, length / 2];
+  return [0, 0, 0];
+}
+
 // --- Nez : cône dont la base plate (le point d'attache) est à l'origine, la pointe vers -Z ---
 function noseGeometry(radius, length) {
   const geo = new THREE.ConeGeometry(radius, length, 14);
@@ -82,6 +97,7 @@ export const PART_DEFS = [
     radius: 0.6, length: 1.6, dragArea: 0.9,
     geometry() { return fuselageGeometry(this.radius, this.length); },
     nodes() { return fuselageNodes(this.radius, this.length); },
+    mountOffset(nodeName) { return zExtentMountOffset(this.length, nodeName); },
   },
   {
     id: 'fuselage-long', category: 'fuselage', label: 'Fuselage long', mass: 65,
@@ -89,6 +105,7 @@ export const PART_DEFS = [
     radius: 0.55, length: 3.2, dragArea: 1.1,
     geometry() { return fuselageGeometry(this.radius, this.length); },
     nodes() { return fuselageNodes(this.radius, this.length); },
+    mountOffset(nodeName) { return zExtentMountOffset(this.length, nodeName); },
   },
   {
     id: 'fuselage-wide', category: 'fuselage', label: 'Fuselage large', mass: 90,
@@ -96,6 +113,7 @@ export const PART_DEFS = [
     radius: 0.85, length: 2.0, dragArea: 1.6,
     geometry() { return fuselageGeometry(this.radius, this.length); },
     nodes() { return fuselageNodes(this.radius, this.length); },
+    mountOffset(nodeName) { return zExtentMountOffset(this.length, nodeName); },
   },
 
   // ── Nez : s'accroche au nœud 'front' d'un fuselage, aucun nœud exposé ──
@@ -168,6 +186,7 @@ export const PART_DEFS = [
     thrust: 1400, spoolRate: 1.4, radius: 0.35, length: 0.7, dragArea: 0.25,
     geometry() { return engineGeometry(this.radius, this.length); },
     nodes() { return {}; },
+    mountOffset(nodeName) { return zExtentMountOffset(this.length, nodeName); },
   },
   {
     id: 'engine-jet', category: 'engine', label: 'Réacteur', mass: 55,
@@ -175,6 +194,7 @@ export const PART_DEFS = [
     thrust: 2600, spoolRate: 0.7, radius: 0.45, length: 1.3, dragArea: 0.4,
     geometry() { return engineGeometry(this.radius, this.length); },
     nodes() { return {}; },
+    mountOffset(nodeName) { return zExtentMountOffset(this.length, nodeName); },
   },
 
   // ── Gouvernes ──

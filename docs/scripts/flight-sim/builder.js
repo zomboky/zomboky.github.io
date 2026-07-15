@@ -2,9 +2,13 @@ import * as THREE from '../../three/build/three.module.min.js';
 import { OrbitControls } from '../../three/examples/jsm/controls/OrbitControls.js';
 import { getPartDef, MAX_PARTS } from './parts.js';
 import { buildAircraft, freeNodes, removePartAndDescendants, makeUid, validateDesign } from './aircraft.js';
+import { isTouchDevice } from './touch-controls.js';
 
 const MARKER_COLOR = 0xffd23f;
 const MARKER_HOVER_COLOR = 0x33ff77;
+// Rayon de hit plus généreux au tactile (précision du doigt < souris) ; la
+// taille visuelle du marker reste identique, seul le volume de détection grandit.
+const MARKER_HIT_RADIUS = isTouchDevice() ? 0.32 : 0.2;
 
 // Hangar KSP-like : on choisit une pièce dans la palette (HTML, voir
 // hud.js), puis on clique sur un point d'accroche mis en évidence dans la
@@ -63,7 +67,7 @@ export function createBuilder({ scene, camera, canvas, onChange, onSelectPlaced 
         if (seen.has(key)) continue;
         seen.add(key);
         const mesh = new THREE.Mesh(
-          new THREE.SphereGeometry(0.2, 12, 10),
+          new THREE.SphereGeometry(MARKER_HIT_RADIUS, 12, 10),
           new THREE.MeshBasicMaterial({ color: MARKER_COLOR, transparent: true, opacity: 0.85, depthTest: false }),
         );
         mesh.position.copy(free.position);
@@ -111,22 +115,29 @@ export function createBuilder({ scene, camera, canvas, onChange, onSelectPlaced 
     ndc.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   }
 
-  function onPointerMove(event) {
-    if (!markers.length) return;
+  // Retourne le marker sous le pointeur/doigt, indépendamment de tout survol
+  // préalable — nécessaire au tactile où un tap ne déclenche généralement
+  // aucun 'pointermove' avant le 'click' (pas de notion de survol sans
+  // mouvement), contrairement à la souris.
+  function hitTestMarkers(event) {
+    if (!markers.length) return null;
     pointerToNdc(event);
     raycaster.setFromCamera(ndc, camera);
     const hits = raycaster.intersectObjects(markers.map((m) => m.mesh));
+    return hits.length ? markers.find((m) => m.mesh === hits[0].object) : null;
+  }
+
+  function onPointerMove(event) {
+    const hit = hitTestMarkers(event);
     if (hoveredMarker) hoveredMarker.mesh.material.color.setHex(MARKER_COLOR);
-    hoveredMarker = null;
-    if (hits.length) {
-      hoveredMarker = markers.find((m) => m.mesh === hits[0].object);
-      hoveredMarker.mesh.material.color.setHex(MARKER_HOVER_COLOR);
-    }
+    hoveredMarker = hit;
+    if (hoveredMarker) hoveredMarker.mesh.material.color.setHex(MARKER_HOVER_COLOR);
   }
 
   function onClick(event) {
     if (!hangarGroup.visible) return;
-    if (hoveredMarker) { placeAt(hoveredMarker); return; }
+    const marker = hoveredMarker || hitTestMarkers(event);
+    if (marker) { placeAt(marker); return; }
     if (selectedDefId || !aircraftGroup) return;
     pointerToNdc(event);
     raycaster.setFromCamera(ndc, camera);
