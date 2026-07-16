@@ -31,14 +31,15 @@ disponible à nouveau quand le joueur quitte.
 Tout est en mémoire : une partie vide est supprimée immédiatement, une
 partie inactive depuis 30 minutes est balayée.
 
-## HTTP uniquement (pas de HTTPS/WSS)
+## HTTPS/WSS
 
-Même contrainte que `chess-server` (voir son README pour le détail) : le
-port 443 est bloqué par la Security List Oracle Cloud, donc ce relais parle
-`ws://` simple. Le multijoueur n'est donc jouable que depuis
-`http://bear.servebeer.com/hibou-3d.html` — une page chargée en HTTPS
-(GitHub Pages) ne peut pas ouvrir de connexion `ws://` (contenu mixte) et le
-client affiche un avertissement dans ce cas.
+Le port 443 est ouvert côté Security List Oracle Cloud et un vhost SSL
+(`bear-servebeer-ssl.conf`, provisionné par `.github/workflows/chess-diagnose.yml`
+avec `setup_tls: true`) fait tourner ce relais en `wss://` aussi. Le client
+(`docs/scripts/hibou3d-multiplayer.js`) choisit `ws://` ou `wss://` selon le
+protocole de la page qui le charge, donc le multijoueur fonctionne aussi bien
+depuis `http://bear.servebeer.com/hibou-3d.html` que depuis la version GitHub
+Pages en HTTPS.
 
 ## Déploiement automatique
 

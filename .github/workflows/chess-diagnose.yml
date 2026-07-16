@@ -72,6 +72,7 @@ jobs:
                 '    ProxyTimeout 3600' \
                 '    Include conf.d/chess-ws.conf' \
                 '    Include conf.d/orange-api.conf' \
+                '    Include conf.d/hibou3d-ws.conf' \
                 '</VirtualHost>' \
                 | sudo tee "$SSL_CONF" > /dev/null
 
