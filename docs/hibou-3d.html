@@ -37,7 +37,7 @@ import { initMultiplayer, auraColorHex } from './scripts/hibou3d-multiplayer.js'
 // ══════════════════════════════════════════════════
 //  ÉTAT DU JEU
 // ══════════════════════════════════════════════════
-const S = { START: 0, PLAY: 1, OVER: 2, PAUSED: 3, LOOT: 4, MP_LOBBY: 5, MP_DEAD: 6 };
+const S = { START: 0, PLAY: 1, OVER: 2, PAUSED: 3, LOOT: 4, MP_LOBBY: 5, MP_DEAD: 6, CAMPAIGN_SELECT: 7 };
 let state = S.START;
 
 const MAX_COMBO_TIME = 120;
@@ -1694,11 +1694,18 @@ function handleTouchStart(e) {
     const t = e.changedTouches[0];
     const inRect = (r) => r && t.clientX >= r.x && t.clientX <= r.x + r.w && t.clientY >= r.y && t.clientY <= r.y + r.h;
     if (state === S.START && inRect(startMultiBtnRect)) { enterMultiplayerLobby(); e.preventDefault(); return; }
+    if (state === S.START && inRect(startCampaignBtnRect)) { state = S.CAMPAIGN_SELECT; e.preventDefault(); return; }
     beginGame(); e.preventDefault(); return;
   }
   if (state === S.MP_LOBBY) {
     const t = e.changedTouches[0];
     if (mp) mp.onLobbyClick(t.clientX, t.clientY);
+    e.preventDefault();
+    return;
+  }
+  if (state === S.CAMPAIGN_SELECT) {
+    const t = e.changedTouches[0];
+    handleCampaignSelectClick(t.clientX, t.clientY);
     e.preventDefault();
     return;
   }
@@ -1744,6 +1751,10 @@ window.addEventListener('keydown', e => {
     if (e.key === 'k' || e.key === 'K') { enterSoloMultiplayerTest(); return; }
     return;
   }
+  if (state === S.CAMPAIGN_SELECT) {
+    if (e.key === 'Escape') { state = S.START; return; }
+    return;
+  }
   if (e.key === 'Escape') { settingsOpen = false; return; }
   if (multiplayerMode && state === S.PLAY && /^[1-3]$/.test(e.key)) { useInventorySlot(Number(e.key) - 1); return; }
   if ((e.key === 'm' || e.key === 'M') && (state === S.START || state === S.OVER) && !isMobile) { enterMultiplayerLobby(); return; }
@@ -1760,8 +1771,10 @@ let mouseDX = 0, mouseDY = 0;
 // ── Vue arrière (clic droit maintenu) : la caméra reste fixée au hibou mais
 //    pivote de 180° tant que le bouton est enfoncé (voir updateCameraClip).
 let lookBack = false;
-// Zones cliquables des boutons Solo/Multijoueur de l'écran d'accueil (recalculées à chaque drawStart())
-let startSoloBtnRect = null, startMultiBtnRect = null;
+// Zones cliquables des boutons Solo/Multijoueur/Campagne de l'écran d'accueil (recalculées à chaque drawStart())
+let startSoloBtnRect = null, startMultiBtnRect = null, startCampaignBtnRect = null;
+// Zones cliquables des 3 boutons de difficulté de l'écran S.CAMPAIGN_SELECT (recalculées à chaque drawCampaignSelect())
+let campaignDifficultyRects = [];
 glCanvas.addEventListener('contextmenu', e => e.preventDefault());
 window.addEventListener('blur', () => { lookBack = false; });
 function requestFlightPointerLock() {
@@ -1794,10 +1807,12 @@ window.addEventListener('pointerdown', e => {
     return;
   }
   if (state === S.MP_LOBBY) { if (mp) mp.onLobbyClick(e.clientX, e.clientY); return; }
+  if (state === S.CAMPAIGN_SELECT) { handleCampaignSelectClick(e.clientX, e.clientY); return; }
   if (multiplayerMode && state === S.PLAY && e.button === 0) mouseFireHeld = true;
   if (state === S.START) {
     const inRect = (r) => r && e.clientX >= r.x && e.clientX <= r.x + r.w && e.clientY >= r.y && e.clientY <= r.y + r.h;
     if (inRect(startMultiBtnRect)) { enterMultiplayerLobby(); return; }
+    if (inRect(startCampaignBtnRect)) { state = S.CAMPAIGN_SELECT; return; }
     beginGame(); // clic sur SOLO ou n'importe où ailleurs sur l'écran d'accueil
   }
   else if (state === S.OVER) beginGame();
@@ -2753,6 +2768,27 @@ const MP_AMMO_CRATE_COUNT = 3;    // pool de caisses — bien plus rare que les 
 const MP_AMMO_GRANT = 60;        // munitions par caisse (le serveur fait foi via 'ammo')
 const MP_HEALKIT_COUNT = 2;       // pool de kits de soin — plus rare que les caisses de munitions
 
+// ══════════════════════════════════════════════════
+//  CAMPAGNE (vs IA) — mode de test : partie multijoueur locale contre un bot.
+//  Le bot vole avec le même modèle de vol/dégâts que le joueur (voir
+//  updateBotFlight/updateBotAI plus bas) mais sans passer par `mp` (aucun
+//  réseau) : tout est résolu localement. Voir plans/hibou3d-multiplayer.md
+//  pour l'architecture multijoueur existante réutilisée.
+// ══════════════════════════════════════════════════
+let vsBotMode = false;
+let botDifficulty = 'medium'; // 'easy' | 'medium' | 'hard'
+let bot = null;                // créé une fois par spawnBotEntity(), réutilisé ensuite
+let campaignKills = 0, campaignDeaths = 0; // compteurs HUD, bac à sable (pas de fin de partie)
+
+// Seules ces valeurs changent selon la difficulté — MAX_SPEED, taux de rotation,
+// vie/munitions max sont IDENTIQUES aux 3 niveaux (même specs que le joueur) :
+// la difficulté ajuste la qualité de décision de l'IA, pas ses capacités de vol.
+const BOT_DIFFICULTY_TUNING = {
+  easy:   { aiTickInterval: 0.5,  aimConeRad: THREE.MathUtils.degToRad(12), reactionDelay: 0.9,  leadFactor: 0,   throttleCap: 0.7, evadeLifeThreshold: 6 },
+  medium: { aiTickInterval: 0.3,  aimConeRad: THREE.MathUtils.degToRad(6),  reactionDelay: 0.4,  leadFactor: 0.5, throttleCap: 0.9, evadeLifeThreshold: 4 },
+  hard:   { aiTickInterval: 0.15, aimConeRad: THREE.MathUtils.degToRad(2),  reactionDelay: 0.15, leadFactor: 1,   throttleCap: 1.0, evadeLifeThreshold: 2 },
+};
+
 let devEspEnabled = false;        // mode triche dev : position des adversaires sur le HUD
 try { devEspEnabled = localStorage.getItem('h3d_dev_esp') === '1'; } catch (_e) { /* stockage indisponible */ }
 function toggleDevEsp() {
@@ -2837,14 +2873,16 @@ const bulletMatRemote = new THREE.SpriteMaterial({
   map: glowTexture, color: 0xff8040, transparent: true, opacity: 0.9,
   blending: THREE.AdditiveBlending, depthWrite: false
 });
-let bullets = []; // { sprite, vel, remote, life }
-function spawnBullet(originPos, dir, isRemote) {
+let bullets = []; // { sprite, vel, owner: 'player'|'bot'|'tracer', life }
+// owner: 'player' = tirée par le joueur local (teste les remotes réseau + le bot campagne) ;
+// 'bot' = tirée par le bot campagne (teste le joueur local) ; 'tracer' = relais réseau cosmétique, jamais testée.
+function spawnBullet(originPos, dir, owner) {
   if (bullets.length >= MP_BULLET_MAX) removeBullet(0); // recycle la plus ancienne
-  const sprite = new THREE.Sprite(isRemote ? bulletMatRemote : bulletMatLocal); // matériaux PARTAGÉS : rien à disposer par balle
+  const sprite = new THREE.Sprite(owner === 'player' ? bulletMatLocal : bulletMatRemote); // matériaux PARTAGÉS : rien à disposer par balle
   sprite.scale.setScalar(0.5);
   sprite.position.copy(originPos);
   scene.add(sprite);
-  bullets.push({ sprite, vel: dir.clone().multiplyScalar(MP_BULLET_SPEED), remote: isRemote, life: MP_BULLET_LIFE });
+  bullets.push({ sprite, vel: dir.clone().multiplyScalar(MP_BULLET_SPEED), owner, life: MP_BULLET_LIFE });
 }
 function removeBullet(i) {
   scene.remove(bullets[i].sprite);
@@ -2885,6 +2923,7 @@ function segmentDistanceTo(center, a, b) {
 
 function updateBullets(dt) {
   const remoteOwls = mp ? mp.remotesList() : [];
+  const botHostile = (vsBotMode && bot && bot.alive) ? bot : null;
   const hitRadius = Math.max(1.3, OWL_COLLIDE_RADIUS * 2.5);
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i];
@@ -2900,7 +2939,20 @@ function updateBullets(dt) {
       removeBullet(i);
       continue;
     }
-    if (b.remote) continue;
+    if (b.owner === 'tracer') continue; // cosmétique — c'est le tireur qui fait foi côté réseau
+
+    if (b.owner === 'bot') {
+      // Balle du bot campagne : teste contre le joueur local.
+      if (segmentDistanceTo(owlGroup.position, _segA, b.sprite.position) > hitRadius) continue;
+      const location = classifyHitLocation(owlGroup, b.sprite.position);
+      onMPHitMe(location, 'bot'); // entièrement local, aucun relais réseau nécessaire
+      spawnFX(b.sprite.position, 8, 'death', location === 'head' ? '🎯 TÊTE !' : '');
+      removeBullet(i);
+      continue;
+    }
+
+    // b.owner === 'player' : teste contre les hiboux distants réseau + le bot campagne
+    let hit = false;
     for (const r of remoteOwls) {
       if (!r.alive) continue;
       if (segmentDistanceTo(r.obj.position, _segA, b.sprite.position) > hitRadius) continue;
@@ -2908,7 +2960,15 @@ function updateBullets(dt) {
       mp.sendHit(r.id, location); // la victime applique elle-même l'effet en recevant le relais
       spawnFX(b.sprite.position, 8, 'death', location === 'head' ? '🎯 TÊTE !' : '');
       removeBullet(i);
+      hit = true;
       break;
+    }
+    if (hit) continue;
+    if (botHostile && segmentDistanceTo(botHostile.obj.position, _segA, b.sprite.position) <= hitRadius) {
+      const location = classifyHitLocation(botHostile.obj, b.sprite.position);
+      botTakeHit(location); // pas de relais réseau : le bot n'existe que localement
+      spawnFX(b.sprite.position, 8, 'death', location === 'head' ? '🎯 TÊTE !' : '');
+      removeBullet(i);
     }
   }
 }
@@ -2927,7 +2987,7 @@ function updateMPFire(dt) {
   _firePos.set(0, -0.28, -0.9);
   owlGroup.localToWorld(_firePos); // bouche du canon
   for (let i = 0; i < n; i++) {
-    spawnBullet(_firePos, _fireDir, false);
+    spawnBullet(_firePos, _fireDir, 'player');
     mpAmmo--;
     mp.sendFire();
   }
@@ -2937,7 +2997,7 @@ function updateMPFire(dt) {
 const _tracerPos = new THREE.Vector3();
 function onMPRemoteFire(pos, dir) {
   _tracerPos.copy(pos).addScaledVector(dir, 1.2);
-  spawnBullet(_tracerPos, dir, true);
+  spawnBullet(_tracerPos, dir, 'tracer');
 }
 
 // ── Caisses de munitions : réutilisent la mécanique des branches (placement
@@ -3049,6 +3109,7 @@ function updateHealKits() {
 //    mort MP_RESPAWN_DELAY s → réapparition automatique à un point aléatoire de l'arène ──
 function mpDie(cause) {
   if (state !== S.PLAY || !multiplayerMode) return;
+  if (vsBotMode) campaignDeaths++;
   mpDeathCause = cause;
   mpRespawnTimer = MP_RESPAWN_DELAY;
   state = S.MP_DEAD;
@@ -3185,6 +3246,339 @@ function repairOwl() {
   spawnFX(owlGroup.position, 10, 'repaired', 'RÉPARÉ');
 }
 
+// ══════════════════════════════════════════════════
+//  CAMPAGNE — bot IA. Ne passe jamais par `mp` : le bot n'existe que
+//  localement, tout est résolu dans ce client (voir plan de conception,
+//  "Choix d'architecture clé : ne PAS toucher à updateFlight").
+// ══════════════════════════════════════════════════
+
+// Crée le visuel du bot une seule fois (réutilisé à chaque campagne suivante).
+function spawnBotEntity() {
+  if (bot) return;
+  const visual = makeRemoteOwlVisual();
+  const aura = makeAuraSprite(auraColorHex('purple'));
+  visual.obj.add(aura.sprite);
+  scene.add(visual.obj);
+  bot = {
+    obj: visual.obj, mixer: visual.mixer || null, auraMat: aura.mat,
+    velocity: new THREE.Vector3(), angRate: new THREE.Vector3(),
+    speed: 0, throttle: 0, stallMode: false, stallTimer: 0,
+    life: LIFE_MAX, governEff: { leftWing: 0, rightWing: 0, tail: 0 },
+    controlLostShown: { leftWing: false, rightWing: false, tail: false },
+    ammo: MP_MAG_CAP, fireAccum: 0,
+    alive: true, invul: 0, respawnTimer: 0,
+    degradeAccum: 0, lastHitTime: 0, repairProgress: 0,
+    aiState: 'approach', aiTimer: 0, targetPoint: new THREE.Vector3(),
+    fireIntentTimer: 0,
+  };
+}
+
+// Point de réapparition à distance modérée du joueur (pas au hasard dans toute
+// l'arène) : le bot doit rester trouvable, cf. règle « rien d'introuvable ».
+function botRespawn() {
+  const angle = rnd(0, Math.PI * 2);
+  const dist = rnd(60, 140);
+  const x = owlGroup.position.x + Math.cos(angle) * dist;
+  const z = owlGroup.position.z + Math.sin(angle) * dist;
+  bot.obj.position.set(x, effectiveGroundY(x, z) + rnd(25, 60), z);
+  bot.obj.quaternion.identity();
+  bot.obj.rotateY(rnd(0, Math.PI * 2));
+  bot.obj.visible = true;
+  bot.speed = MAX_SPEED * 0.55;
+  bot.velocity.set(0, 0, -bot.speed).applyQuaternion(bot.obj.quaternion);
+  bot.angRate.set(0, 0, 0);
+  bot.throttle = CRUISE_THROTTLE;
+  bot.stallMode = false; bot.stallTimer = 0;
+  bot.life = LIFE_MAX;
+  bot.governEff.leftWing = 0; bot.governEff.rightWing = 0; bot.governEff.tail = 0;
+  bot.controlLostShown.leftWing = false; bot.controlLostShown.rightWing = false; bot.controlLostShown.tail = false;
+  bot.degradeAccum = 0; bot.repairProgress = 0;
+  bot.lastHitTime = performance.now();
+  bot.ammo = MP_MAG_CAP; bot.fireAccum = 0;
+  bot.alive = true; bot.invul = 90;
+  bot.aiState = 'approach'; bot.aiTimer = 0; bot.fireIntentTimer = 0;
+}
+
+// Miroir d'onMPHitMe, mais sur l'état du bot — tout est local, pas de relais réseau.
+function botTakeHit(location) {
+  if (!bot || !bot.alive || bot.invul > 0) return;
+  bot.lastHitTime = performance.now();
+
+  if (location === 'head') {
+    spawnFX(bot.obj.position, 10, 'death', 'COUP CRITIQUE : HEADSHOT');
+    botDie('headshot');
+    return;
+  }
+
+  bot.life--;
+  if (Math.random() < CRIT_CHANCE) bot.life--;
+
+  const govPart = location === 'left-wing' ? 'leftWing' : location === 'right-wing' ? 'rightWing' : location === 'tail' ? 'tail' : null;
+  if (govPart) {
+    if (bot.governEff[govPart] > 0) bot.governEff[govPart] = Math.min(1, bot.governEff[govPart] + GOVERN_REPEAT_HIT_ADD);
+    else bot.governEff[govPart] = rnd(GOVERN_FIRST_HIT_MIN, GOVERN_FIRST_HIT_MAX);
+  }
+
+  screenShake = Math.max(screenShake, location === 'body' ? 4 : 8);
+  if (bot.life <= 0) botDie('shot');
+}
+
+function botDie(cause) {
+  campaignKills++;
+  bot.alive = false;
+  bot.obj.visible = false;
+  bot.velocity.set(0, 0, 0);
+  bot.respawnTimer = MP_RESPAWN_DELAY;
+  spawnFX(bot.obj.position, 20, 'death', cause === 'headshot' ? '💥 TÊTE TOUCHÉE !' : '💥 ABATTU !');
+}
+
+// Dégradation périodique + réparation passive du bot — mêmes constantes/règles
+// que updateDamageSystems/repairOwl côté joueur (parité du système de dégâts).
+function updateBotDamage(dt) {
+  const damaged = bot.life < LIFE_MAX || bot.governEff.leftWing > 0 || bot.governEff.rightWing > 0 || bot.governEff.tail > 0;
+  if (!damaged) { bot.repairProgress = 0; return; }
+
+  bot.degradeAccum += dt;
+  if (bot.degradeAccum >= GOVERN_DEGRADE_INTERVAL) {
+    bot.degradeAccum -= GOVERN_DEGRADE_INTERVAL;
+    for (const part of ['leftWing', 'rightWing', 'tail']) {
+      if (bot.governEff[part] > 0 && bot.governEff[part] < 1 && Math.random() < GOVERN_DEGRADE_CHANCE) {
+        bot.governEff[part] = Math.min(1, bot.governEff[part] + GOVERN_DEGRADE_STEP);
+      }
+    }
+  }
+
+  bot.repairProgress = THREE.MathUtils.clamp((performance.now() - bot.lastHitTime) / 1000 / REPAIR_TIME, 0, 1);
+  if (bot.repairProgress >= 1) {
+    bot.life = LIFE_MAX;
+    bot.governEff.leftWing = 0; bot.governEff.rightWing = 0; bot.governEff.tail = 0;
+    bot.degradeAccum = 0; bot.repairProgress = 0;
+    bot.lastHitTime = performance.now();
+  }
+}
+
+// ── Vol du bot : duplique le squelette aérodynamique d'updateFlight (mêmes
+//    constantes MAX_SPEED/YAW_RATE/THRUST_ACCEL/GRAVITY/portance/traînée/
+//    décrochage/governEff) mais lit un `input` calculé par l'IA au lieu du
+//    clavier, et écrit dans l'objet `bot` au lieu des globales du joueur. ──
+const _bFwd = new THREE.Vector3(), _bUp = new THREE.Vector3(), _bRight = new THREE.Vector3();
+const _bAcc = new THREE.Vector3(), _bTmp = new THREE.Vector3(), _bTgtAng = new THREE.Vector3();
+function updateBotFlight(input, dt) {
+  const rollMult  = 1 - Math.max(bot.governEff.leftWing, bot.governEff.rightWing);
+  const pitchMult = 1 - bot.governEff.tail;
+  const yawMult   = 1 - Math.max(bot.governEff.leftWing, bot.governEff.rightWing, bot.governEff.tail);
+  let authority = THREE.MathUtils.clamp(
+    (bot.speed - CTRL_MIN_SPEED) / (CTRL_FULL_SPEED - CTRL_MIN_SPEED), 0.2, 1);
+  if (bot.stallMode) authority *= 0.3;
+
+  _bTgtAng.set(input.pitchIn * PITCH_RATE * pitchMult, input.yawIn * YAW_RATE * yawMult,
+               input.rollIn * ROLL_RATE * rollMult).multiplyScalar(authority);
+  const kAng = 1 - Math.exp(-ANG_RESPONSE * dt);
+  bot.angRate.lerp(_bTgtAng, kAng);
+  bot.obj.rotateX(bot.angRate.x * dt);
+  bot.obj.rotateY(bot.angRate.y * dt);
+  bot.obj.rotateZ(bot.angRate.z * dt);
+
+  const q = bot.obj.quaternion;
+  _bFwd.set(0, 0, -1).applyQuaternion(q);
+  _bUp.set(0, 1, 0).applyQuaternion(q);
+  _bRight.set(1, 0, 0).applyQuaternion(q);
+  const curBank = Math.asin(THREE.MathUtils.clamp(_bRight.y, -1, 1));
+
+  if (input.thrustHeld) bot.throttle = Math.min(1, bot.throttle + 0.8 * dt);
+  else if (input.brakeHeld) bot.throttle = Math.max(0, bot.throttle - BRAKE_RATE * dt);
+  const climbFade = 1 - 0.85 * THREE.MathUtils.smoothstep(_bFwd.y, 0.35, 0.9);
+  const thrust = bot.throttle * THRUST_ACCEL * climbFade;
+
+  const v = bot.velocity.length();
+  const vUp = bot.velocity.dot(_bUp);
+  const vFwd = bot.velocity.dot(_bFwd);
+  const vRight = bot.velocity.dot(_bRight);
+  const aoa = v > 0.6 ? Math.atan2(-vUp, Math.abs(vFwd) + 1e-3) : 0;
+
+  const absAoa = Math.abs(aoa);
+  const stalling = absAoa > STALL_AOA;
+  let CL;
+  if (!stalling) CL = CL_MAX * (aoa / STALL_AOA);
+  else { const over = Math.min(1, (absAoa - STALL_AOA) / STALL_AOA); CL = Math.sign(aoa) * CL_MAX * (1 - 0.75 * over); }
+
+  const climbStall = _bFwd.y > 0.45 && v < STALL_SPEED;
+  if (!bot.stallMode && (stalling || climbStall)) { bot.stallMode = true; bot.stallTimer = 0.8; }
+  if (bot.stallMode) {
+    bot.stallTimer -= dt;
+    bot.angRate.x = THREE.MathUtils.lerp(bot.angRate.x, -1.5, 1 - Math.exp(-3.5 * dt));
+    if (bot.stallTimer <= 0 && v > STALL_RECOVER && _bFwd.y < 0.25 && absAoa < STALL_AOA * 0.8) bot.stallMode = false;
+  }
+
+  _bAcc.set(0, -OWL_MASS * GRAVITY, 0);
+  _bAcc.addScaledVector(_bFwd, thrust * OWL_MASS);
+
+  const altAGL = bot.obj.position.y - effectiveGroundY(bot.obj.position.x, bot.obj.position.z);
+  const groundEffect = THREE.MathUtils.clamp(1 - altAGL / 6, 0, 1);
+  const dynLift  = AIR_LIFT * v * v * CL * (1 + 0.3 * groundEffect);
+  const flapLift = FLAP_LIFT * (0.35 + 0.65 * bot.throttle) * Math.max(0, 1 - v / FLAP_FADE)
+                 * (1 - THREE.MathUtils.smoothstep(_bFwd.y, 0.35, 0.8));
+  const wingLiftMult = 1 - (bot.governEff.leftWing + bot.governEff.rightWing) / 2;
+  _bAcc.addScaledVector(_bUp, (dynLift + flapLift) * wingLiftMult * OWL_MASS);
+
+  if (v > 1e-3) {
+    const drag = AIR_DRAG * v * v + INDUCED_DRAG * CL * CL * v * (1 - 0.35 * groundEffect);
+    _bAcc.addScaledVector(bot.velocity, (-drag / v) * OWL_MASS);
+  }
+  _bAcc.addScaledVector(_bRight, -vRight * SIDE_GRIP * OWL_MASS);
+  _bAcc.divideScalar(OWL_MASS);
+
+  bot.velocity.addScaledVector(_bAcc, dt);
+  const driftSeverity = Math.max(bot.governEff.leftWing, bot.governEff.rightWing, bot.governEff.tail);
+  if (driftSeverity > 0) {
+    const driftSign = bot.governEff.leftWing > bot.governEff.rightWing ? -1 : 1;
+    bot.velocity.addScaledVector(_bRight, driftSign * DRIFT_ACCEL * driftSeverity * dt);
+  }
+  const vmax = MAX_SPEED;
+  if (bot.velocity.lengthSq() > vmax * vmax) bot.velocity.setLength(vmax);
+  bot.obj.position.addScaledVector(bot.velocity, dt);
+  bot.speed = bot.velocity.length();
+
+  const levelness = 1 - THREE.MathUtils.clamp(Math.abs(_bFwd.y) / 0.85, 0, 1);
+  if (bot.speed > 3 && levelness > 0) {
+    const turnRate = GRAVITY * Math.tan(THREE.MathUtils.clamp(curBank, -1.45, 1.45)) / bot.speed;
+    const a = turnRate * dt * levelness;
+    const ca = Math.cos(a), sa = Math.sin(a);
+    const vx = bot.velocity.x, vz = bot.velocity.z;
+    bot.velocity.x = vx * ca + vz * sa;
+    bot.velocity.z = -vx * sa + vz * ca;
+    bot.obj.rotateOnWorldAxis(_UP_AXIS, a);
+  }
+
+  // Bordure d'arène : même garde-fou dur que le joueur (pas de résistance
+  // progressive ici, le bot n'a pas besoin du confort de conduite du joueur).
+  const f = ellipsoidFactor(bot.obj.position);
+  if (f > 1) {
+    _bTmp.copy(bot.obj.position).sub(ARENA_CENTER);
+    bot.obj.position.copy(ARENA_CENTER).addScaledVector(_bTmp, 1 / f);
+  }
+  const groundY = effectiveGroundY(bot.obj.position.x, bot.obj.position.z) + OWL_GROUND_CLEAR;
+  if (bot.obj.position.y < groundY) {
+    bot.obj.position.y = groundY;
+    botDie('crash');
+  }
+}
+
+// ── IA de décision : choisit un état (approche/orbite/fuite/ravitaillement)
+//    et un point visé, converti en yaw/pitch/roll comme le ferait un joueur. ──
+const _aiToPlayer = new THREE.Vector3(), _aiLocal = new THREE.Vector3(), _aiFwd = new THREE.Vector3(), _aiUp = new THREE.Vector3(), _aiRight = new THREE.Vector3();
+function updateBotAI(dt) {
+  const tuning = BOT_DIFFICULTY_TUNING[botDifficulty];
+  bot.aiTimer -= dt;
+  if (bot.aiTimer <= 0) {
+    bot.aiTimer = tuning.aiTickInterval;
+
+    const distToPlayer = bot.obj.position.distanceTo(owlGroup.position);
+    if (bot.life <= tuning.evadeLifeThreshold) {
+      bot.aiState = 'evade';
+    } else if (bot.ammo <= 10) {
+      bot.aiState = 'seek_ammo';
+    } else if (bot.life < LIFE_MAX * 0.5 && healKits.length) {
+      bot.aiState = 'seek_heal';
+    } else if (distToPlayer < 70) {
+      bot.aiState = 'orbit';
+    } else {
+      bot.aiState = 'approach';
+    }
+
+    if (bot.aiState === 'approach') {
+      _aiToPlayer.copy(velocity).multiplyScalar(tuning.leadFactor * 0.6); // anticipation : point d'interception
+      bot.targetPoint.copy(owlGroup.position).add(_aiToPlayer);
+    } else if (bot.aiState === 'orbit') {
+      _aiToPlayer.copy(bot.obj.position).sub(owlGroup.position).normalize();
+      _aiRight.set(-_aiToPlayer.z, 0, _aiToPlayer.x); // perpendiculaire, dans le plan horizontal
+      bot.targetPoint.copy(owlGroup.position).addScaledVector(_aiToPlayer, 45).addScaledVector(_aiRight, 30);
+    } else if (bot.aiState === 'evade') {
+      _aiToPlayer.copy(bot.obj.position).sub(owlGroup.position).normalize();
+      bot.targetPoint.copy(bot.obj.position).addScaledVector(_aiToPlayer, 80).setY(bot.obj.position.y + 20);
+    } else if (bot.aiState === 'seek_ammo' && ammoCrates.length) {
+      let nearest = ammoCrates[0], nd = Infinity;
+      for (const c of ammoCrates) { const d = c.sprite.position.distanceToSquared(bot.obj.position); if (d < nd) { nd = d; nearest = c; } }
+      bot.targetPoint.copy(nearest.sprite.position);
+    } else if (bot.aiState === 'seek_heal' && healKits.length) {
+      let nearest = healKits[0], nd = Infinity;
+      for (const k of healKits) { const d = k.sprite.position.distanceToSquared(bot.obj.position); if (d < nd) { nd = d; nearest = k; } }
+      bot.targetPoint.copy(nearest.sprite.position);
+    } else {
+      bot.targetPoint.copy(owlGroup.position);
+    }
+  }
+
+  // Conversion point visé -> commandes yaw/pitch/roll, comme un pilote humain
+  // qui viserait ce point (produit scalaire/vectoriel avec le repère local du bot).
+  const q = bot.obj.quaternion;
+  _aiFwd.set(0, 0, -1).applyQuaternion(q);
+  _aiUp.set(0, 1, 0).applyQuaternion(q);
+  _aiRight.set(1, 0, 0).applyQuaternion(q);
+  _aiLocal.copy(bot.targetPoint).sub(bot.obj.position).normalize();
+
+  const yawIn   = THREE.MathUtils.clamp(_aiLocal.dot(_aiRight) * 3, -1, 1);
+  const pitchIn = THREE.MathUtils.clamp(-_aiLocal.dot(_aiUp) * 3, -1, 1);
+  const rollIn  = THREE.MathUtils.clamp(-yawIn * 1.2, -1, 1); // vire à plat façon virage coordonné
+
+  const thrustHeld = bot.aiState !== 'evade' || _aiLocal.dot(_aiFwd) > -0.3;
+  updateBotFlight({ yawIn, pitchIn, rollIn, thrustHeld, brakeHeld: false }, dt);
+  bot.throttle = Math.min(bot.throttle, tuning.throttleCap);
+
+  // Décision de tir : cône de précision + délai de réaction, seulement en approche/orbite.
+  const aimable = bot.aiState === 'approach' || bot.aiState === 'orbit';
+  _aiToPlayer.copy(owlGroup.position).sub(bot.obj.position);
+  const distToPlayer2 = _aiToPlayer.length();
+  _aiToPlayer.normalize();
+  const angleToPlayer = Math.acos(THREE.MathUtils.clamp(_aiFwd.dot(_aiToPlayer), -1, 1));
+  if (aimable && distToPlayer2 < 220 && angleToPlayer < tuning.aimConeRad) {
+    bot.fireIntentTimer += dt;
+  } else {
+    bot.fireIntentTimer = 0;
+  }
+  bot.wantsToFire = aimable && bot.fireIntentTimer >= tuning.reactionDelay;
+}
+
+// ── Tir du bot : même mécanique/cadence que updateMPFire, direction bruitée
+//    par le cône de précision (pas un aimbot parfait — esquivable au pilotage). ──
+const _botFireDir = new THREE.Vector3(), _botFirePos = new THREE.Vector3();
+function updateBotFire(dt) {
+  if (!bot.wantsToFire || bot.ammo <= 0) { bot.fireAccum = 0; return; }
+  bot.fireAccum += dt * MP_FIRE_RATE;
+  const n = Math.min(Math.floor(bot.fireAccum), bot.ammo, 6);
+  bot.fireAccum -= Math.floor(bot.fireAccum);
+  if (n <= 0) return;
+  const tuning = BOT_DIFFICULTY_TUNING[botDifficulty];
+  _botFireDir.set(0, 0, -1).applyQuaternion(bot.obj.quaternion);
+  const jitter = tuning.aimConeRad * 0.6;
+  _botFireDir.x += rnd(-jitter, jitter);
+  _botFireDir.y += rnd(-jitter, jitter);
+  _botFireDir.normalize();
+  _botFirePos.set(0, -0.28, -0.9);
+  bot.obj.localToWorld(_botFirePos);
+  for (let i = 0; i < n; i++) {
+    spawnBullet(_botFirePos, _botFireDir, 'bot');
+    bot.ammo--;
+  }
+}
+
+// Orchestrateur appelé chaque frame en campagne : respawn si mort, sinon
+// IA + vol + tir + dégâts, dans cet ordre.
+function updateBot(dt) {
+  if (!bot) return;
+  if (!bot.alive) {
+    bot.respawnTimer -= dt;
+    if (bot.respawnTimer <= 0) botRespawn();
+    return;
+  }
+  if (bot.invul > 0) bot.invul--;
+  updateBotAI(dt);
+  updateBotFire(dt);
+  updateBotDamage(dt);
+  if (bot.mixer) bot.mixer.update(dt);
+  bot.obj.visible = !(bot.invul > 0 && Math.floor(Date.now() / 80) % 2 !== 0);
+}
+
 // ── Entrée / sortie du mode multijoueur ──
 function enterMultiplayerLobby() {
   if (!mp || !assetsReady) return;
@@ -3217,6 +3611,11 @@ function clearMultiplayerWorld() {
   inventory = [null, null, null];
   localKillStreak = 0;
   mouseFireHeld = false; touchFireHeld = false; mpFireAccum = 0;
+  if (vsBotMode) {
+    vsBotMode = false;
+    campaignKills = 0; campaignDeaths = 0;
+    if (bot) bot.obj.visible = false; // le mesh est conservé pour la prochaine campagne
+  }
 }
 
 // Test solo hors-ligne (touche [K] dans le salon) : lance directement une manche
@@ -3224,6 +3623,18 @@ function clearMultiplayerWorld() {
 function enterSoloMultiplayerTest() {
   if (!assetsReady) return;
   beginMultiplayerGame('brown');
+}
+
+// Mode CAMPAGNE (vs IA) : partie multijoueur locale contre un bot, sans serveur.
+// Choisi depuis l'écran S.CAMPAIGN_SELECT (voir drawCampaignSelect).
+function beginCampaignGame(level) {
+  if (!assetsReady) return;
+  beginMultiplayerGame('brown');
+  vsBotMode = true;
+  botDifficulty = level;
+  campaignKills = 0; campaignDeaths = 0;
+  spawnBotEntity();
+  botRespawn();
 }
 
 // Partie rejointe (message 'joined' du serveur) : lance la manche multijoueur.
@@ -3270,11 +3681,13 @@ function beginMultiplayerGame(colorName) {
   requestFlightPointerLock();
 }
 
-// Quitter la partie en cours (Retour arrière depuis la pause) : retour au salon.
+// Quitter la partie en cours (Retour arrière depuis la pause) : retour au salon
+// multijoueur réseau, ou au menu si c'était une campagne (pas de salon pour l'IA).
 function leaveMultiplayerGame() {
+  const wasCampaign = vsBotMode;
   if (mp) mp.leaveRoom();
   clearMultiplayerWorld();
-  state = S.MP_LOBBY;
+  state = wasCampaign ? S.START : S.MP_LOBBY;
   document.body.style.cursor = 'default';
   owlGroup.visible = false;
   if (document.pointerLockElement) document.exitPointerLock();
@@ -3367,6 +3780,7 @@ function drawHUD() {
     drawMPStatusBox();
     drawScoreboard();
     drawInventoryBar();
+    if (vsBotMode) drawCampaignScore();
     hctx.restore();
   } else {
   rrect(12, 12, 230, 100, 14, 'rgba(8,8,35,0.82)', 'rgba(100,90,220,0.4)');
@@ -3509,6 +3923,7 @@ function drawHUD() {
     if (nearestCrate) drawTargetIndicator(nearestCrate.sprite.position, '#ffa030', '📦');
     if (devEspEnabled && mp) mp.drawEsp();
   }
+  drawBotDebugTag(); // aussi visible sur l'écran de mort MP_DEAD : le bot continue de voler
 }
 
 // Panneau haut-gauche du multijoueur : munitions, gouvernes, vie, joueurs de la partie.
@@ -3572,6 +3987,42 @@ function drawScoreboard() {
     hctx.textAlign = 'left';
     yy += 20;
   }
+}
+
+// Compteur kills/morts du mode CAMPAGNE (bac à sable, pas de fin de partie) —
+// affiché à la place du tableau des scores réseau (vide en campagne, mp.roster() === []).
+function drawCampaignScore() {
+  const W = hudCanvas.width;
+  const boxW = 170, boxH = 50;
+  const x = W / 2 - boxW / 2, y = 10;
+  rrect(x, y, boxW, boxH, 12, 'rgba(8,8,35,0.82)', 'rgba(180,90,255,0.4)');
+  hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+  hctx.fillStyle = '#dde'; hctx.font = 'bold 12px system-ui';
+  hctx.fillText('🤖 CAMPAGNE (' + CAMPAIGN_DIFFICULTIES.find(d => d.level === botDifficulty).label + ')', W / 2, y + 16);
+  hctx.font = 'bold 13px system-ui';
+  hctx.fillStyle = '#8fe06a'; hctx.fillText('Vous : ' + campaignKills + ' 💀 IA', W / 2, y + 36);
+  hctx.textAlign = 'left';
+}
+
+// Étiquette de debug au-dessus du bot : visible en permanence en campagne (pas
+// seulement avec devEspEnabled), pour observer son comportement en jeu — demande
+// explicite de Rémi. Réactivité = autorité de pilotage restante après dégâts.
+function drawBotDebugTag() {
+  if (!vsBotMode || !bot || !bot.alive) return;
+  _indTmp.copy(bot.obj.position); _indTmp.y += 2.2;
+  const s = worldToScreen(_indTmp);
+  const avgLoss = (bot.governEff.leftWing + bot.governEff.rightWing + bot.governEff.tail) / 3;
+  const reactivity = Math.round((1 - avgLoss) * 100);
+  hctx.save();
+  hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+  const w = 118, h = 34;
+  rrect(s.x - w / 2, s.y - h - 10, w, h, 8, 'rgba(8,8,35,0.85)', 'rgba(180,90,255,0.7)');
+  hctx.font = 'bold 12px system-ui'; hctx.fillStyle = '#e8ecff';
+  hctx.fillText('🤖 BOT', s.x, s.y - h + 2);
+  hctx.font = '11px system-ui';
+  hctx.fillStyle = reactivity > 70 ? '#8fe06a' : reactivity > 30 ? '#ff9a6a' : '#ff4444';
+  hctx.fillText('Réactivité : ' + reactivity + '%', s.x, s.y - h + 18);
+  hctx.restore();
 }
 
 // Barre d'inventaire, bas-centre : 3 slots (touches 1-3), slot 1 réservé aux
@@ -3719,19 +4170,71 @@ function drawStart() {
   hctx.fillStyle = '#fff'; hctx.font = 'bold 15px system-ui';
   hctx.fillText('Choisis un mode', cx, cy + 102);
 
-  const btnW = 150, btnH = 44, btnGap = 16, btnY = cy + 120;
-  startSoloBtnRect = { x: cx - btnW - btnGap / 2, y: btnY, w: btnW, h: btnH };
-  startMultiBtnRect = { x: cx + btnGap / 2, y: btnY, w: btnW, h: btnH };
+  const btnW = 112, btnH = 44, btnGap = 10, btnY = cy + 120;
+  const btnTotalW = btnW * 3 + btnGap * 2, btnX0 = cx - btnTotalW / 2;
+  startSoloBtnRect     = { x: btnX0,                     y: btnY, w: btnW, h: btnH };
+  startMultiBtnRect    = { x: btnX0 + btnW + btnGap,     y: btnY, w: btnW, h: btnH };
+  startCampaignBtnRect = { x: btnX0 + 2 * (btnW + btnGap), y: btnY, w: btnW, h: btnH };
   rrect(startSoloBtnRect.x, btnY, btnW, btnH, 10, 'rgba(120,110,255,0.3)', 'rgba(180,170,255,0.8)');
   rrect(startMultiBtnRect.x, btnY, btnW, btnH, 10, 'rgba(60,180,255,0.25)', 'rgba(120,220,255,0.8)');
-  hctx.font = 'bold 16px system-ui'; hctx.fillStyle = '#fff';
+  rrect(startCampaignBtnRect.x, btnY, btnW, btnH, 10, 'rgba(180,90,255,0.25)', 'rgba(220,140,255,0.8)');
+  hctx.font = 'bold 13px system-ui'; hctx.fillStyle = '#fff';
   hctx.fillText('SOLO', startSoloBtnRect.x + btnW / 2, btnY + btnH / 2);
   hctx.fillText('MULTIJOUEUR', startMultiBtnRect.x + btnW / 2, btnY + btnH / 2);
+  hctx.fillText('CAMPAGNE', startCampaignBtnRect.x + btnW / 2, btnY + btnH / 2);
   if (!isMobile) {
     hctx.fillStyle = '#9be0ff'; hctx.font = '11px system-ui';
     hctx.fillText('([M] = raccourci multijoueur)', cx, btnY + btnH + 20);
   }
   hctx.restore();
+}
+
+// ── Écran de sélection de difficulté du mode CAMPAGNE (vs IA) : mode de test,
+//    partie multijoueur locale (canon/munitions/vie/gouvernes) contre un bot. ──
+const CAMPAIGN_DIFFICULTIES = [
+  { level: 'easy',   label: 'FACILE' },
+  { level: 'medium', label: 'MOYEN' },
+  { level: 'hard',   label: 'DIFFICILE' },
+];
+function drawCampaignSelect() {
+  const W = hudCanvas.width, H = hudCanvas.height;
+  hctx.save();
+  hctx.fillStyle = 'rgba(4,4,18,0.8)'; hctx.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2;
+  const pw = Math.min(420, W - 40), ph = 260;
+  const px = cx - pw / 2, py = cy - ph / 2;
+  rrect(px, py, pw, ph, 24, 'rgba(12,12,48,0.96)', 'rgba(180,90,255,0.5)');
+  hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+  hctx.fillStyle = '#cbc3ff'; hctx.font = '900 22px system-ui';
+  hctx.fillText('🤖 CAMPAGNE — Choisis la difficulté', cx, py + 40);
+  hctx.fillStyle = '#9fb0d8'; hctx.font = '13px system-ui';
+  hctx.fillText('Mode de test : toi contre un hibou IA, mêmes specs de vol.', cx, py + 66);
+
+  const btnW = 110, btnH = 48, btnGap = 14;
+  const totalW = btnW * 3 + btnGap * 2, x0 = cx - totalW / 2, btnY = py + 110;
+  campaignDifficultyRects = [];
+  for (let i = 0; i < CAMPAIGN_DIFFICULTIES.length; i++) {
+    const d = CAMPAIGN_DIFFICULTIES[i];
+    const bx = x0 + i * (btnW + btnGap);
+    const rect = { x: bx, y: btnY, w: btnW, h: btnH, level: d.level };
+    campaignDifficultyRects.push(rect);
+    rrect(bx, btnY, btnW, btnH, 10, 'rgba(180,90,255,0.25)', 'rgba(220,140,255,0.8)');
+    hctx.font = 'bold 14px system-ui'; hctx.fillStyle = '#fff';
+    hctx.fillText(d.label, bx + btnW / 2, btnY + btnH / 2);
+  }
+
+  hctx.fillStyle = '#cbc3dd'; hctx.font = '13px system-ui';
+  hctx.fillText('[Échap] Retour au menu', cx, py + ph - 24);
+  hctx.restore();
+}
+
+function handleCampaignSelectClick(x, y) {
+  for (const r of campaignDifficultyRects) {
+    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
+      beginCampaignGame(r.level);
+      return;
+    }
+  }
 }
 
 function drawOver() {
@@ -3922,6 +4425,8 @@ function drawOverlay() {
     drawStart();
   } else if (state === S.MP_LOBBY) {
     if (mp) mp.drawLobby();
+  } else if (state === S.CAMPAIGN_SELECT) {
+    drawCampaignSelect();
   } else {
     if (state === S.PLAY) drawSpeedFX();
     for (const p of particles) {
@@ -4066,6 +4571,7 @@ function update() {
     if (multiplayerMode) {
       // Multijoueur : canon/balles/caisses remplacent branches/ours/cadeau/rase-mottes
       updateMPFire(dt);
+      if (vsBotMode) updateBot(dt);
       updateBullets(dt);
       updateAmmoCrates();
       updateHealKits();
@@ -4091,6 +4597,7 @@ function update() {
   } else if (state === S.MP_DEAD) {
     mouseDX = 0; mouseDY = 0;
     boundaryGrid.visible = false;
+    if (vsBotMode) updateBot(dt); // le bot continue de voler/patrouiller pendant que le joueur est mort
     updateBullets(dt); // les balles en vol finissent leur course pendant l'écran de mort
     mpRespawnTimer -= dt;
     if (mpRespawnTimer <= 0) doMPRespawn();
