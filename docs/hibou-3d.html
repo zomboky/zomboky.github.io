@@ -28,6 +28,7 @@
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from './three/examples/jsm/loaders/GLTFLoader.js';
+import { OBJLoader } from './three/examples/jsm/loaders/OBJLoader.js';
 import { clone as skeletonClone } from './three/examples/jsm/utils/SkeletonUtils.js';
 import { initMultiplayer, auraColorHex } from './scripts/hibou3d-multiplayer.js';
 
@@ -595,7 +596,8 @@ const MODEL_URLS = {
   mountainGroup: 'models/mountain_group.glb',
   cloud1:        'models/cloud1.glb',
   cloud2:        'models/cloud2.glb',
-  cloud3:        'models/cloud3.glb'
+  cloud3:        'models/cloud3.glb',
+  watchtower:    'models/watchtower.glb'
 };
 const models = {};
 const modelClips = {}; // clips d'animation (le cas échéant) du .glb, indexés comme MODEL_URLS
@@ -613,6 +615,24 @@ async function loadAssets() {
       console.warn('Modèle 3D indisponible (repli procédural) :', entries[i][0], res.reason);
     }
   });
+
+  // cabin.obj (free3d) : pas de .mtl fourni avec le téléchargement → pas de couleur/texture
+  // d'origine. On retint une teinte par pièce nommée (Roof/Cabin/Chimney/Door dans le .obj
+  // source), assortie à la palette bois/toit déjà utilisée par les chalets procéduraux.
+  try {
+    const cabinRoot = await new OBJLoader().loadAsync('models/cabin.obj');
+    const CABIN_PART_COLORS = { Roof: ROOF_COLOR, Cabin: WOOD_LIGHT, Chimney: 0x6b6058, Door: WOOD_DARK };
+    cabinRoot.traverse(o => {
+      if (o.isMesh) {
+        o.material = new THREE.MeshStandardMaterial({
+          color: CABIN_PART_COLORS[o.name] ?? WOOD_LIGHT, roughness: 0.9
+        });
+      }
+    });
+    models.cabin = cabinRoot;
+  } catch (err) {
+    console.warn('Modèle 3D indisponible (repli procédural) :', 'cabin', err);
+  }
 }
 
 // Enveloppe un modèle dans un Group normalisé : recentré en XZ, posé au sol (ou centré),
@@ -1597,6 +1617,13 @@ let buildingGroups = [];
 let campfires = []; // { pos, group, flame }
 
 const WOOD_LIGHT = 0x8a6a3f, WOOD_DARK = 0x5a3d22, ROOF_COLOR = 0x2e2620, TOWER_ROOF_COLOR = 0x4a1e1e;
+// Tour de guet GLB (models.watchtower) : gabarit calé sur l'ancienne tour procédurale
+// (pilotis + cabine + toit ≈ 13.8 de haut) pour garder le même feel dans les hameaux.
+const TOWER_MODEL_HEIGHT = 13.8, TOWER_MODEL_FOOTPRINT = 2.4 * 1.6;
+// Chalet GLB (models.cabin, cabin.obj/free3d) : gabarit calé sur l'ancien chalet 1 étage
+// procédural (≈ 3.8 de haut) ; le variant 'floor' (à étage) reprend le même modèle agrandi
+// faute d'un second maillage dédié.
+const CABIN_MODEL_HEIGHT = 3.8, CABIN_MODEL_FOOTPRINT = 4.2 * 1.05;
 
 // Toit pyramidal simplifié (cône à 4 côtés tourné de 45°) pour tous les bâtiments —
 // même langage visuel low-poly que la tour, robuste sans avoir besoin d'un vrai
@@ -1608,6 +1635,13 @@ function buildChalet(kind) {
   const roofMat = new THREE.MeshStandardMaterial({ color: ROOF_COLOR, roughness: 0.85, flatShading: true });
 
   if (kind === 'tower') {
+    if (models.watchtower) {
+      const group = new THREE.Group();
+      const model = normalizeModel(models.watchtower.clone(), { height: TOWER_MODEL_HEIGHT, groundAlign: true });
+      group.add(model);
+      group.userData.footprint = TOWER_MODEL_FOOTPRINT;
+      return group;
+    }
     const legR = 0.32, legH = 9, spread = 2.4;
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
       const leg = new THREE.Mesh(new THREE.CylinderGeometry(legR * 0.7, legR, legH, 5), trimMat);
@@ -1623,6 +1657,15 @@ function buildChalet(kind) {
     roof.rotation.y = Math.PI / 4;
     group.add(roof);
     group.userData.footprint = spread * 1.6;
+    return group;
+  }
+
+  if (models.cabin) {
+    const group = new THREE.Group();
+    const height = kind === 'floor' ? CABIN_MODEL_HEIGHT * 1.35 : CABIN_MODEL_HEIGHT;
+    const model = normalizeModel(models.cabin.clone(), { height, groundAlign: true });
+    group.add(model);
+    group.userData.footprint = CABIN_MODEL_FOOTPRINT;
     return group;
   }
 
@@ -4507,7 +4550,9 @@ function drawCampaignScore() {
 function drawBotDebugTag() {
   if (!vsBotMode || !bot || !bot.alive) return;
   _indTmp.copy(bot.obj.position); _indTmp.y += 2.2;
-  const s = worldToScreen(_indTmp);
+  _indTmp.project(camera);
+  if (_indTmp.z > 1) return; // bot derrière la caméra : projection inversée, pas d'étiquette
+  const s = { x: (_indTmp.x * 0.5 + 0.5) * hudCanvas.width, y: (-_indTmp.y * 0.5 + 0.5) * hudCanvas.height };
   const avgLoss = (bot.governEff.leftWing + bot.governEff.rightWing + bot.governEff.tail) / 3;
   const reactivity = Math.round((1 - avgLoss) * 100);
   hctx.save();
@@ -5178,7 +5223,8 @@ window.__hibouDebug = () => ({
     owl: !!models.owl, bear: !!models.bear, moon: !!models.moon,
     trees: !!(models.pine1 || models.pine2 || models.birch || models.tree1),
     mountains: !!(models.mountains || models.mountainGroup),
-    clouds: !!(models.cloud1 || models.cloud2 || models.cloud3)
+    clouds: !!(models.cloud1 || models.cloud2 || models.cloud3),
+    watchtower: !!models.watchtower
   }
 });
 
