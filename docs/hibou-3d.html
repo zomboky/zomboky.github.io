@@ -1690,7 +1690,18 @@ function handleMobileTouchRelease(id) {
   if (touchFireHeld && id === touchFireId) touchFireHeld = false;
 }
 function handleTouchStart(e) {
-  if (state === S.START || state === S.OVER) { beginGame(); e.preventDefault(); return; }
+  if (state === S.START || state === S.OVER) {
+    const t = e.changedTouches[0];
+    const inRect = (r) => r && t.clientX >= r.x && t.clientX <= r.x + r.w && t.clientY >= r.y && t.clientY <= r.y + r.h;
+    if (state === S.START && inRect(startMultiBtnRect)) { enterMultiplayerLobby(); e.preventDefault(); return; }
+    beginGame(); e.preventDefault(); return;
+  }
+  if (state === S.MP_LOBBY) {
+    const t = e.changedTouches[0];
+    if (mp) mp.onLobbyClick(t.clientX, t.clientY);
+    e.preventDefault();
+    return;
+  }
   if (state === S.PLAY) {
     for (let i = 0; i < e.changedTouches.length; i++) {
       const t = e.changedTouches[i];
