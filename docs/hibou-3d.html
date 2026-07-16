@@ -2783,10 +2783,19 @@ let campaignKills = 0, campaignDeaths = 0; // compteurs HUD, bac à sable (pas d
 // Seules ces valeurs changent selon la difficulté — MAX_SPEED, taux de rotation,
 // vie/munitions max sont IDENTIQUES aux 3 niveaux (même specs que le joueur) :
 // la difficulté ajuste la qualité de décision de l'IA, pas ses capacités de vol.
+//   aiTickInterval     : délai entre deux décisions tactiques (temps de réaction)
+//   aimConeRad         : cône d'alignement exigé pour tirer (et dispersion des balles)
+//   reactionDelay      : temps de visée continue avant d'ouvrir le feu
+//   leadFactor         : anticipation de la position future du joueur (0 = poursuite pure)
+//   throttleCap        : régime moteur max hors urgence (terrain/décrochage)
+//   evadeLifeThreshold : vie sous laquelle le bot rompt le combat
+//   breakChance        : probabilité de break défensif quand le joueur le vise/le touche
+//   jinkPeriod         : période (s) du zigzag en break/fuite (0 = trajectoire prévisible)
+//   fireDist           : portée d'ouverture du feu
 const BOT_DIFFICULTY_TUNING = {
-  easy:   { aiTickInterval: 0.5,  aimConeRad: THREE.MathUtils.degToRad(12), reactionDelay: 0.9,  leadFactor: 0,   throttleCap: 0.7, evadeLifeThreshold: 6 },
-  medium: { aiTickInterval: 0.3,  aimConeRad: THREE.MathUtils.degToRad(6),  reactionDelay: 0.4,  leadFactor: 0.5, throttleCap: 0.9, evadeLifeThreshold: 4 },
-  hard:   { aiTickInterval: 0.15, aimConeRad: THREE.MathUtils.degToRad(2),  reactionDelay: 0.15, leadFactor: 1,   throttleCap: 1.0, evadeLifeThreshold: 2 },
+  easy:   { aiTickInterval: 0.5,  aimConeRad: THREE.MathUtils.degToRad(12),  reactionDelay: 0.9,  leadFactor: 0,    throttleCap: 0.7, evadeLifeThreshold: 6, breakChance: 0,    jinkPeriod: 0,    fireDist: 150 },
+  medium: { aiTickInterval: 0.3,  aimConeRad: THREE.MathUtils.degToRad(6),   reactionDelay: 0.4,  leadFactor: 0.55, throttleCap: 0.9, evadeLifeThreshold: 4, breakChance: 0.45, jinkPeriod: 0.9,  fireDist: 200 },
+  hard:   { aiTickInterval: 0.15, aimConeRad: THREE.MathUtils.degToRad(3.5), reactionDelay: 0.15, leadFactor: 1,    throttleCap: 1.0, evadeLifeThreshold: 3, breakChance: 0.8,  jinkPeriod: 0.55, fireDist: 240 },
 };
 
 let devEspEnabled = false;        // mode triche dev : position des adversaires sur le HUD
@@ -3269,7 +3278,8 @@ function spawnBotEntity() {
     alive: true, invul: 0, respawnTimer: 0,
     degradeAccum: 0, lastHitTime: 0, repairProgress: 0,
     aiState: 'approach', aiTimer: 0, targetPoint: new THREE.Vector3(),
-    fireIntentTimer: 0,
+    fireIntentTimer: 0, wantsToFire: false,
+    stateTimer: 0, breakCooldown: 0, jinkTimer: 0, jinkSign: 1, hitReact: false,
   };
 }
 
@@ -3296,13 +3306,15 @@ function botRespawn() {
   bot.lastHitTime = performance.now();
   bot.ammo = MP_MAG_CAP; bot.fireAccum = 0;
   bot.alive = true; bot.invul = 90;
-  bot.aiState = 'approach'; bot.aiTimer = 0; bot.fireIntentTimer = 0;
+  bot.aiState = 'approach'; bot.aiTimer = 0; bot.fireIntentTimer = 0; bot.wantsToFire = false;
+  bot.stateTimer = 0; bot.breakCooldown = 0; bot.jinkTimer = 0; bot.jinkSign = 1; bot.hitReact = false;
 }
 
 // Miroir d'onMPHitMe, mais sur l'état du bot — tout est local, pas de relais réseau.
 function botTakeHit(location) {
   if (!bot || !bot.alive || bot.invul > 0) return;
   bot.lastHitTime = performance.now();
+  bot.hitReact = true; // l'IA peut réagir par un break défensif au prochain tick
 
   if (location === 'head') {
     spawnFX(bot.obj.position, 10, 'death', 'COUP CRITIQUE : HEADSHOT');
@@ -3464,98 +3476,199 @@ function updateBotFlight(input, dt) {
   }
 }
 
-// ── IA de décision : choisit un état (approche/orbite/fuite/ravitaillement)
-//    et un point visé, converti en yaw/pitch/roll comme le ferait un joueur. ──
-const _aiToPlayer = new THREE.Vector3(), _aiLocal = new THREE.Vector3(), _aiFwd = new THREE.Vector3(), _aiUp = new THREE.Vector3(), _aiRight = new THREE.Vector3(), _aiProbeDir = new THREE.Vector3();
+// ── IA de décision : machine à états façon combat aérien — poursuite avec point
+//    d'interception, dégagement après une passe (« extend »), break défensif
+//    quand le joueur a le nez sur lui, fuite en jink quand il est blessé — posée
+//    sur un pilote bas niveau qui convertit une direction voulue en commandes
+//    AUX CONVENTIONS DU JOUEUR : pitchIn>0 = cabrer, yawIn>0 = virer à gauche,
+//    rollIn>0 = s'incliner à gauche (l'ancienne IA avait pitch/yaw inversés :
+//    son « évitement terrain » piquait moteur à fond vers le sol, d'où les
+//    crashs systématiques dans le décor).
+//    Priorités du pilote : décrochage > terrain > bordure > cible. ──
+const _aiFwd = new THREE.Vector3(), _aiUp = new THREE.Vector3(), _aiRight = new THREE.Vector3();
+const _aiSteer = new THREE.Vector3(), _aiTmp = new THREE.Vector3(), _aiTmp2 = new THREE.Vector3();
+const BOT_SAFE_FACTOR  = 0.78;            // fraction de l'ellipsoïde où l'IA choisit ses points (la muraille de montagnes monte dès ~0.86)
+const BOT_TARGET_CLEAR = 14;              // marge sol minimale de tout point visé
+const BOT_PROBE_TIMES  = [0.5, 1.1, 2.0]; // horizons (s) des sondes terrain sur la trajectoire prédite
+
+// Ramène un point visé dans le volume jouable (ellipsoïde sûre + au-dessus du
+// sol/de l'eau) : l'IA ne se donne jamais un objectif mortel, quel que soit l'état.
+function botClampTarget(p) {
+  const f = ellipsoidFactor(p);
+  if (f > BOT_SAFE_FACTOR) {
+    _aiTmp.copy(p).sub(ARENA_CENTER);
+    p.copy(ARENA_CENTER).addScaledVector(_aiTmp, BOT_SAFE_FACTOR / f);
+  }
+  p.y = Math.max(p.y, effectiveGroundY(p.x, p.z) + BOT_TARGET_CLEAR);
+}
+
 function updateBotAI(dt) {
   const tuning = BOT_DIFFICULTY_TUNING[botDifficulty];
-  bot.aiTimer -= dt;
-  if (bot.aiTimer <= 0) {
-    bot.aiTimer = tuning.aiTickInterval;
+  bot.aiTimer -= dt; bot.stateTimer -= dt; bot.breakCooldown -= dt;
+  const distToPlayer = bot.obj.position.distanceTo(owlGroup.position);
 
-    const distToPlayer = bot.obj.position.distanceTo(owlGroup.position);
-    if (bot.life <= tuning.evadeLifeThreshold) {
-      bot.aiState = 'evade';
-    } else if (bot.ammo <= 10) {
-      bot.aiState = 'seek_ammo';
-    } else if (bot.life < LIFE_MAX * 0.5 && healKits.length) {
-      bot.aiState = 'seek_heal';
-    } else if (distToPlayer < 70) {
-      bot.aiState = 'orbit';
-    } else {
-      bot.aiState = 'approach';
-    }
-
-    if (bot.aiState === 'approach') {
-      _aiToPlayer.copy(velocity).multiplyScalar(tuning.leadFactor * 0.6); // anticipation : point d'interception
-      bot.targetPoint.copy(owlGroup.position).add(_aiToPlayer);
-    } else if (bot.aiState === 'orbit') {
-      _aiToPlayer.copy(bot.obj.position).sub(owlGroup.position).normalize();
-      _aiRight.set(-_aiToPlayer.z, 0, _aiToPlayer.x); // perpendiculaire, dans le plan horizontal
-      bot.targetPoint.copy(owlGroup.position).addScaledVector(_aiToPlayer, 45).addScaledVector(_aiRight, 30);
-    } else if (bot.aiState === 'evade') {
-      _aiToPlayer.copy(bot.obj.position).sub(owlGroup.position).normalize();
-      bot.targetPoint.copy(bot.obj.position).addScaledVector(_aiToPlayer, 80).setY(bot.obj.position.y + 20);
-    } else if (bot.aiState === 'seek_ammo' && ammoCrates.length) {
-      let nearest = ammoCrates[0], nd = Infinity;
-      for (const c of ammoCrates) { const d = c.sprite.position.distanceToSquared(bot.obj.position); if (d < nd) { nd = d; nearest = c; } }
-      bot.targetPoint.copy(nearest.sprite.position);
-    } else if (bot.aiState === 'seek_heal' && healKits.length) {
-      let nearest = healKits[0], nd = Infinity;
-      for (const k of healKits) { const d = k.sprite.position.distanceToSquared(bot.obj.position); if (d < nd) { nd = d; nearest = k; } }
-      bot.targetPoint.copy(nearest.sprite.position);
-    } else {
-      bot.targetPoint.copy(owlGroup.position);
-    }
-  }
-
-  // Conversion point visé -> commandes yaw/pitch/roll, comme un pilote humain
-  // qui viserait ce point (produit scalaire/vectoriel avec le repère local du bot).
+  // Repère local du bot (nez / haut / droite) + inclinaison réelle.
   const q = bot.obj.quaternion;
   _aiFwd.set(0, 0, -1).applyQuaternion(q);
   _aiUp.set(0, 1, 0).applyQuaternion(q);
   _aiRight.set(1, 0, 0).applyQuaternion(q);
-  _aiLocal.copy(bot.targetPoint).sub(bot.obj.position).normalize();
+  const bank = Math.asin(THREE.MathUtils.clamp(_aiRight.y, -1, 1)); // >0 = incliné à gauche
 
-  let yawIn   = THREE.MathUtils.clamp(_aiLocal.dot(_aiRight) * 3, -1, 1);
-  let pitchIn = THREE.MathUtils.clamp(-_aiLocal.dot(_aiUp) * 3, -1, 1);
-  let rollIn  = THREE.MathUtils.clamp(-yawIn * 1.2, -1, 1); // vire à plat façon virage coordonné
-  let thrustHeld = bot.aiState !== 'evade' || _aiLocal.dot(_aiFwd) > -0.3;
+  // ── Décision tactique (au tick — le délai entre deux décisions fait partie
+  //    de la difficulté ; le pilotage/évitement, lui, tourne à chaque frame) ──
+  if (bot.aiTimer <= 0) {
+    bot.aiTimer = tuning.aiTickInterval;
 
-  // Évitement de terrain : sonde le relief devant le bot, à chaque frame (pas
-  // au tick de décision — sinon un bot "Facile" au tick lent percute avant de
-  // réagir). Priorité absolue sur la cible visée tant que la marge est courte :
-  // cabrer, se remettre à plat et pousser les gaz à fond pour dégager.
-  _aiProbeDir.copy(_aiFwd).setY(0);
-  if (_aiProbeDir.lengthSq() > 1e-6) _aiProbeDir.normalize(); else _aiProbeDir.set(0, 0, -1);
-  const probeDist = THREE.MathUtils.clamp(bot.speed * 1.6, 12, 60);
-  const probeX = bot.obj.position.x + _aiProbeDir.x * probeDist;
-  const probeZ = bot.obj.position.z + _aiProbeDir.z * probeDist;
-  const safeAlt = effectiveGroundY(probeX, probeZ) + OWL_GROUND_CLEAR * 4;
-  const margin = bot.obj.position.y - safeAlt;
-  const avoidingTerrain = margin < 10;
-  if (avoidingTerrain) {
-    const urgency = THREE.MathUtils.clamp((10 - margin) / 10, 0, 1);
-    pitchIn = THREE.MathUtils.lerp(pitchIn, -1, urgency);
-    rollIn  = THREE.MathUtils.lerp(rollIn, 0, urgency);
-    thrustHeld = true;
+    // Le joueur a-t-il le nez sur le bot ? (cône ~14° à portée de tir)
+    _aiTmp.copy(bot.obj.position).sub(owlGroup.position);
+    _aiTmp2.set(0, 0, -1).applyQuaternion(owlGroup.quaternion);
+    const underAim = distToPlayer < 200 &&
+      _aiTmp.dot(_aiTmp2) / Math.max(distToPlayer, 1) > Math.cos(THREE.MathUtils.degToRad(14));
+
+    // Un break/extend en cours se tient jusqu'au bout — sauf si on vient d'être touché.
+    const locked = (bot.aiState === 'break' || bot.aiState === 'extend') && bot.stateTimer > 0 && !bot.hitReact;
+    if (!locked) {
+      if (bot.life <= tuning.evadeLifeThreshold) {
+        bot.aiState = 'evade'; // blessé : rompt le combat le temps de la réparation passive
+      } else if ((underAim || bot.hitReact) && bot.breakCooldown <= 0 && Math.random() < tuning.breakChance) {
+        bot.aiState = 'break';
+        bot.stateTimer = rnd(1.4, 2.2);
+        bot.breakCooldown = rnd(3.5, 6);
+        bot.jinkSign = Math.random() < 0.5 ? -1 : 1;
+        bot.jinkTimer = 0;
+      } else if (distToPlayer < 30) {
+        bot.aiState = 'extend'; // passe terminée : reprend de la séparation avant de revenir
+        bot.stateTimer = rnd(2, 3);
+      } else {
+        bot.aiState = 'approach';
+      }
+    }
+    bot.hitReact = false;
+
+    if (bot.aiState === 'approach') {
+      // Point d'interception : où sera le joueur quand la balle arrivera
+      // (leadFactor dose l'anticipation — 0 en Facile = poursuite pure, très esquivable).
+      const tof = distToPlayer / MP_BULLET_SPEED;
+      bot.targetPoint.copy(owlGroup.position).addScaledVector(velocity, tof * tuning.leadFactor);
+    } else if (bot.aiState === 'extend') {
+      // File droit devant en montée douce : le combat devient une suite de
+      // passes de joute, pas un tournoiement collé au joueur.
+      _aiTmp.copy(bot.velocity).setY(0);
+      if (_aiTmp.lengthSq() < 1) _aiTmp.copy(_aiFwd).setY(0);
+      if (_aiTmp.lengthSq() < 1e-4) _aiTmp.set(0, 0, -1);
+      _aiTmp.normalize();
+      bot.targetPoint.copy(bot.obj.position).addScaledVector(_aiTmp, 130);
+      bot.targetPoint.y += 25;
+    } else if (bot.aiState === 'break') {
+      // Virage serré perpendiculaire à la ligne de visée du joueur, côté tiré au sort.
+      _aiTmp.copy(bot.obj.position).sub(owlGroup.position).setY(0);
+      if (_aiTmp.lengthSq() < 1e-4) _aiTmp.set(1, 0, 0); // joueur pile au-dessus : direction arbitraire
+      _aiTmp.normalize();
+      _aiTmp2.set(-_aiTmp.z, 0, _aiTmp.x).multiplyScalar(bot.jinkSign);
+      bot.targetPoint.copy(bot.obj.position).addScaledVector(_aiTmp2, 90).addScaledVector(_aiTmp, 30);
+      bot.targetPoint.y += rnd(-10, 22);
+    } else { // evade — fuit à l'opposé du joueur (la vie se répare passivement, voir updateBotDamage)
+      _aiTmp.copy(bot.obj.position).sub(owlGroup.position).setY(0);
+      if (_aiTmp.lengthSq() < 1e-4) _aiTmp.set(1, 0, 0);
+      _aiTmp.normalize();
+      bot.targetPoint.copy(bot.obj.position).addScaledVector(_aiTmp, 150);
+    }
+    botClampTarget(bot.targetPoint);
   }
 
-  updateBotFlight({ yawIn, pitchIn, rollIn, thrustHeld, brakeHeld: false }, dt);
-  bot.throttle = avoidingTerrain ? bot.throttle : Math.min(bot.throttle, tuning.throttleCap);
+  // ── Pilote bas niveau : direction voulue → yaw/pitch/roll ──
+  _aiSteer.copy(bot.targetPoint).sub(bot.obj.position);
+  if (_aiSteer.lengthSq() < 1) _aiSteer.copy(_aiFwd);
+  _aiSteer.normalize();
 
-  // Décision de tir : cône de précision + délai de réaction, seulement en approche/orbite.
-  const aimable = bot.aiState === 'approach' || bot.aiState === 'orbit';
-  _aiToPlayer.copy(owlGroup.position).sub(bot.obj.position);
-  const distToPlayer2 = _aiToPlayer.length();
-  _aiToPlayer.normalize();
-  const angleToPlayer = Math.acos(THREE.MathUtils.clamp(_aiFwd.dot(_aiToPlayer), -1, 1));
-  if (aimable && distToPlayer2 < 220 && angleToPlayer < tuning.aimConeRad) {
+  // Jink : cap qui zigzague pendant break/fuite (période selon la difficulté) —
+  // dur à garder dans le viseur, sans rendre le bot imprévisible en attaque.
+  if ((bot.aiState === 'break' || bot.aiState === 'evade') && tuning.jinkPeriod > 0) {
+    bot.jinkTimer -= dt;
+    if (bot.jinkTimer <= 0) { bot.jinkTimer = tuning.jinkPeriod * rnd(0.7, 1.3); bot.jinkSign = -bot.jinkSign; }
+    _aiSteer.addScaledVector(_aiRight, bot.jinkSign * 0.45).normalize();
+  }
+
+  // ── Garde-fou bordure : si la trajectoire prédite (~2 s) sort de l'ellipsoïde
+  //    sûre, on mélange la direction voulue avec un retour vers le centre —
+  //    plafonné, pour que le bot reste engagé même quand le joueur rase le bord. ──
+  _aiTmp.copy(bot.obj.position).addScaledVector(bot.velocity, 2.2);
+  const fPred = ellipsoidFactor(_aiTmp);
+  if (fPred > 0.86) {
+    const w = Math.min(0.9, (fPred - 0.86) * 9);
+    _aiTmp2.copy(ARENA_CENTER).sub(bot.obj.position).normalize();
+    _aiSteer.lerp(_aiTmp2, w).normalize();
+  }
+
+  const side = _aiSteer.dot(_aiRight); // >0 : cible à droite du nez
+  let yawIn   = THREE.MathUtils.clamp(-side * 2.5, -1, 1);
+  let pitchIn = THREE.MathUtils.clamp(_aiSteer.dot(_aiUp) * 3, -1, 1);
+  const wantBank = THREE.MathUtils.clamp(-side * 1.6, -1.05, 1.05); // s'incline vers la cible : virage coordonné
+  let rollIn  = THREE.MathUtils.clamp((wantBank - bank) * 2.5, -1, 1);
+
+  // ── Évitement terrain : sonde la trajectoire PRÉDITE (composante verticale
+  //    comprise) à plusieurs horizons, chaque frame. La marge exigée croît avec
+  //    l'horizon (il faut du temps pour arrondir). Prioritaire sur la cible. ──
+  let urgency = 0;
+  for (const t of BOT_PROBE_TIMES) {
+    const gy = effectiveGroundY(bot.obj.position.x + bot.velocity.x * t,
+                                bot.obj.position.z + bot.velocity.z * t);
+    const deficit = gy + OWL_GROUND_CLEAR + 5 + 7 * t - (bot.obj.position.y + bot.velocity.y * t);
+    if (deficit / 18 > urgency) urgency = deficit / 18;
+  }
+  urgency = Math.min(1, urgency);
+  if (urgency > 0) {
+    // Côté de dégagement le plus ouvert : compare le sol à ±50° du cap.
+    _aiTmp.copy(bot.velocity).setY(0);
+    if (_aiTmp.lengthSq() < 1) _aiTmp.copy(_aiFwd).setY(0);
+    if (_aiTmp.lengthSq() < 1e-4) _aiTmp.set(0, 0, -1);
+    _aiTmp.normalize();
+    const lookD = Math.max(35, bot.speed * 1.6);
+    const c = Math.cos(0.87), s = Math.sin(0.87);
+    const gL = effectiveGroundY(bot.obj.position.x + (_aiTmp.x * c + _aiTmp.z * s) * lookD,
+                                bot.obj.position.z + (-_aiTmp.x * s + _aiTmp.z * c) * lookD);
+    const gR = effectiveGroundY(bot.obj.position.x + (_aiTmp.x * c - _aiTmp.z * s) * lookD,
+                                bot.obj.position.z + (_aiTmp.x * s + _aiTmp.z * c) * lookD);
+    const escape = gL < gR ? 1 : -1; // 1 = dégagement à gauche (yawIn > 0)
+    // Cabre ailes quasi à plat (portance verticale max) en s'orientant vers le côté ouvert.
+    pitchIn = THREE.MathUtils.lerp(pitchIn, 1, urgency);
+    yawIn   = THREE.MathUtils.lerp(yawIn, escape * 0.6, urgency);
+    rollIn  = THREE.MathUtils.lerp(rollIn,
+      THREE.MathUtils.clamp((escape * 0.3 - bank) * 2.5, -1, 1), urgency);
+  }
+
+  // Anti-décrochage : cabré plafonné quand la vitesse air est basse (sinon le
+  // modèle de vol décroche et force le nez vers le bas — fatal près du sol).
+  if (bot.speed < STALL_RECOVER) pitchIn = Math.min(pitchIn, 0.45);
+  if (bot.stallMode) {
+    // Décroché : ailes à plat, gaz à fond, on laisse le nez tomber pour raccrocher.
+    yawIn = 0; pitchIn = 0;
+    rollIn = THREE.MathUtils.clamp(-bank * 3, -1, 1);
+  }
+
+  updateBotFlight({ yawIn, pitchIn, rollIn, thrustHeld: true, brakeHeld: false }, dt);
+  // Plein régime autorisé en urgence (terrain/décrochage), bridé au cap de difficulté sinon.
+  if (!(urgency > 0 || bot.stallMode)) bot.throttle = Math.min(bot.throttle, tuning.throttleCap);
+
+  // ── Tir : cône de précision visé sur le POINT D'ANTICIPATION (temps de vol de
+  //    balle × leadFactor) + délai de réaction. Un pilote en urgence ne tire pas. ──
+  const aimable = bot.aiState === 'approach' && urgency <= 0.25 && !bot.stallMode;
+  _aiTmp.copy(owlGroup.position)
+    .addScaledVector(velocity, (distToPlayer / MP_BULLET_SPEED) * tuning.leadFactor)
+    .sub(bot.obj.position).normalize();
+  const aimAngle = Math.acos(THREE.MathUtils.clamp(_aiFwd.dot(_aiTmp), -1, 1));
+  if (aimable && distToPlayer < tuning.fireDist && aimAngle < tuning.aimConeRad) {
     bot.fireIntentTimer += dt;
   } else {
     bot.fireIntentTimer = 0;
   }
   bot.wantsToFire = aimable && bot.fireIntentTimer >= tuning.reactionDelay;
+
+  // Télégraphe visuel : l'aura violette s'embrase pendant la montée en intention
+  // de tir — le joueur voit venir la rafale et peut casser l'alignement.
+  bot.auraMat.opacity = bot.wantsToFire ? 0.95
+    : bot.fireIntentTimer > 0 ? 0.6 + 0.3 * Math.sin(performance.now() / 55)
+    : 0.55;
 }
 
 // ── Tir du bot : même mécanique/cadence que updateMPFire, direction bruitée
