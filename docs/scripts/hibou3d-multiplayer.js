@@ -7,11 +7,10 @@
 // petite API (update, drawLobby, sendFire, remotes, ...). Voir
 // plans/hibou3d-multiplayer.md pour l'architecture d'ensemble.
 //
-// Même contrainte d'infra que le client échecs (docs/scripts/chess-multiplayer.js) :
-// le relais Oracle ne parle que ws:// (port 443 bloqué), donc le multijoueur
-// n'est jouable que depuis http://bear.servebeer.com/hibou-3d.html.
+// Le port 443 est ouvert côté Oracle Cloud : le relais parle wss:// pour les
+// pages chargées en HTTPS (GitHub Pages compris), voir wsUrl() ci-dessous.
 
-const PRODUCTION_WS_URL = 'ws://bear.servebeer.com/hibou3d-ws';
+const PRODUCTION_HOST = 'bear.servebeer.com';
 const PSEUDO_KEY = 'h3d-mp-pseudo';
 const SEND_HZ = 15;              // fréquence d'envoi de l'état local
 const REMOTE_EXTRAP_MAX = 0.3;   // extrapolation max (s) entre deux paquets
@@ -93,19 +92,11 @@ export function initMultiplayer(hooks) {
   function wsUrl() {
     const override = new URLSearchParams(location.search).get('ws');
     if (override) return override;
+    const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
     if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
-      const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
       return proto + location.host + '/hibou3d-ws';
     }
-    return PRODUCTION_WS_URL;
-  }
-
-  // Une page HTTPS (GitHub Pages) ne peut pas ouvrir de ws:// non sécurisé.
-  function isMixedContentBlocked() {
-    if (location.protocol !== 'https:') return false;
-    if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return false;
-    if (new URLSearchParams(location.search).get('ws')) return false;
-    return true;
+    return proto + PRODUCTION_HOST + '/hibou3d-ws';
   }
 
   function send(message) {
@@ -113,10 +104,6 @@ export function initMultiplayer(hooks) {
   }
 
   function connect() {
-    if (isMixedContentBlocked()) {
-      statusMessage = 'Multijoueur indisponible en HTTPS.';
-      return;
-    }
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
     statusMessage = 'Connexion au serveur…';
     ws = new WebSocket(wsUrl());
@@ -445,19 +432,6 @@ export function initMultiplayer(hooks) {
       hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
       hctx.fillStyle = '#cbc3ff'; hctx.font = '900 24px system-ui';
       hctx.fillText('🦉 MULTIJOUEUR', W / 2, py + 34);
-
-      // Bannière contenu mixte : la page HTTPS ne peut pas joindre le relais ws://
-      if (isMixedContentBlocked()) {
-        rrect(px + 20, py + 58, pw - 40, 56, 12, 'rgba(60,10,10,0.9)', 'rgba(255,90,60,0.9)');
-        hctx.fillStyle = '#ffd0c0'; hctx.font = 'bold 13px system-ui';
-        hctx.fillText('Multijoueur indisponible en HTTPS (contenu mixte).', W / 2, py + 78);
-        hctx.fillText('Utilisez http://bear.servebeer.com/hibou-3d.html', W / 2, py + 98);
-        hctx.fillStyle = '#cbc3dd'; hctx.font = '13px system-ui';
-        hctx.fillText('[Échap] Retour', W / 2, py + ph - 22);
-        hctx.restore();
-        quickJoinRect = null; roomRects = []; pseudoRect = null;
-        return;
-      }
 
       // Statut + pseudo
       hctx.fillStyle = '#9fb0d8'; hctx.font = '13px system-ui';
