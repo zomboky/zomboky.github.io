@@ -109,20 +109,23 @@ const glCanvas  = document.getElementById('gl');
 const hudCanvas = document.getElementById('hud');
 const hctx = hudCanvas.getContext('2d');
 
-const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true });
-const PIXEL_RATIO_MAX = Math.min(window.devicePixelRatio || 1, 2);
-renderer.setPixelRatio(PIXEL_RATIO_MAX);
+const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: !LOW_SPEC });
+const PIXEL_RATIO_MAX = Math.min(window.devicePixelRatio || 1, LOW_SPEC ? 1.5 : 2);
 
 // ── Résolution adaptative : si les FPS s'effondrent, on baisse la définition de rendu
-//    par paliers (jusqu'à -45 %), et on la remonte quand la fluidité revient. ──
-let perfAccum = 0, perfFrames = 0, pixelScale = 1;
+//    par paliers (jusqu'à -45 %), et on la remonte quand la fluidité revient.
+//    Sur mobile, on démarre déjà pré-réduit (0.7) et on plafonne la remontée à 0.85. ──
+let perfAccum = 0, perfFrames = 0, pixelScale = LOW_SPEC ? 0.7 : 1;
+const PIXEL_SCALE_MAX = LOW_SPEC ? 0.85 : 1;
+const PERF_FPS_LOW = LOW_SPEC ? 50 : 45;
+renderer.setPixelRatio(PIXEL_RATIO_MAX * pixelScale);
 function updateAdaptiveQuality(rawDt) {
   perfAccum += rawDt; perfFrames++;
   if (perfAccum < 1.5) return;              // fenêtre de mesure d'1,5 s
   const fps = perfFrames / perfAccum;
   perfAccum = 0; perfFrames = 0;
-  if (fps < 45 && pixelScale > 0.55)      pixelScale = Math.max(0.55, pixelScale - 0.15);
-  else if (fps > 57 && pixelScale < 1)    pixelScale = Math.min(1, pixelScale + 0.1);
+  if (fps < PERF_FPS_LOW && pixelScale > 0.55)         pixelScale = Math.max(0.55, pixelScale - 0.15);
+  else if (fps > 57 && pixelScale < PIXEL_SCALE_MAX)   pixelScale = Math.min(PIXEL_SCALE_MAX, pixelScale + 0.1);
   else return;
   renderer.setPixelRatio(PIXEL_RATIO_MAX * pixelScale);
 }
@@ -198,8 +201,9 @@ function makeMoonSurfaceTexture() {
   return tex;
 }
 
+const STAR_COUNT = LOW_SPEC ? 500 : 1600;
 function makeSky() {
-  const starCount = 1600;
+  const starCount = STAR_COUNT;
   const positions = new Float32Array(starCount * 3);
   const colors = new Float32Array(starCount * 3);
   const palette = [new THREE.Color(0xffffff), new THREE.Color(0xaaccff), new THREE.Color(0xffe9c4)];
@@ -266,7 +270,7 @@ function makeSky() {
 //  étincelles du cadeau, traînée de boost. (Les particules 2D du HUD restent
 //  pour le texte flottant ; celles-ci vivent DANS la scène, avec la parallaxe.)
 // ══════════════════════════════════════════════════
-const FX3D_MAX = LOW_SPEC ? 200 : 320;
+const FX3D_MAX = LOW_SPEC ? 90 : 320;
 let fx3d, fx3dData = [], fx3dCursor = 0;
 // grav = accélération vers le bas (négatif : flotte vers le haut), up = impulsion verticale initiale
 const FX3D_KINDS = {
@@ -420,7 +424,7 @@ function updateSmokeTrail(dt) {
 //  La vie est en bas : elles attirent l'œil (et le vol) vers le sol, où les
 //  branches abondent et où le rase-mottes rapporte.
 // ══════════════════════════════════════════════════
-const FIREFLY_COUNT = LOW_SPEC ? 120 : 240;
+const FIREFLY_COUNT = LOW_SPEC ? 45 : 240;
 const FIREFLY_RANGE = 170;  // rayon d'ancrage autour du hibou
 let fireflies, fireflyData = [];
 const FIREFLY_COLORS = [new THREE.Color(0x9fff6a), new THREE.Color(0xffe08a), new THREE.Color(0x6affc8)];
@@ -495,12 +499,14 @@ function updateFireflies(dt) {
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h);
+  renderer.setPixelRatio(PIXEL_RATIO_MAX * pixelScale);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   hudCanvas.width  = w;
   hudCanvas.height = h;
 }
 window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', resize);
 
 // ══════════════════════════════════════════════════
 //  VOLUME DE JEU (sphère 3D)
@@ -627,8 +633,8 @@ function collectMeshParts(root) {
 }
 
 // Construit des InstancedMesh à partir d'un modèle et d'une liste de matrices d'instance.
-// frustumCulled=false : les instances sont dispersées sur toute la carte, la sphère
-// englobante de la géométrie seule ferait disparaître des arbres en bord d'écran.
+// Culling laissé actif (défaut) : InstancedMesh calcule sa bounding sphere en englobant
+// toutes les instances (pas juste la géométrie source), donc pas de pop-out en bord d'écran.
 function makeInstancedFromModel(root, matrices) {
   const parts = collectMeshParts(root);
   const group = new THREE.Group();
@@ -640,7 +646,6 @@ function makeInstancedFromModel(root, matrices) {
       im.setMatrixAt(i, tmpM);
     }
     im.instanceMatrix.needsUpdate = true;
-    im.frustumCulled = false;
     im.userData.partMatrix = part.matrix.clone(); // conservé pour les mises à jour dynamiques (nuages)
     group.add(im);
   }
@@ -654,7 +659,7 @@ function makeInstancedFromModel(root, matrices) {
 //  ET aux collisions/placements — aucun échantillonnage de grille.
 // ══════════════════════════════════════════════════
 const TERRAIN_SIZE = 4500;  // x5 : couvre la nouvelle zone de jeu élargie (ARENA_RADIUS_XZ)
-const TERRAIN_SEGS = 160;
+const TERRAIN_SEGS = LOW_SPEC ? 72 : 160;
 const WATER_Y      = -3.0;  // niveau des lacs
 const HILL_AMP     = 24;    // amplitude des collines fBm (±) — terrain nettement plus vallonné
 const GROUND_DETAIL_AMP = 5.5; // bosses fines superposées, visibles même loin des montagnes/lacs
@@ -893,7 +898,7 @@ function makeMountainScenery() {
 // ══════════════════════════════════════════════════
 //  NUAGES LOW-POLY — instanciés, dérive lente, recyclés en bord de carte.
 // ══════════════════════════════════════════════════
-const CLOUD_COUNT  = LOW_SPEC ? 32 : 64;        // couvre l'arène élargie (l'ancien semis ±380 laissait le ciel vide au loin)
+const CLOUD_COUNT  = LOW_SPEC ? 15 : 64;        // couvre l'arène élargie (l'ancien semis ±380 laissait le ciel vide au loin)
 const CLOUD_SPREAD = ARENA_RADIUS_XZ * 0.85;    // zone de semis
 const CLOUD_WRAP   = ARENA_RADIUS_XZ * 0.92;    // bord de recyclage de la dérive
 let cloudSets = []; // { group, data:[{pos, scale, rotY, speed}], parts }
@@ -1194,7 +1199,7 @@ function updateRocks(dt) {
 //  brouillard qui se densifie et lumière qui se plombe par mauvais temps,
 //  éclairs pendant les tempêtes. Le ciel n'est plus figé.
 // ══════════════════════════════════════════════════
-const WEATHER_DROPS   = LOW_SPEC ? 380 : 900;
+const WEATHER_DROPS   = LOW_SPEC ? 150 : 900;
 const RAIN_DURATION   = [18, 32];  // secondes d'un épisode de pluie
 const RAIN_NEXT       = [25, 50];  // délai avant le prochain épisode
 let weather = { mode: 'clear', level: 0, timer: 0, next: rnd(RAIN_NEXT[0], RAIN_NEXT[1]) };
@@ -1324,7 +1329,7 @@ function updateWeatherFX(dt) {
 //  jamais dans les lacs ni sur les pentes raides. Repli : cône+cylindre procédural.
 // ══════════════════════════════════════════════════
 let treeColliders = [];
-const TREE_COUNT  = LOW_SPEC ? 1400 : 3000;      // forêt étendue à TOUTE l'arène (réduite sur appareil modeste)
+const TREE_COUNT  = LOW_SPEC ? 550 : 3000;      // forêt étendue à TOUTE l'arène (réduite sur appareil modeste)
 const TREE_SPREAD = ARENA_RADIUS_XZ * 0.84;      // s'arrête avant les pentes de la muraille
 
 // Repli si un modèle d'arbre manque : silhouette cône+cylindre équivalente.
@@ -1634,6 +1639,7 @@ const JOYSTICK_RADIUS = 55;
 let joystick = { active: false, id: null, baseX: 0, baseY: 0, dx: 0, dy: 0 };
 let touchThrust = false, touchThrustId = null;
 let touchBrake  = false, touchBrakeId  = null;
+let touchFireHeld = false, touchFireId = null;
 
 function getThrustButtonCenter() {
   const W = hudCanvas.width, H = hudCanvas.height;
@@ -1643,10 +1649,17 @@ function getBrakeButtonCenter() {
   const W = hudCanvas.width, H = hudCanvas.height;
   return { x: W - 74, y: H - 210, r: 34 };
 }
+// Bande pleine largeur en haut de l'écran = zone de tir tactile (multijoueur uniquement).
+function getFireZoneHeight() {
+  return Math.min(140, hudCanvas.height * 0.2);
+}
 // Événements tactiles natifs (touchstart/move/end) : contrairement aux Pointer Events,
 // ils sont supportés par tous les navigateurs mobiles sans exception, y compris les
 // vieux WebViews Android et les navigateurs in-app — donc plus fiable pour le tactile.
 function handleMobileTouchBegin(id, x, y) {
+  if (multiplayerMode && y < getFireZoneHeight()) {
+    touchFireHeld = true; touchFireId = id; return;
+  }
   const thrust = getThrustButtonCenter();
   if (Math.hypot(x - thrust.x, y - thrust.y) < thrust.r) {
     touchThrust = true; touchThrustId = id; return;
@@ -1674,6 +1687,7 @@ function handleMobileTouchRelease(id) {
   if (joystick.active && id === joystick.id) { joystick.active = false; joystick.dx = 0; joystick.dy = 0; }
   if (touchThrust && id === touchThrustId) touchThrust = false;
   if (touchBrake  && id === touchBrakeId)  touchBrake  = false;
+  if (touchFireHeld && id === touchFireId) touchFireHeld = false;
 }
 function handleTouchStart(e) {
   if (state === S.START || state === S.OVER) { beginGame(); e.preventDefault(); return; }
@@ -2892,7 +2906,7 @@ function updateBullets(dt) {
 // pas dépendre du framerate (100 coups/s ≈ 1,7 balle par frame à 60 fps).
 const _fireDir = new THREE.Vector3(), _firePos = new THREE.Vector3();
 function updateMPFire(dt) {
-  const fireHeld = mouseFireHeld || keys['f'];
+  const fireHeld = mouseFireHeld || keys['f'] || touchFireHeld;
   if (!fireHeld || mpAmmo <= 0) { mpFireAccum = 0; return; }
   mpFireAccum += dt * MP_FIRE_RATE;
   const n = Math.min(Math.floor(mpFireAccum), mpAmmo, 6);
@@ -3061,7 +3075,7 @@ function mpSpawnLocalOwl() {
   mpAmmo = MP_MAG_CAP;
   owlInvul = 90;   // protection de spawn (clignotement), comme en solo
   treeCooldown = 0;
-  mouseFireHeld = false; mpFireAccum = 0;
+  mouseFireHeld = false; touchFireHeld = false; mpFireAccum = 0;
 }
 
 function doMPRespawn() {
@@ -3191,7 +3205,7 @@ function clearMultiplayerWorld() {
   governEff.leftWing = 0; governEff.rightWing = 0; governEff.tail = 0;
   inventory = [null, null, null];
   localKillStreak = 0;
-  mouseFireHeld = false; mpFireAccum = 0;
+  mouseFireHeld = false; touchFireHeld = false; mpFireAccum = 0;
 }
 
 // Test solo hors-ligne (touche [K] dans le salon) : lance directement une manche
@@ -4078,11 +4092,14 @@ function update() {
   if (mp && multiplayerMode) mp.update(dt);
   updateMoonVisual(dt);
   updateWeatherFX(dt); // après updateMoonVisual (qui fixe moonLight.intensity chaque frame)
-  updateStars(dt);
-  updateClouds(dt);
+  // Sur mobile, on gèle étoiles/nuages/lucioles sur les écrans vraiment inactifs (titre/pause/lobby)
+  // pour économiser du CPU — mais pas en LOOT/OVER/MP_DEAD où d'autres animations doivent finir.
+  const mobileIdle = isMobile && (state === S.START || state === S.PAUSED || state === S.MP_LOBBY);
+  if (!mobileIdle) updateStars(dt);
+  if (!mobileIdle) updateClouds(dt);
   updateParticles();
   updateFX3D(dt);      // les gerbes 3D finissent de retomber même en pause/game over
-  updateFireflies(dt); // la nuée scintille aussi sur les écrans de menu
+  if (!mobileIdle) updateFireflies(dt); // la nuée scintille aussi sur les écrans de menu (desktop)
 }
 
 function render() {
