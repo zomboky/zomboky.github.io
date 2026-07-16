@@ -18,6 +18,8 @@ Licence : [Creative Commons Attribution 3.0](https://creativecommons.org/license
 | Fichier | Titre |
 |---|---|
 | `barnowl.glb` | Barn Owl (remplace l'ancien `owl.glb` de Poly by Google) |
+| `watchtower.glb` | Firewatch Tower (Sketchfab, remplace l'ancienne tour de guet procédurale) |
+| `cabin.obj` | Cabin (free3d, remplace l'ancien chalet procédural — sans `.mtl`/textures fournis, couleurs bois/toit réassignées par nom de pièce dans le code) |
 
 ## CC0 1.0 (domaine public)
 
