@@ -19,89 +19,17 @@
   html, body { width: 100%; height: 100%; overflow: hidden; background: #04040e; }
   canvas { position: fixed; top: 0; left: 0; display: block; }
   #hud { pointer-events: none; }
-
-  /* ── Verrou d'accès v6 prerelease ── */
-  #hibou-lock { display: none; }
-  body.hibou-locked #hibou-lock {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    background: #04040e;
-  }
-  body.hibou-locked canvas { pointer-events: none; }
-  #hibou-lock-form {
-    font-family: monospace;
-    color: #ccccff;
-    background: #0c1030;
-    border: 2px solid #8899ff;
-    box-shadow: 0 0 20px #4455aa;
-    padding: 2rem 2.5rem;
-    text-align: center;
-    width: min(90vw, 360px);
-  }
-  #hibou-lock-title { font-size: 1.05rem; font-weight: bold; margin: 0 0 1.2rem; line-height: 1.4; }
-  #hibou-lock-form label { display: block; text-align: left; margin-bottom: 0.4rem; font-size: 0.85rem; }
-  #hibou-lock-input {
-    width: 100%;
-    font-family: monospace;
-    background: #04040e;
-    color: #ccccff;
-    border: 1px solid #8899ff;
-    padding: 0.5rem;
-    margin-bottom: 1rem;
-    outline: none;
-  }
-  #hibou-lock-form button {
-    width: 100%;
-    font-family: monospace;
-    font-weight: bold;
-    text-transform: uppercase;
-    color: #04040e;
-    background: #ccccff;
-    border: none;
-    padding: 0.6rem;
-    cursor: pointer;
-  }
-  #hibou-lock-error { display: none; color: #ff6666; margin: 1rem 0 0; font-size: 0.85rem; }
 </style>
 </head>
-<body class="hibou-locked">
+<body>
 <canvas id="gl"></canvas>
 <canvas id="hud"></canvas>
-
-<div id="hibou-lock">
-  <form id="hibou-lock-form">
-    <p id="hibou-lock-title">🦉 Accès à la v6 prerelease<br>Veuillez saisir votre code d'accès confidentiel (VIP only)</p>
-    <label for="hibou-lock-input">Code d'accès</label>
-    <input type="password" id="hibou-lock-input" autocomplete="off" autofocus>
-    <button type="submit">Valider</button>
-    <p id="hibou-lock-error">Code incorrect.</p>
-  </form>
-</div>
-<script src="scripts/hibou3d-lock.js"></script>
 
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from './three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as skeletonClone } from './three/examples/jsm/utils/SkeletonUtils.js';
 import { initMultiplayer, auraColorHex } from './scripts/hibou3d-multiplayer.js';
-
-// Le jeu ne démarre qu'après vérification d'un token délivré par le serveur.
-// window.__hibouStart(token) est appelé par hibou3d-lock.js une fois le token
-// obtenu via POST /api/hibou3d/login — le jeu ne tourne jamais sans token valide.
-window.__hibouStart = async function (token) {
-  const _API = 'https://bear.servebeer.com/orange-api';
-  try {
-    const _r = await fetch(_API + '/api/hibou3d/verify', {
-      headers: { 'Authorization': 'Bearer ' + token },
-    });
-    if (!_r.ok) { window.__hibouRelock(); return; }
-  } catch (_e) {
-    window.__hibouRelock(); return;
-  }
 
 // Modèles 3D externes (voir docs/models/CREDITS.md pour les licences/attributions) :
 // hibou, ours, lune © Poly by Google (CC-BY 3.0) — arbres, montagnes, nuages © Quaternius (CC0).
@@ -141,6 +69,15 @@ function rollLoot() {
 }
 
 let screenShake = 0, hitFlash = 0;
+let roundTime = 0; // secondes écoulées dans la partie en cours — pilote la rampe de difficulté des ours
+const BEAR_RAMP_TIME = 90; // durée (s) pour que les ours atteignent leur pleine intensité (hors lunes)
+
+// ── Ralenti d'impact (« hit stop ») : le temps se fige un bref instant sur les gros chocs ──
+let hitStopTimer = 0, hitStopScale = 0.25;
+function triggerHitStop(duration = 0.22, scale = 0.25) {
+  hitStopTimer = Math.max(hitStopTimer, duration);
+  hitStopScale = scale;
+}
 
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -158,8 +95,12 @@ function mulberry32(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-const treeRng = mulberry32(20260715);
+let treeRng = mulberry32(20260715);
 const treeRnd = (a, b) => a + treeRng() * (b - a);
+
+// Appareil tactile = supposé modeste : budgets de particules/forêt/nuages réduits d'office.
+// (Même détection que isMobile plus bas, mais évaluée tôt car les constantes de budget en dépendent.)
+const LOW_SPEC = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
 // ══════════════════════════════════════════════════
 //  CANVAS / RENDERER / SCÈNE
@@ -169,7 +110,22 @@ const hudCanvas = document.getElementById('hud');
 const hctx = hudCanvas.getContext('2d');
 
 const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+const PIXEL_RATIO_MAX = Math.min(window.devicePixelRatio || 1, 2);
+renderer.setPixelRatio(PIXEL_RATIO_MAX);
+
+// ── Résolution adaptative : si les FPS s'effondrent, on baisse la définition de rendu
+//    par paliers (jusqu'à -45 %), et on la remonte quand la fluidité revient. ──
+let perfAccum = 0, perfFrames = 0, pixelScale = 1;
+function updateAdaptiveQuality(rawDt) {
+  perfAccum += rawDt; perfFrames++;
+  if (perfAccum < 1.5) return;              // fenêtre de mesure d'1,5 s
+  const fps = perfFrames / perfAccum;
+  perfAccum = 0; perfFrames = 0;
+  if (fps < 45 && pixelScale > 0.55)      pixelScale = Math.max(0.55, pixelScale - 0.15);
+  else if (fps > 57 && pixelScale < 1)    pixelScale = Math.min(1, pixelScale + 0.1);
+  else return;
+  renderer.setPixelRatio(PIXEL_RATIO_MAX * pixelScale);
+}
 
 // Dégradé de ciel bleu nuit (reprend les teintes de drawSky() du jeu 2D : #04040e en haut → #0c1030 en bas)
 function makeSkyGradient() {
@@ -310,7 +266,7 @@ function makeSky() {
 //  étincelles du cadeau, traînée de boost. (Les particules 2D du HUD restent
 //  pour le texte flottant ; celles-ci vivent DANS la scène, avec la parallaxe.)
 // ══════════════════════════════════════════════════
-const FX3D_MAX = 320;
+const FX3D_MAX = LOW_SPEC ? 200 : 320;
 let fx3d, fx3dData = [], fx3dCursor = 0;
 // grav = accélération vers le bas (négatif : flotte vers le haut), up = impulsion verticale initiale
 const FX3D_KINDS = {
@@ -340,9 +296,10 @@ function makeFX3D() {
   scene.add(fx3d);
 }
 
-function spawnFX3D(worldPos, amount, kind = 'collect') {
+function spawnFX3D(worldPos, amount, kind = 'collect', colorOverride = null) {
   if (!fx3d) return;
   const spec = FX3D_KINDS[kind];
+  const palette = colorOverride || spec.colors;
   for (let n = 0; n < amount; n++) {
     const d = fx3dData[fx3dCursor];
     fx3dCursor = (fx3dCursor + 1) % FX3D_MAX;
@@ -354,7 +311,7 @@ function spawnFX3D(worldPos, amount, kind = 'collect') {
     d.vel.y += spec.up;
     d.grav = spec.grav;
     d.maxLife = d.life = rnd(spec.life[0], spec.life[1]);
-    d.color.setHex(spec.colors[Math.floor(Math.random() * spec.colors.length)]);
+    d.color.setHex(palette[Math.floor(Math.random() * palette.length)]);
   }
 }
 
@@ -385,18 +342,48 @@ function updateFX3D(dt) {
   col.needsUpdate = true;
 }
 
-// Traînée de boost : sillage lumineux quand le moteur est à fond (ou buff vitesse)
+// Traînée de boost : DOUBLE sillage lumineux en bout d'aile quand le moteur est à
+// fond (ou buff vitesse), dont la couleur reflète le buff actif — sillage exagéré,
+// façon jeu d'arcade : dense en boost, doré en score x5, incandescent en invincible.
 let trailAccum = 0;
 const _trailTmp = new THREE.Vector3();
+const TRAIL_PALETTES = {
+  none:       [0x9fd8ff, 0xe8f6ff],
+  speed:      [0x67e8ff, 0xb7f6ff, 0xffffff],
+  multi:      [0xffd700, 0xfff0a0, 0xffb020],
+  slow:       [0xa0e8ff, 0xe0f8ff],
+  invincible: [0xffd700, 0xffffff, 0xff9a00]
+};
 function updateBoostTrail(dt) {
   if (throttle < 0.75 && buffs.speed <= 0) { trailAccum = 0; return; }
+  const palette = buffs.invincible > 0 ? TRAIL_PALETTES.invincible
+                : buffs.multi      > 0 ? TRAIL_PALETTES.multi
+                : buffs.speed      > 0 ? TRAIL_PALETTES.speed
+                : buffs.slow       > 0 ? TRAIL_PALETTES.slow
+                : TRAIL_PALETTES.none;
+  const rate = buffs.speed > 0 ? 0.016 : 0.028; // boost = sillage nettement plus dense
   trailAccum += dt;
-  while (trailAccum > 0.03) {
-    trailAccum -= 0.03;
-    owlGroup.getWorldDirection(_trailTmp);         // +Z local = l'arrière du hibou
-    _trailTmp.multiplyScalar(1.7).add(owlGroup.position);
-    _trailTmp.x += rnd(-0.35, 0.35); _trailTmp.y += rnd(-0.35, 0.35); _trailTmp.z += rnd(-0.35, 0.35);
-    spawnFX3D(_trailTmp, 1, 'trail');
+  while (trailAccum > rate) {
+    trailAccum -= rate;
+    for (const side of [-1, 1]) { // un filet par bout d'aile
+      _trailTmp.set(side * 1.25, 0.1, 1.4).applyQuaternion(owlGroup.quaternion).add(owlGroup.position);
+      _trailTmp.x += rnd(-0.25, 0.25); _trailTmp.y += rnd(-0.25, 0.25); _trailTmp.z += rnd(-0.25, 0.25);
+      spawnFX3D(_trailTmp, 1, 'trail', palette);
+    }
+  }
+}
+
+// Cascade de combo : à partir de x5, le hibou ruisselle d'étincelles dorées,
+// de plus en plus dru à mesure que le combo grimpe.
+let comboFxAccum = 0;
+function updateComboCascade(dt) {
+  if (combo < 5 || comboTimer <= 0) { comboFxAccum = 0; return; }
+  comboFxAccum += dt;
+  const rate = Math.max(0.05, 0.2 - combo * 0.006);
+  while (comboFxAccum > rate) {
+    comboFxAccum -= rate;
+    _trailTmp.set(rnd(-0.8, 0.8), rnd(-0.3, 0.6), rnd(0.4, 1.6)).applyQuaternion(owlGroup.quaternion).add(owlGroup.position);
+    spawnFX3D(_trailTmp, 1, 'sparkle');
   }
 }
 
@@ -405,7 +392,7 @@ function updateBoostTrail(dt) {
 //  La vie est en bas : elles attirent l'œil (et le vol) vers le sol, où les
 //  branches abondent et où le rase-mottes rapporte.
 // ══════════════════════════════════════════════════
-const FIREFLY_COUNT = 240;
+const FIREFLY_COUNT = LOW_SPEC ? 120 : 240;
 const FIREFLY_RANGE = 170;  // rayon d'ancrage autour du hibou
 let fireflies, fireflyData = [];
 const FIREFLY_COLORS = [new THREE.Color(0x9fff6a), new THREE.Color(0xffe08a), new THREE.Color(0x6affc8)];
@@ -657,8 +644,13 @@ const RING_VAR   = 260;                    // relief supplémentaire des sommets
 // Seed fixe (pas Math.random()) : le terrain doit être identique sur tous les
 // navigateurs, sinon en multijoueur chaque client voit un sol différent — les
 // hiboux distants (positionnés selon LEUR sol) se retrouvent enterrés sous
-// le nôtre et deviennent invisibles.
-const terrainSeed = 483.271;
+// le nôtre et deviennent invisibles. En solo en revanche, le terrain est
+// régénéré à chaque partie (voir regenerateTerrainSeed) : le multijoueur
+// restaure systématiquement ce seed canonique avant de démarrer une manche
+// (voir restoreCanonicalTerrain), qu'une partie solo ait tourné avant ou non.
+const CANONICAL_TERRAIN_SEED = 483.271;
+let terrainSeed = CANONICAL_TERRAIN_SEED;
+let worldRegenerated = false; // true dès qu'une partie solo a re-tiré le terrain
 
 function hashNoise(ix, iz) {
   const n = Math.sin(ix * 127.1 + iz * 311.7 + terrainSeed * 17.3) * 43758.5453;
@@ -684,8 +676,10 @@ function fbm(x, z, octaves = 4) {
 // Pics montagneux : bosses gaussiennes semées à l'intérieur de l'arène (jamais au centre).
 // Nombre, position, hauteur et rayon tirés au hasard à chaque run — désormais répartis
 // sur TOUTE l'arène élargie (l'ancien semis 90..270 laissait 90 % de la carte plate).
+// L'array garde la MÊME référence à travers les régénérations : terrainHeight ferme dessus.
 const mountainPeaks = [];
-{
+function fillMountainPeaks() {
+  mountainPeaks.length = 0;
   const peakCount = Math.floor(rnd(10, 15));
   for (let i = 0; i < peakCount; i++) {
     const angle = (i / peakCount) * Math.PI * 2 + rnd(-0.5, 0.5);
@@ -697,6 +691,61 @@ const mountainPeaks = [];
       r: rnd(55, 165)
     });
   }
+}
+fillMountainPeaks(); // premier tirage au chargement (canonique, réutilisé par le multijoueur)
+const CANONICAL_MOUNTAIN_PEAKS = mountainPeaks.map(p => ({ ...p }));
+
+// Nouvelle carte à chaque partie SOLO : nouveau seed de bruit + nouveaux pics + nouvelle
+// forêt (treeRng reseedé). Le multijoueur, lui, ne doit JAMAIS voir un terrain différent
+// d'un client à l'autre : voir restoreCanonicalTerrain().
+function regenerateTerrainSeed() {
+  terrainSeed = Math.random() * 1000;
+  fillMountainPeaks();
+  treeRng = mulberry32(Math.floor(Math.random() * 1e9));
+  worldRegenerated = true;
+}
+
+// Restaure le terrain canonique (seed fixe + pics + arbres d'origine) avant une manche
+// multijoueur, que le client ait joué une ou plusieurs parties solo entre-temps ou non.
+function restoreCanonicalTerrain() {
+  terrainSeed = CANONICAL_TERRAIN_SEED;
+  mountainPeaks.length = 0;
+  for (const p of CANONICAL_MOUNTAIN_PEAKS) mountainPeaks.push({ ...p });
+  treeRng = mulberry32(20260715);
+  worldRegenerated = false;
+}
+
+// Références aux objets du monde régénérable (terrain/eau/montagnes GLB/forêt),
+// pour pouvoir les retirer de la scène à chaque nouvelle partie (voir disposeWorldGeometry).
+let terrainMesh = null, waterMesh = null;
+let mountainSceneryGroups = [];
+let treeGroups = [];
+
+// Retire de la scène tout le monde régénérable avant reconstruction (nouvelle partie).
+// Terrain/eau : géométries et matériaux UNIQUES, créés à chaque makeTerrain → on les dispose
+// (sinon fuite GPU à chaque partie). Arbres/montagnes GLB : géométries/matériaux PARTAGÉS
+// avec les modèles sources (models.pine1, models.mountains…) → on retire sans disposer.
+function disposeWorldGeometry() {
+  if (terrainMesh) {
+    scene.remove(terrainMesh);
+    terrainMesh.geometry.dispose();
+    terrainMesh.material.dispose();
+    terrainMesh = null;
+  }
+  if (waterMesh) {
+    scene.remove(waterMesh);
+    waterMesh.geometry.dispose();
+    waterMesh.material.dispose();
+    waterMesh = null;
+  }
+  for (const g of [...mountainSceneryGroups, ...treeGroups]) {
+    scene.remove(g);
+    // InstancedMesh.dispose() ne libère QUE les attributs d'instance (instanceMatrix),
+    // pas la géométrie ni le matériau — donc sans danger pour les modèles GLB partagés.
+    g.traverse(o => { if (o.isInstancedMesh) o.dispose(); });
+  }
+  mountainSceneryGroups = [];
+  treeGroups = [];
 }
 
 function terrainHeight(x, z) {
@@ -769,6 +818,7 @@ function makeTerrain() {
     vertexColors: true, flatShading: true, roughness: 1
   }));
   scene.add(mesh);
+  terrainMesh = mesh;
 
   // Lacs : un seul plan d'eau sous tout le terrain, visible dans les creux.
   const water = new THREE.Mesh(
@@ -781,6 +831,7 @@ function makeTerrain() {
   water.rotation.x = -Math.PI / 2;
   water.position.y = WATER_Y;
   scene.add(water);
+  waterMesh = water;
 }
 
 // Chaînes de montagnes GLB plantées SUR la muraille procédurale : elles ajoutent
@@ -805,14 +856,16 @@ function makeMountainScenery() {
   protos.forEach((proto, i) => {
     if (!matrices[i].length) return;
     const norm = normalizeModel(proto.clone(true), { height: 150, groundAlign: true });
-    scene.add(makeInstancedFromModel(norm, matrices[i]));
+    const group = makeInstancedFromModel(norm, matrices[i]);
+    scene.add(group);
+    mountainSceneryGroups.push(group);
   });
 }
 
 // ══════════════════════════════════════════════════
 //  NUAGES LOW-POLY — instanciés, dérive lente, recyclés en bord de carte.
 // ══════════════════════════════════════════════════
-const CLOUD_COUNT  = 64;                        // couvre l'arène élargie (l'ancien semis ±380 laissait le ciel vide au loin)
+const CLOUD_COUNT  = LOW_SPEC ? 32 : 64;        // couvre l'arène élargie (l'ancien semis ±380 laissait le ciel vide au loin)
 const CLOUD_SPREAD = ARENA_RADIUS_XZ * 0.85;    // zone de semis
 const CLOUD_WRAP   = ARENA_RADIUS_XZ * 0.92;    // bord de recyclage de la dérive
 let cloudSets = []; // { group, data:[{pos, scale, rotY, speed}], parts }
@@ -1002,7 +1055,7 @@ function updateStorm(dt) {
   storm.rockSpawnTimer -= dt;
   if (storm.rockSpawnTimer <= 0 && rocks.length < ROCK_MAX) {
     rocks.push(newRock());
-    storm.rockSpawnTimer = rnd(0.35, 0.75); // pluie de cailloux dense autour du joueur
+    storm.rockSpawnTimer = rnd(0.12, 0.3); // pluie de cailloux dense sur toute la zone autour du joueur
   }
 
   if (!forced) {
@@ -1018,8 +1071,8 @@ function updateStorm(dt) {
 //  Au contact du hibou : punition de score + plaqué vers le sol.
 // ══════════════════════════════════════════════════
 let rocks = [];
-const ROCK_RADIUS = 1.1;
-const ROCK_MAX    = 26;
+const ROCK_RADIUS = 1.7;
+const ROCK_MAX    = 46;
 
 // 4 variantes de géométrie « taillées » une fois pour toutes : sommets perturbés
 // par un bruit fonction de leur POSITION (les sommets partagés bougent ensemble).
@@ -1041,12 +1094,12 @@ const rockMats = [
 ];
 
 function newRock() {
-  // Colonne de chute centrée un peu EN AVANT du hibou (l'ancienne version semait
-  // sur toute l'arène élargie : on ne voyait jamais tomber un seul caillou).
+  // Pluie de cailloux qui couvre une large zone tout AUTOUR du hibou (pas seulement
+  // devant) pour que la tempête soit une vraie menace où qu'on regarde.
   const lead = rnd(0.8, 3.2);
-  const x = owlGroup.position.x + velocity.x * lead + rnd(-70, 70);
-  const z = owlGroup.position.z + velocity.z * lead + rnd(-70, 70);
-  const scale = rnd(0.9, 2.3);
+  const x = owlGroup.position.x + velocity.x * lead + rnd(-220, 220);
+  const z = owlGroup.position.z + velocity.z * lead + rnd(-220, 220);
+  const scale = rnd(1.4, 3.4);
   const mesh = new THREE.Mesh(
     rockGeos[Math.floor(Math.random() * rockGeos.length)],
     rockMats[Math.floor(Math.random() * rockMats.length)]
@@ -1088,16 +1141,153 @@ function updateRocks(dt) {
 
     if (rockInvul <= 0 && buffs.invincible <= 0 &&
         owlGroup.position.distanceTo(rk.mesh.position) < (ROCK_RADIUS * rk.scale + OWL_COLLIDE_RADIUS + 0.6)) {
-      score = Math.max(0, score - 20);
-      rockInvul = 0.35;
-      velocity.y -= 7; // le choc rabat le hibou vers le sol
-      screenShake = Math.max(screenShake, 12);
-      hitFlash    = Math.max(hitFlash, 0.4);
-      spawnFX(rk.mesh.position, 10, 'death', '-20');
-      spawnFX3D(rk.mesh.position, 12, 'burst');
+      screenShake = Math.max(screenShake, 25);
+      hitFlash    = Math.max(hitFlash, 0.6);
+      triggerHitStop(0.3, 0.15);
+      spawnFX(rk.mesh.position, 16, 'death', 'ÉCRASÉ 🪨');
+      spawnFX3D(rk.mesh.position, 16, 'burst');
       removeRock(i);
+      // updateRocks() ne tourne jamais en multijoueur (gate dans la boucle update()) : pas de garde à faire ici.
+      if (state === S.PLAY) {
+        best = Math.max(best, score);
+        state = S.OVER;
+        overReason = 'rock';
+        owlGroup.visible = false;
+        document.body.style.cursor = 'default';
+        if (document.pointerLockElement) document.exitPointerLock();
+      }
+      continue;
     }
   }
+}
+
+// ══════════════════════════════════════════════════
+//  MÉTÉO DYNAMIQUE — épisodes de pluie entre les tempêtes, neige en altitude,
+//  brouillard qui se densifie et lumière qui se plombe par mauvais temps,
+//  éclairs pendant les tempêtes. Le ciel n'est plus figé.
+// ══════════════════════════════════════════════════
+const WEATHER_DROPS   = LOW_SPEC ? 380 : 900;
+const RAIN_DURATION   = [18, 32];  // secondes d'un épisode de pluie
+const RAIN_NEXT       = [25, 50];  // délai avant le prochain épisode
+let weather = { mode: 'clear', level: 0, timer: 0, next: rnd(RAIN_NEXT[0], RAIN_NEXT[1]) };
+let precip = null, precipData = [];
+let lightningTimer = rnd(3, 7), lightningFlash = 0;
+
+// Teintes de brouillard : bleu nuit par temps clair → gris plombé sous la pluie/tempête.
+const FOG_CLEAR = new THREE.Color(0x0c1030), FOG_HEAVY = new THREE.Color(0x1d2530);
+const PRECIP_RAIN_COLOR = new THREE.Color(0x9fc0e8), PRECIP_SNOW_COLOR = new THREE.Color(0xf4f8ff);
+
+// (Ré)ancre une goutte/un flocon dans le volume qui suit le hibou. La hauteur du sol
+// est mémorisée à l'ancrage (comme les lucioles) : zéro appel terrain par frame.
+function anchorDrop(d, fromTop) {
+  d.x = owlGroup.position.x + rnd(-95, 95);
+  d.z = owlGroup.position.z + rnd(-95, 95);
+  d.y = owlGroup.position.y + (fromTop ? rnd(25, 60) : rnd(-25, 60));
+  d.spd = rnd(55, 85);
+  d.sway = rnd(0, Math.PI * 2);
+  d.gy = effectiveGroundY(d.x, d.z);
+}
+
+function makeWeather() {
+  const positions = new Float32Array(WEATHER_DROPS * 3);
+  for (let i = 0; i < WEATHER_DROPS; i++) {
+    const d = {};
+    anchorDrop(d, false);
+    precipData.push(d);
+    positions[i * 3 + 1] = -9999; // parqué hors champ tant que la pluie n'est pas levée
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({
+    map: glowTexture, color: PRECIP_RAIN_COLOR.clone(), size: 0.55, transparent: true,
+    opacity: 0, depthWrite: false, sizeAttenuation: true
+  });
+  precip = new THREE.Points(geo, mat);
+  precip.frustumCulled = false;
+  precip.visible = false;
+  scene.add(precip);
+}
+
+// Cycle météo (uniquement pendant le jeu) : clair → pluie → clair, la tempête
+// existante restant l'événement « paroxysme » qui force une pluie battante.
+function updateWeatherLogic(dt) {
+  if (!storm.active) {
+    if (weather.mode === 'clear') {
+      if (moon.state === 'none') { // les lunes gardent leur ciel dégagé dramatique
+        weather.next -= dt;
+        if (weather.next <= 0) {
+          weather.mode = 'rain';
+          weather.timer = rnd(RAIN_DURATION[0], RAIN_DURATION[1]);
+          spawnFX(owlGroup.position, 8, 'collect', '🌧️ PLUIE');
+        }
+      }
+    } else {
+      weather.timer -= dt;
+      if (weather.timer <= 0) {
+        weather.mode = 'clear';
+        weather.next = rnd(RAIN_NEXT[0], RAIN_NEXT[1]);
+      }
+    }
+  }
+  // Éclairs : uniquement pendant la tempête — flash lumineux + secousse.
+  if (storm.active) {
+    lightningTimer -= dt;
+    if (lightningTimer <= 0) {
+      lightningTimer = rnd(2.5, 7);
+      lightningFlash = 1;
+      screenShake = Math.max(screenShake, 9);
+    }
+  }
+}
+
+// Rendu météo (tourne aussi sur les écrans de menu : la pluie ne se fige pas).
+// Appelé APRÈS updateMoonVisual, qui fixe moonLight.intensity à chaque frame.
+function updateWeatherFX(dt) {
+  const target = storm.active ? 1 : weather.mode === 'rain' ? 0.7 : 0;
+  weather.level += (target - weather.level) * Math.min(1, 1.2 * dt);
+  const lv = weather.level;
+
+  // Brouillard densifié et lumière plombée par mauvais temps
+  scene.fog.color.lerpColors(FOG_CLEAR, FOG_HEAVY, lv);
+  scene.fog.near = ARENA_RADIUS_XZ * THREE.MathUtils.lerp(0.55, 0.28, lv);
+  scene.fog.far  = ARENA_RADIUS_XZ * THREE.MathUtils.lerp(1.6, 0.95, lv);
+  ambientLight.intensity = 0.9 * (1 - 0.3 * lv) + lightningFlash * 1.6;
+  moonLight.intensity = moonLight.intensity * (1 - 0.4 * lv) + lightningFlash * 2.5;
+  lightningFlash = Math.max(0, lightningFlash - 3.2 * dt);
+
+  if (!precip) return;
+  precip.visible = lv > 0.02;
+  if (!precip.visible) return;
+
+  // Pluie en plaine, flocons dès que le hibou vole au-dessus de la ligne de neige
+  const snowing = owlGroup.position.y > SNOW_LINE + 12;
+  precip.material.color.lerp(snowing ? PRECIP_SNOW_COLOR : PRECIP_RAIN_COLOR, 0.08);
+  precip.material.size = THREE.MathUtils.lerp(precip.material.size, snowing ? 0.95 : 0.55, 0.08);
+  precip.material.opacity = 0.8 * lv;
+
+  const pos = precip.geometry.attributes.position;
+  const wx = storm.active ? Math.cos(storm.windAngle) * storm.windForce * 8 : 0;
+  const wz = storm.active ? Math.sin(storm.windAngle) * storm.windForce * 8 : 0;
+  const ox = owlGroup.position.x, oy = owlGroup.position.y, oz = owlGroup.position.z;
+  for (let i = 0; i < WEATHER_DROPS; i++) {
+    const d = precipData[i];
+    if (snowing) {
+      d.sway += dt * 1.6;
+      d.y -= d.spd * 0.12 * dt;                       // les flocons tombent lentement…
+      d.x += (wx + Math.cos(d.sway) * 2.5) * dt;      // …et voltigent
+      d.z += (wz + Math.sin(d.sway * 0.8) * 2.5) * dt;
+    } else {
+      d.y -= d.spd * dt;                              // la pluie tombe dru
+      d.x += wx * dt;
+      d.z += wz * dt;
+    }
+    const ddx = d.x - ox, ddz = d.z - oz;
+    if (d.y < Math.max(d.gy, oy - 30) || ddx * ddx + ddz * ddz > 120 * 120) anchorDrop(d, true);
+    pos.array[i * 3]     = d.x;
+    pos.array[i * 3 + 1] = d.y;
+    pos.array[i * 3 + 2] = d.z;
+  }
+  pos.needsUpdate = true;
 }
 
 // ══════════════════════════════════════════════════
@@ -1106,7 +1296,7 @@ function updateRocks(dt) {
 //  jamais dans les lacs ni sur les pentes raides. Repli : cône+cylindre procédural.
 // ══════════════════════════════════════════════════
 let treeColliders = [];
-const TREE_COUNT  = 3000;                        // forêt étendue à TOUTE l'arène (avant : rayon 340 seulement)
+const TREE_COUNT  = LOW_SPEC ? 1400 : 3000;      // forêt étendue à TOUTE l'arène (réduite sur appareil modeste)
 const TREE_SPREAD = ARENA_RADIUS_XZ * 0.84;      // s'arrête avant les pentes de la muraille
 
 // Repli si un modèle d'arbre manque : silhouette cône+cylindre équivalente.
@@ -1189,7 +1379,10 @@ function makeTrees() {
   }
 
   for (const type of types) {
-    if (type.matrices.length) scene.add(makeInstancedFromModel(type.norm, type.matrices));
+    if (!type.matrices.length) continue;
+    const group = makeInstancedFromModel(type.norm, type.matrices);
+    scene.add(group);
+    treeGroups.push(group);
   }
 }
 
@@ -1318,9 +1511,14 @@ function pointInsideAnyTree(p) {
 }
 const camClipDir = new THREE.Vector3();
 const camClipPoint = new THREE.Vector3();
+const _camOffset = new THREE.Vector3();
 function updateCameraClip() {
-  const maxDist = CAMERA_LOCAL_OFFSET.length();
-  camClipDir.copy(CAMERA_LOCAL_OFFSET).normalize().applyQuaternion(owlGroup.quaternion);
+  // Vue arrière (clic droit) : la caméra passe DEVANT le hibou (offset Z inversé) et
+  // regarde vers l'arrière — le hibou reste au centre de l'image, comme en vue avant.
+  _camOffset.copy(CAMERA_LOCAL_OFFSET);
+  if (lookBack) _camOffset.z = -_camOffset.z;
+  const maxDist = _camOffset.length();
+  camClipDir.copy(_camOffset).normalize().applyQuaternion(owlGroup.quaternion);
   let safeDist = maxDist;
   for (let i = 1; i <= CAMERA_CLIP_SAMPLES; i++) {
     const t = (i / CAMERA_CLIP_SAMPLES) * maxDist;
@@ -1332,7 +1530,8 @@ function updateCameraClip() {
       break;
     }
   }
-  camera.position.copy(CAMERA_LOCAL_OFFSET).setLength(safeDist);
+  camera.position.copy(_camOffset).setLength(safeDist);
+  camera.rotation.y = lookBack ? Math.PI : 0; // demi-tour d'orientation en vue arrière
 }
 
 let flapPhase = 0;
@@ -1368,7 +1567,7 @@ function updateFlap(dt, speedRatio) {
 // ══════════════════════════════════════════════════
 //  ENTRÉES — clavier (ZQSD/AE) + souris (joystick additionnel) + tactile (mobile)
 // ══════════════════════════════════════════════════
-const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+const isMobile = LOW_SPEC; // même détection, évaluée en tête de module (les budgets en dépendent)
 
 const keys = {};
 const ARROW_KEYS = ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
@@ -1503,6 +1702,12 @@ window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 // Souris en pointer-lock : le curseur ne sort jamais de l'écran, donc le lacet/tangage
 // ne se bloque plus quand on atteint le bord (mouvements relatifs via movementX/Y).
 let mouseDX = 0, mouseDY = 0;
+
+// ── Vue arrière (clic droit maintenu) : la caméra reste fixée au hibou mais
+//    pivote de 180° tant que le bouton est enfoncé (voir updateCameraClip).
+let lookBack = false;
+glCanvas.addEventListener('contextmenu', e => e.preventDefault());
+window.addEventListener('blur', () => { lookBack = false; });
 function requestFlightPointerLock() {
   if (!isMobile && glCanvas.requestPointerLock) glCanvas.requestPointerLock();
 }
@@ -1514,10 +1719,11 @@ window.addEventListener('pointermove', e => {
   }
   if (sliderDrag) handleSliderDrag(e.clientX);
 });
-window.addEventListener('pointerup',     e => { if (e.button === 0) mouseFireHeld = false; if (isMobile) return; sliderDrag = false; });
-window.addEventListener('pointercancel', e => { mouseFireHeld = false; if (isMobile) return; sliderDrag = false; });
+window.addEventListener('pointerup',     e => { if (e.button === 0) mouseFireHeld = false; if (isMobile) return; sliderDrag = false; if (e.button === 2) lookBack = false; });
+window.addEventListener('pointercancel', e => { mouseFireHeld = false; if (isMobile) return; sliderDrag = false; lookBack = false; });
 window.addEventListener('pointerdown', e => {
   if (isMobile) return; // tactile géré par touchstart/touchmove/touchend natifs
+  if (e.button === 2) { lookBack = true; return; } // clic droit = vue arrière (maintenu)
   if (settingsOpen) {
     const hit = getSliderHitArea();
     if (e.clientX >= hit.x && e.clientX <= hit.x + hit.w && e.clientY >= hit.y - 10 && e.clientY <= hit.y + hit.h + 10) {
@@ -1719,9 +1925,15 @@ function updateFlight(dt) {
   _acc.set(0, -OWL_MASS * GRAVITY, 0);           // poids P = m·g (la pesanteur ne dépend pas de la masse)
   _acc.addScaledVector(_fwd, thrust * OWL_MASS); // poussée le long du nez
 
+  // Effet de sol : au ras du terrain (moins d'une envergure et demie), le coussin
+  // d'air comprimé sous l'aile augmente la portance et réduit la traînée induite —
+  // le rase-mottes « porte » réellement, comme pour un vrai rapace.
+  const altAGL = owlGroup.position.y - effectiveGroundY(owlGroup.position.x, owlGroup.position.z);
+  const groundEffect = THREE.MathUtils.clamp(1 - altAGL / 6, 0, 1);
+
   // Portance : dynamique (aile, ∝ v²·CL) + battement (basse vitesse, ∝ poussée).
   // Le battement ne porte plus quand le nez pointe au zénith : plus d'ascenseur vertical gratuit.
-  const dynLift  = AIR_LIFT * v * v * CL;
+  const dynLift  = AIR_LIFT * v * v * CL * (1 + 0.3 * groundEffect);
   const flapLift = FLAP_LIFT * (0.35 + 0.65 * throttle) * Math.max(0, 1 - v / FLAP_FADE)
                  * (1 - THREE.MathUtils.smoothstep(_fwd.y, 0.35, 0.8));
   _acc.addScaledVector(_up, (dynLift + flapLift) * wingAvg * OWL_MASS); // wingAvg : portance amputée si les ailes sont touchées (multijoueur)
@@ -1729,7 +1941,8 @@ function updateFlight(dt) {
   // Traînée : parasite (∝ v²) + induite (∝ CL²), opposée à la vitesse.
   // Le frein (Shift/✋) déploie des aérofreins : traînée renforcée, décélération en douceur.
   if (v > 1e-3) {
-    const drag = AIR_DRAG * (brakeHeld ? 1 + BRAKE_DRAG : 1) * v * v + INDUCED_DRAG * CL * CL * v;
+    const drag = AIR_DRAG * (brakeHeld ? 1 + BRAKE_DRAG : 1) * v * v
+               + INDUCED_DRAG * CL * CL * v * (1 - 0.35 * groundEffect); // effet de sol : traînée induite réduite
     _acc.addScaledVector(velocity, (-drag / v) * OWL_MASS);
   }
 
@@ -1743,6 +1956,10 @@ function updateFlight(dt) {
     _acc.x += Math.cos(storm.windAngle) * w;
     _acc.z += Math.sin(storm.windAngle) * w;
     _acc.y -= w * (0.55 + 0.35 * Math.sin(storm.gustPhase * 0.5)); // toujours vers le bas, pulsé par les rafales
+    // Turbulence chaotique : secousses aléatoires qui dévient RÉELLEMENT la trajectoire
+    _acc.x += rnd(-1, 1) * w * 0.5;
+    _acc.y += rnd(-1, 1) * w * 0.35;
+    _acc.z += rnd(-1, 1) * w * 0.5;
   }
 
   _acc.divideScalar(OWL_MASS); // a = ΣF / m — c'est ici que la masse (1.6 kg) intervient réellement
@@ -1847,6 +2064,7 @@ function onTreeHit() {
   screenShake = Math.max(screenShake, 22);
   hitFlash = Math.max(hitFlash, 0.5);
   treeCooldown = TREE_HIT_COOLDOWN;
+  triggerHitStop(0.14, 0.3);
   spawnFX(owlGroup.position, 18, 'death', 'CRASH ! 🌳');
 }
 
@@ -1863,6 +2081,7 @@ function onGroundCrash() {
   if (document.pointerLockElement) document.exitPointerLock();
   screenShake = Math.max(screenShake, 25);
   hitFlash = Math.max(hitFlash, 0.6);
+  triggerHitStop(0.3, 0.15);
   spawnFX(owlGroup.position, 24, 'death', '💥 CRASHÉ !');
 }
 
@@ -2069,6 +2288,7 @@ function updateLootbox(dt) {
 const ROTTEN_LIFE = 600, ROTTEN_CHANCE = 0.08;
 const COLLECT_RADIUS = 3;
 const BRANCH_COUNT = 14;
+const BRANCH_SCORE_MULT = 10; // la collecte de branches rapporte 10 pts (vs rase-mottes réduit)
 const BRANCH_RECYCLE_DIST = 420;
 let branches = [];
 
@@ -2154,7 +2374,7 @@ function updateBranches() {
         hitFlash = Math.max(hitFlash, 0.35);
         spawnFX(br.sprite.position, 14, 'death', 'COMBO RESET 🤢');
       } else {
-        const gain = Math.max(1, combo) * (buffs.multi > 0 ? 5 : 1);
+        const gain = Math.max(1, combo) * BRANCH_SCORE_MULT * (buffs.multi > 0 ? 5 : 1);
         score += gain; nest += 1;
         if (nest >= 100) {
           nest %= 100; lives++;
@@ -2179,6 +2399,7 @@ function updateBranches() {
 //  le joueur au sol, entre les arbres et le relief (du risque contre des points).
 // ══════════════════════════════════════════════════
 const SKIM_ALT = 8, SKIM_MIN_SPEED = 13;
+const SKIM_SCORE = 1; // points/seconde de rase-mottes (réduit : la collecte de branches doit rester plus rentable)
 let skimTimer = 0, skimActive = false;
 
 function updateSkim(dt) {
@@ -2186,9 +2407,9 @@ function updateSkim(dt) {
   skimActive = alt < SKIM_ALT && speed > SKIM_MIN_SPEED;
   if (!skimActive) { skimTimer = 0; return; }
   skimTimer += dt;
-  if (skimTimer >= 1) { // +2 par seconde passée au ras du sol (x5 avec le buff ✨)
+  if (skimTimer >= 1) { // +SKIM_SCORE par seconde passée au ras du sol (x5 avec le buff ✨)
     skimTimer -= 1;
-    const gain = 2 * (buffs.multi > 0 ? 5 : 1);
+    const gain = SKIM_SCORE * (buffs.multi > 0 ? 5 : 1);
     score += gain;
     nest += 1;
     if (nest >= 100) {
@@ -2206,6 +2427,7 @@ function updateSkim(dt) {
 //  sa direction de déplacement. Repli : sprite emoji 🐻 d'origine.
 // ══════════════════════════════════════════════════
 let bears = [];
+const BEAR_SCALE = 2.2; // échelle visuelle des ours (légèrement réduite, avant : 2.6)
 // Lacet du modèle GLB pour que l'ours regarde vers +Z (convention lookAt de three.js).
 const BEAR_MODEL_YAW = 0;
 let bearProto = null; // gabarit normalisé, cloné pour chaque ours
@@ -2218,18 +2440,21 @@ function bearTarget() {
   if (multiplayerMode) return 0; // multijoueur : les ours disparaissent (tous les sites de spawn passent par ce plafond)
   if (moon.state === 'blood') return 18;
   if (moon.state === 'full')  return 12;
-  return Math.min(2 + Math.floor(score / 15), 10);
+  // Rampe de début de partie : on démarre à 1 ours et on rejoint la base de 2 en BEAR_RAMP_TIME.
+  const ramp = Math.min(roundTime / BEAR_RAMP_TIME, 1);
+  const base = Math.round(THREE.MathUtils.lerp(1, 2, ramp));
+  return Math.min(base + Math.floor(score / 15), 10);
 }
 
 function newBear() {
   let sprite;
   if (bearProto) {
     sprite = bearProto.clone(true); // clone léger : géométries et matériaux partagés
-    sprite.scale.setScalar(2.6);
+    sprite.scale.setScalar(BEAR_SCALE);
   } else {
     const mat = new THREE.SpriteMaterial({ map: bearTexture, transparent: true });
     sprite = new THREE.Sprite(mat);
-    sprite.scale.set(2.6, 2.6, 1);
+    sprite.scale.set(BEAR_SCALE, BEAR_SCALE, 1);
   }
 
   // Halo de menace : lueur rouge additive allumée pendant la préparation et la
@@ -2267,15 +2492,20 @@ function newBear() {
 
   const isFullMoon  = moon.state === 'full';
   const isBloodMoon = moon.state === 'blood';
+  // Rampe de difficulté : en mode normal les premiers ours sont plus lents et chargent
+  // moins souvent, puis rejoignent l'intensité actuelle en BEAR_RAMP_TIME secondes.
+  // Les lunes (pleine/de sang) restent des pics à pleine intensité, non affectés.
+  const ramp = Math.min(roundTime / BEAR_RAMP_TIME, 1);
+  const speedRamp = (isFullMoon || isBloodMoon) ? 1 : THREE.MathUtils.lerp(0.55, 1, ramp);
   return {
     sprite, menaceMat,
     life: isBloodMoon ? rnd(400, 900) : isFullMoon ? rnd(300, 600) : rnd(1000, 2000),
-    spdBase: (isBloodMoon ? 22 : isFullMoon ? 16 : 11) + Math.min(score * 0.15, 10), // unités/s (mouvement mis à l'échelle par dt)
+    spdBase: ((isBloodMoon ? 22 : isFullMoon ? 16 : 11) + Math.min(score * 0.15, 10)) * speedRamp, // unités/s (mouvement mis à l'échelle par dt)
     lead: rnd(0.5, 1.5),         // anticipation : l'ours vise là où le hibou SERA, pas là où il est
     drift: new THREE.Vector3(),
     driftTimer: 0,
     mode: 'stalk', modeTimer: 0, // stalk → windup (télégraphe) → lunge (charge) → recover
-    lungeCooldown: rnd(1.5, 3.5),
+    lungeCooldown: rnd(1.5, 3.5) + (1 - speedRamp) * 2,
     lungeDir: new THREE.Vector3(),
     bob: rnd(0, Math.PI * 2),
     spawnPulse: 1,
@@ -2291,7 +2521,8 @@ function removeBear(i) {
 
 const BEAR_LUNGE_RANGE = 38; // distance de déclenchement de la charge
 const BEAR_LUNGE_SPEED = 31; // vitesse de charge : plus vite que la croisière du hibou
-const _bearAim = new THREE.Vector3(), _bearMove = new THREE.Vector3();
+const BEAR_PACK_DIST   = 16; // distance de répulsion entre ours (comportement de meute)
+const _bearAim = new THREE.Vector3(), _bearMove = new THREE.Vector3(), _bearSep = new THREE.Vector3();
 
 function updateBears(dt) {
   for (let i = bears.length - 1; i >= 0; i--) {
@@ -2339,6 +2570,9 @@ function updateBears(dt) {
     } else if (b.mode === 'lunge') {
       spd = Math.max(BEAR_LUNGE_SPEED, b.spdBase * 1.5) * slowMul;
       _bearMove.copy(b.lungeDir);
+      // Sillage de poussière/débris derrière l'ours en pleine charge
+      b.dustAccum = (b.dustAccum || 0) + dt;
+      if (b.dustAccum > 0.07) { b.dustAccum = 0; spawnFX3D(b.sprite.position, 2, 'dust'); }
       if (b.modeTimer <= 0) { b.mode = 'recover'; b.modeTimer = 1.1; b.lungeCooldown = rnd(2.2, 4); }
     } else if (b.mode === 'recover') {
       spd *= 0.45;
@@ -2350,7 +2584,22 @@ function updateBears(dt) {
                        : b.mode === 'lunge'  ? 0.55 : 0;
     b.menaceMat.opacity = THREE.MathUtils.lerp(b.menaceMat.opacity, menaceTarget, 0.25);
     const menace = b.mode === 'windup' ? 1.25 : b.mode === 'lunge' ? 1.12 : 1;
-    b.sprite.scale.setScalar(2.6 * (1 - b.spawnPulse * 0.6) * menace);
+    b.sprite.scale.setScalar(BEAR_SCALE * (1 - b.spawnPulse * 0.6) * menace);
+
+    // Esprit de meute : répulsion douce entre ours proches — plutôt que de
+    // s'agglutiner sur la même trajectoire, ils s'écartent et encerclent.
+    if (b.mode !== 'lunge') {
+      _bearSep.set(0, 0, 0);
+      for (let j = 0; j < bears.length; j++) {
+        if (j === i) continue;
+        _tmp.copy(b.sprite.position).sub(bears[j].sprite.position);
+        const sd = _tmp.length();
+        if (sd > 1e-3 && sd < BEAR_PACK_DIST) _bearSep.addScaledVector(_tmp, (1 - sd / BEAR_PACK_DIST) / sd);
+      }
+      if (_bearSep.lengthSq() > 1e-6 && _bearMove.lengthSq() > 1e-6) {
+        _bearMove.normalize().addScaledVector(_bearSep.normalize(), 0.65).normalize();
+      }
+    }
 
     const d = _bearMove.length() || 1;
     b.sprite.position.addScaledVector(_bearMove, (spd * dt) / d);
@@ -2366,6 +2615,7 @@ function updateBears(dt) {
     if (owlInvul <= 0 && buffs.invincible <= 0 && b.spawnGrace <= 0 && owlGroup.position.distanceTo(b.sprite.position) < COLLECT_RADIUS + 1) {
       lives--;
       screenShake = 25; hitFlash = 0.6;
+      triggerHitStop(0.24, 0.2);
       spawnFX(b.sprite.position, 16, 'death');
       if (lives <= 0) {
         best = Math.max(best, score);
@@ -2750,6 +3000,16 @@ function beginMultiplayerGame(colorName) {
   score = 0; nest = 0; combo = 1; comboTimer = 0; lives = 1;
   screenShake = 0; hitFlash = 0;
 
+  // Le terrain DOIT être identique sur tous les clients : si une partie solo a
+  // régénéré la carte entre-temps, on restaure le terrain canonique avant de jouer.
+  if (worldRegenerated) {
+    disposeWorldGeometry();
+    restoreCanonicalTerrain();
+    makeTerrain();
+    makeMountainScenery();
+    makeTrees();
+  }
+
   // Purge des systèmes solo : pas d'ours, pas de branches/cadeau/lune/tempête.
   for (const br of branches) { scene.remove(br.sprite); br.sprite.material.dispose(); br.glowMat.dispose(); }
   branches = [];
@@ -2835,6 +3095,34 @@ function rrect(x, y, w, h, r, fill, stroke, lw) {
   if (stroke) { hctx.lineWidth = lw || 1.5; hctx.strokeStyle = stroke; hctx.stroke(); }
 }
 
+// Vignette dynamique + lignes de vitesse radiales : l'écran « se resserre » et file
+// à haute vitesse ou sous buff ⚡ — pur canvas 2D, zéro post-processing GPU.
+function drawSpeedFX() {
+  const sr = THREE.MathUtils.clamp(speed / MAX_SPEED, 0, 1.3);
+  const k = Math.max(0, (sr - 0.8) * 2) + (buffs.speed > 0 ? 0.4 : 0);
+  if (k <= 0.03) return;
+  const W = hudCanvas.width, H = hudCanvas.height, cx = W / 2, cy = H / 2;
+  hctx.save();
+  const g = hctx.createRadialGradient(cx, cy, Math.min(W, H) * 0.32, cx, cy, Math.hypot(cx, cy));
+  g.addColorStop(0, 'rgba(6,8,26,0)');
+  g.addColorStop(1, 'rgba(6,8,26,' + Math.min(0.55, 0.5 * k).toFixed(3) + ')');
+  hctx.fillStyle = g;
+  hctx.fillRect(0, 0, W, H);
+  hctx.strokeStyle = 'rgba(210,230,255,' + Math.min(0.4, 0.3 * k).toFixed(3) + ')';
+  hctx.lineWidth = 2;
+  const n = Math.floor(8 + 14 * k);
+  for (let i = 0; i < n; i++) {
+    const a = rnd(0, Math.PI * 2);
+    const r0 = Math.min(W, H) * rnd(0.38, 0.5);
+    const r1 = r0 + rnd(60, 190) * k;
+    hctx.beginPath();
+    hctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+    hctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+    hctx.stroke();
+  }
+  hctx.restore();
+}
+
 function drawHUD() {
   hctx.save();
   if (multiplayerMode) {
@@ -2854,10 +3142,12 @@ function drawHUD() {
   if (buffs.speed      > 0) { hctx.fillStyle = '#00ffff'; hctx.font = 'bold 13px system-ui'; hctx.fillText('⚡ VITESSE',       24, buffY); buffY += 16; }
   if (buffs.slow       > 0) { hctx.fillStyle = '#00ffff'; hctx.font = 'bold 13px system-ui'; hctx.fillText('❄️ GELÉS',        24, buffY); buffY += 16; }
   if (buffs.invincible > 0) { hctx.fillStyle = '#ffd700'; hctx.font = 'bold 13px system-ui'; hctx.fillText('🦉 INVINCIBLE !', 24, buffY); buffY += 16; }
-  if (skimActive)           { hctx.fillStyle = '#8fe06a'; hctx.font = 'bold 13px system-ui'; hctx.fillText('🪶 RASE-MOTTES +2/s', 24, buffY); buffY += 16; }
+  if (skimActive)           { hctx.fillStyle = '#8fe06a'; hctx.font = 'bold 13px system-ui'; hctx.fillText('🪶 RASE-MOTTES +' + SKIM_SCORE + '/s', 24, buffY); buffY += 16; }
 
   if (combo > 1 && comboTimer > 0 && buffs.multi === 0) {
-    hctx.fillStyle = '#ffaa00'; hctx.font = 'bold 13px system-ui';
+    // Le compteur de combo enfle avec la série (et pulse au-delà de x5)
+    const comboSize = Math.min(13 + combo, 24) + (combo >= 5 ? Math.sin(Date.now() / 90) * 1.5 : 0);
+    hctx.fillStyle = '#ffaa00'; hctx.font = 'bold ' + Math.round(comboSize) + 'px system-ui';
     hctx.fillText('🔥 Combo x' + combo, 24, buffY);
     const cbW = 80 * (comboTimer / MAX_COMBO_TIME);
     rrect(120, buffY - 4, 80, 6, 3, 'rgba(255,255,255,0.1)');
@@ -2943,6 +3233,14 @@ function drawHUD() {
     hctx.fillStyle = '#dfe6ee'; hctx.font = 'bold 16px system-ui';
     hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
     hctx.fillText('🌬️ TEMPÊTE : ' + Math.ceil(Math.max(0, storm.timer)) + 's', w / 2, 32);
+    hctx.restore();
+  } else if (weather.mode === 'rain') {
+    hctx.save();
+    const w = hudCanvas.width;
+    rrect(w / 2 - 100, 12, 200, 34, 14, 'rgba(30,38,52,0.75)', 'rgba(140,160,190,0.45)');
+    hctx.fillStyle = '#b8c8de'; hctx.font = 'bold 14px system-ui';
+    hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+    hctx.fillText('🌧️ PLUIE : ' + Math.ceil(Math.max(0, weather.timer)) + 's', w / 2, 29);
     hctx.restore();
   }
 
@@ -3088,7 +3386,7 @@ function drawStart() {
     hctx.fillStyle = '#ffb0a0'; hctx.font = '12px system-ui';
     hctx.fillText('Trop lent ou trop cabré = décrochage !', cx, cy + 8);
     hctx.fillStyle = '#ffe08a';
-    hctx.fillText('Vole en rase-mottes parmi les lucioles : +2/s !', cx, cy + 28);
+    hctx.fillText('Vole en rase-mottes parmi les lucioles : +' + SKIM_SCORE + '/s !', cx, cy + 28);
   } else {
     hctx.fillText('Q / D ou ← / → = lacet   A / E = incliner (virer)', cx, cy - 54);
     hctx.fillText('S / Z = cabrer / piquer   (on tire pour monter)', cx, cy - 32);
@@ -3098,7 +3396,7 @@ function drawStart() {
     hctx.fillText('Monter trop raide tue ta vitesse : DÉCROCHAGE —', cx, cy + 40);
     hctx.fillText('le nez tombe, pique pour raccrocher l\'aile.', cx, cy + 58);
     hctx.fillStyle = '#ffe08a';
-    hctx.fillText('Rase le sol parmi les lucioles : +2/s. Suis les flèches 🎁 🌿', cx, cy + 78);
+    hctx.fillText('Rase le sol parmi les lucioles : +' + SKIM_SCORE + '/s. Suis les flèches 🎁 🌿', cx, cy + 78);
   }
   hctx.fillStyle = '#fff'; hctx.font = 'bold 18px system-ui';
   hctx.fillText('Clique ou appuie sur une touche', cx, cy + 100);
@@ -3118,7 +3416,7 @@ function drawOver() {
   rrect(cx - 150, cy - 180, 300, 360, 28, 'rgba(22,8,30,0.97)', 'rgba(255,70,70,0.8)');
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
   hctx.fillStyle = '#ffaaaa'; hctx.font = '900 32px system-ui';
-  hctx.fillText(overReason === 'crash' ? 'CRASHÉ !' : 'MANGÉ !', cx, cy - 100);
+  hctx.fillText(overReason === 'crash' ? 'CRASHÉ !' : overReason === 'rock' ? 'ÉCRASÉ !' : 'MANGÉ !', cx, cy - 100);
   hctx.fillStyle = '#e8e5ff'; hctx.font = '18px system-ui';
   hctx.fillText('Score final : ' + score, cx, cy - 30);
   if (best > 0) {
@@ -3299,6 +3597,7 @@ function drawOverlay() {
   } else if (state === S.MP_LOBBY) {
     if (mp) mp.drawLobby();
   } else {
+    if (state === S.PLAY) drawSpeedFX();
     for (const p of particles) {
       hctx.save(); hctx.globalAlpha = Math.max(0, p.life);
       if (p.type === 'txt') {
@@ -3328,6 +3627,11 @@ function drawOverlay() {
     hctx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
     hctx.restore();
   }
+  if (lightningFlash > 0.01) { // éclair : flash blanc bref sur tout l'écran
+    hctx.save(); hctx.globalAlpha = Math.min(0.75, lightningFlash * 0.75); hctx.fillStyle = '#eaf2ff';
+    hctx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+    hctx.restore();
+  }
   hctx.restore();
 }
 
@@ -3341,9 +3645,20 @@ function beginGame() {
     clearMultiplayerWorld();
     multiplayerMode = false;
   }
+
+  // ── Nouvelle carte à chaque partie SOLO : le monde (terrain, lacs, muraille, forêt)
+  //    est démoli puis regénéré avec un nouveau seed et de nouveaux pics. Le multijoueur
+  //    restaure toujours le terrain canonique avant de démarrer (restoreCanonicalTerrain).
+  disposeWorldGeometry();
+  regenerateTerrainSeed();
+  makeTerrain();
+  makeMountainScenery();
+  makeTrees();
+
   state = S.PLAY;
   document.body.style.cursor = 'none';
   score = 0; nest = 0; combo = 1; comboTimer = 0; lives = 1; overReason = 'eaten';
+  roundTime = 0; // la rampe de difficulté des ours repart de zéro
   screenShake = 0; hitFlash = 0; owlInvul = 60; treeCooldown = 0;
   speed = MAX_SPEED * 0.55; // décolle déjà lancé
 
@@ -3374,7 +3689,15 @@ function beginGame() {
   // État de vol/effets annexes remis à neuf
   stallMode = false; stallTimer = 0;
   skimTimer = 0; skimActive = false;
-  trailAccum = 0;
+  trailAccum = 0; comboFxAccum = 0;
+  hitStopTimer = 0;
+  camera.fov = 70; camera.updateProjectionMatrix();
+
+  // Météo remise au clair (le niveau retombe en fondu via updateWeatherFX)
+  weather.mode = 'clear'; weather.timer = 0; weather.next = rnd(RAIN_NEXT[0], RAIN_NEXT[1]);
+  lightningFlash = 0; lightningTimer = rnd(3, 7);
+  for (const d of precipData) anchorDrop(d, false); // les gouttes suivent le hibou au point de départ
+
   for (const d of fireflyData) anchorFirefly(d); // la nuée rejoint la clairière de départ
 }
 
@@ -3384,12 +3707,17 @@ function beginGame() {
 const clock = new THREE.Clock();
 
 function update() {
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const rawDt = Math.min(clock.getDelta(), 0.05);
+  updateAdaptiveQuality(rawDt);
+  // Ralenti d'impact : le temps du jeu se dilate un court instant sur les gros chocs
+  if (hitStopTimer > 0) hitStopTimer -= rawDt;
+  const dt = hitStopTimer > 0 ? rawDt * hitStopScale : rawDt;
 
   if (screenShake > 0) { screenShake *= 0.9; if (screenShake < 0.5) screenShake = 0; }
   if (hitFlash    > 0) { hitFlash    *= 0.85; if (hitFlash < 0.01) hitFlash = 0; }
 
   if (state === S.PLAY) {
+    roundTime += dt;
     if (owlInvul > 0) owlInvul--;
     if (treeCooldown > 0) treeCooldown--;
     rockInvul = Math.max(0, rockInvul - dt);
@@ -3400,11 +3728,13 @@ function update() {
     if (!multiplayerMode) {
       updateMoon(dt);
       updateStorm(dt);
+      updateWeatherLogic(dt);
       updateRocks(dt);
     }
     const speedRatio = updateFlight(dt);
     updateFlap(dt, speedRatio);
     updateBoostTrail(dt);
+    updateComboCascade(dt);
     if (multiplayerMode) {
       // Multijoueur : canon/balles/caisses remplacent branches/ours/cadeau/rase-mottes
       updateMPFire(dt);
@@ -3418,6 +3748,10 @@ function update() {
     }
     updateBoundaryGrid();
     updateCameraClip();
+    // FOV dynamique : le champ s'élargit avec la vitesse — la sensation de vitesse est exagérée
+    const targetFov = 70 + speedRatio * speedRatio * 14 + (buffs.speed > 0 ? 5 : 0);
+    camera.fov += (targetFov - camera.fov) * Math.min(1, 6 * dt);
+    camera.updateProjectionMatrix();
     owlGroup.visible = !(owlInvul > 0 && Math.floor(Date.now() / 80) % 2 !== 0);
   } else if (state === S.LOOT) {
     mouseDX = 0; mouseDY = 0;
@@ -3437,6 +3771,7 @@ function update() {
   // local — tourne aussi en salon, en pause et sur l'écran de mort.
   if (mp && multiplayerMode) mp.update(dt);
   updateMoonVisual(dt);
+  updateWeatherFX(dt); // après updateMoonVisual (qui fixe moonLight.intensity chaque frame)
   updateStars(dt);
   updateClouds(dt);
   updateParticles();
@@ -3487,6 +3822,9 @@ window.__hibouDebug = () => ({
   bears: bears.length,
   bearModes: bears.map(b => b.mode),
   rocks: rocks.length,
+  weather: weather.mode,
+  weatherLevel: Math.round(weather.level * 100) / 100,
+  pixelScale,
   branches: branches.length,
   nearestBranch: branches.length
     ? Math.round(Math.min(...branches.map(b => b.sprite.position.distanceTo(owlGroup.position))))
@@ -3515,6 +3853,7 @@ loadAssets().then(() => {
   makeBoundaryGrid();
   makeFX3D();
   makeFireflies();
+  makeWeather();
 
   // Multijoueur : le module réseau reçoit via `hooks` les seules références du
   // jeu dont il a besoin (tout l'état vit dans la closure __hibouStart).
@@ -3537,7 +3876,6 @@ loadAssets().then(() => {
   assetsReady = true;
   loop();
 });
-}; // fin window.__hibouStart
 </script>
 </body>
 </html>
