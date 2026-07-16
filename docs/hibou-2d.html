@@ -39,6 +39,7 @@ let lives       = 1;
 let score       = 0;
 let nest        = 0;
 let best        = 0;
+let gameTime    = 0;   // frames écoulées en S.PLAY (60fps) ; pilote la difficulté temporelle des ours
 
 // ── Lune ────────────────────────────────────────
 let moon = {
@@ -350,6 +351,12 @@ function handleSliderDrag(clientX) {
 // ══════════════════════════════════════════════════
 //  LOGIQUE OURS
 // ══════════════════════════════════════════════════
+// Courbe de difficulté temporelle : monte vite puis plafonne (asymptote vers 1), jamais de saut brutal.
+const DIFF_RAMP_TAU = 5400; // ≈90s à 60fps
+function difficultyFactor() {
+  return 1 - Math.exp(-gameTime / DIFF_RAMP_TAU);
+}
+
 function newBear() {
   const side = Math.floor(Math.random() * 4);
   const x    = side === 0 ? -50 : side === 1 ? canvas.width  + 50 : rnd(0, canvas.width);
@@ -360,10 +367,12 @@ function newBear() {
   else if (moon.state === 'full')  life = rnd(360,  720);
   else                             life = rnd(480,  1200);
 
+  const df = difficultyFactor(); // 0 (début) → ~1 (plateau après 4-5 min)
   let spdBase;
-  if      (moon.state === 'blood') spdBase = rnd(3.8, 7.0);
-  else if (moon.state === 'full')  spdBase = rnd(2.2, 3.8);
-  else                             spdBase = 1.8 + Math.min(score * 0.05, 4.5);
+  if      (moon.state === 'blood') spdBase = rnd(3.8, 7.0) * (1 + df * 0.3);
+  else if (moon.state === 'full')  spdBase = rnd(2.2, 3.8) * (1 + df * 0.3);
+  else                             spdBase = (1.8 + Math.min(score * 0.05, 4.5)) * (1 + df * 0.3);
+  spdBase = Math.min(spdBase, 9); // cap global, garde le jeu jouable en fin de run
 
   const updateDelay = moon.state === 'blood' ? rnd(15, 40) : rnd(20, 80);
   const driftAngle  = rnd(0, Math.PI * 2);
@@ -428,6 +437,17 @@ function spawnFX(x, y, amount, type = 'collect', txt = '') {
   if (txt) particles.push({ type: 'txt', x, y, vx: 0, vy: -3, life: 1.5, txt, tType: type });
 }
 
+function spawnWrapFX(x, y) {
+  for (let i = 0; i < 5; i++) {
+    const a = rnd(0, Math.PI * 2);
+    particles.push({
+      type: 'dot', x, y,
+      vx: Math.cos(a) * rnd(1, 3), vy: Math.sin(a) * rnd(1, 3),
+      life: 0.35, c: 'rgba(160,210,255,0.75)'
+    });
+  }
+}
+
 // ══════════════════════════════════════════════════
 //  INIT / RESET
 // ══════════════════════════════════════════════════
@@ -436,7 +456,7 @@ function beginGame() {
   state = S.PLAY; canvas.style.cursor = 'none';
   owl.x = canvas.width / 2; owl.y = canvas.height / 2; owl.invul = 60;
   owl.px = owl.x; owl.py = owl.y; owl.vx = 0; owl.angle = 0; owl.flap = 0; owl.rockInvul = 0;
-  score = 0; nest = 0; combo = 1; comboTimer = 0; screenShake = 0; lives = 1;
+  score = 0; nest = 0; combo = 1; comboTimer = 0; screenShake = 0; lives = 1; gameTime = 0;
   moon  = { state: 'none', timer: 0, next: 900, fillProgress: 0 };
   storm = { active: false, timer: 0, next: rnd(1800, 3600), windAngle: 0, windForce: 0, gustPhase: 0 };
   rocks = []; windLines = [];
@@ -460,6 +480,9 @@ function update() {
 
   if (state === S.LOOT) { updateLootbox(); updateParticles(); return; }
   if (state !== S.PLAY) { updateParticles(); return; }
+
+  // ── Difficulté temporelle ──
+  gameTime++;
 
   // ── Timers globaux ──
   owl.bob += 0.1;
@@ -491,9 +514,20 @@ function update() {
     owl.x += Math.cos(storm.windAngle) * storm.windForce;
     owl.y += Math.sin(storm.windAngle) * storm.windForce;
   }
+  // ── Wrap-around façon Snake : sortir d'un bord fait réapparaître de l'autre côté ──
   const r = owl.size * 0.4;
-  owl.x = Math.max(r, Math.min(canvas.width  - r, owl.x));
-  owl.y = Math.max(r, Math.min(canvas.height - r, owl.y));
+  if (owl.x < r || owl.x > canvas.width - r) {
+    const nx = owl.x < r ? canvas.width - r : r;
+    owl.px += nx - owl.x;   // décale px du même delta pour ne pas fausser mvx (angle/flap/traînée juste après)
+    owl.x = nx;
+    spawnWrapFX(owl.x, owl.y);
+  }
+  if (owl.y < r || owl.y > canvas.height - r) {
+    const ny = owl.y < r ? canvas.height - r : r;
+    owl.py += ny - owl.y;
+    owl.y = ny;
+    spawnWrapFX(owl.x, owl.y);
+  }
 
   // ── Cap & battement d'ailes ──
   const mvx = owl.x - owl.px, mvy = owl.y - owl.py;
