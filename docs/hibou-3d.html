@@ -110,6 +110,10 @@ const hudCanvas = document.getElementById('hud');
 const hctx = hudCanvas.getContext('2d');
 
 const renderer = new THREE.WebGLRenderer({ canvas: glCanvas, antialias: !LOW_SPEC });
+// Ombres : seul le soleil (cycle jour/nuit) en projette, jamais sur mobile (voir
+// updateDayNightCycle qui gate moonLight.castShadow à `dayFactor > seuil && !LOW_SPEC`).
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const PIXEL_RATIO_MAX = Math.min(window.devicePixelRatio || 1, LOW_SPEC ? 1.5 : 2);
 
 // ── Résolution adaptative : si les FPS s'effondrent, on baisse la définition de rendu
@@ -130,15 +134,15 @@ function updateAdaptiveQuality(rawDt) {
   renderer.setPixelRatio(PIXEL_RATIO_MAX * pixelScale);
 }
 
-// Dégradé de ciel bleu nuit (reprend les teintes de drawSky() du jeu 2D : #04040e en haut → #0c1030 en bas)
-function makeSkyGradient() {
+// Dégradé de ciel : nuit (teintes de drawSky() du jeu 2D) ↔ jour, lerpés par updateDayNightCycle.
+function makeSkyGradient(topHex, bottomHex) {
   const canvas = document.createElement('canvas');
   canvas.width = 2;
   canvas.height = 256;
   const ctx = canvas.getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  grad.addColorStop(0, '#04040e');
-  grad.addColorStop(1, '#0c1030');
+  grad.addColorStop(0, topHex);
+  grad.addColorStop(1, bottomHex);
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const tex = new THREE.CanvasTexture(canvas);
@@ -148,7 +152,7 @@ function makeSkyGradient() {
 }
 
 const scene = new THREE.Scene();
-scene.background = makeSkyGradient();
+scene.background = makeSkyGradient('#04040e', '#0c1030');
 // Brouillard configuré plus bas, une fois ARENA_RADIUS_XZ connu (doit estomper le terrain
 // juste après le mur invisible pour qu'on ne voie plus de sol "accessible" au-delà de la limite).
 
@@ -159,8 +163,88 @@ scene.add(ambientLight);
 const moonLight = new THREE.DirectionalLight(0xccccff, 2.2);
 moonLight.position.set(-60, 90, 30);
 scene.add(moonLight);
+scene.add(moonLight.target); // cible suivie chaque frame (updateDayNightCycle) : centre la caméra d'ombre sur le hibou
+moonLight.shadow.mapSize.set(1536, 1536);
+moonLight.shadow.camera.near = 5;
+moonLight.shadow.camera.far = 400;
+moonLight.shadow.camera.left = -180;
+moonLight.shadow.camera.right = 180;
+moonLight.shadow.camera.top = 180;
+moonLight.shadow.camera.bottom = -180;
+moonLight.shadow.bias = -0.0018;
 const fillLight = new THREE.HemisphereLight(0x9fb4ff, 0x24361f, 0.7);
 scene.add(fillLight);
+
+// ══════════════════════════════════════════════════
+//  CYCLE JOUR/NUIT — boucle continue basée sur l'horloge murale (Date.now()), donc
+//  naturellement synchrone entre clients multijoueur sans aucune donnée réseau.
+//  moonLight fait office d'unique lumière céleste : soleil le jour, lune la nuit.
+// ══════════════════════════════════════════════════
+const DAY_NIGHT_CYCLE_SECONDS = 480; // 8 minutes, boucle continue
+const SUN_COLOR = new THREE.Color(0xfff4d6);
+const SUN_BASE_LIGHT = 1.8, SUN_PEAK_LIGHT = 3.4;
+const AMBIENT_NIGHT_INTENSITY = 0.9, AMBIENT_DAY_INTENSITY = 1.3;
+const AMBIENT_NIGHT_COLOR = new THREE.Color(0x8899ff), AMBIENT_BLOOD_COLOR = new THREE.Color(0xff6666);
+const AMBIENT_DAY_COLOR = new THREE.Color(0xbfe0ff);
+const FILL_SKY_NIGHT = new THREE.Color(0x9fb4ff), FILL_SKY_DAY = new THREE.Color(0xbfe0ff);
+const FILL_GROUND_NIGHT = new THREE.Color(0x24361f), FILL_GROUND_DAY = new THREE.Color(0x3a4a28);
+const SKY_NIGHT_TOP = new THREE.Color(0x04040e), SKY_NIGHT_BOTTOM = new THREE.Color(0x0c1030);
+const SKY_DAY_TOP = new THREE.Color(0x3a7bd5), SKY_DAY_BOTTOM = new THREE.Color(0xbfe4ff);
+const FOG_CLEAR_NIGHT = new THREE.Color(0x0c1030), FOG_CLEAR_DAY = new THREE.Color(0x9cc7e8);
+let dayFactor = 0; // 0 = nuit pleine, 1 = jour plein (transition douce à l'horizon)
+let sunMesh;
+const _sunDir = new THREE.Vector3(), _moonDir = new THREE.Vector3();
+const _dnNightColor = new THREE.Color(), _dnAmbientNightTarget = new THREE.Color();
+const _dnSkyTop = new THREE.Color(), _dnSkyBottom = new THREE.Color();
+let dayNightAmbientBase = AMBIENT_NIGHT_INTENSITY; // lu par updateWeatherFX (remplace l'ancien 0.9 en dur)
+let skyGradientTimer = 0;
+
+function updateSkyGradient() {
+  _dnSkyTop.lerpColors(SKY_NIGHT_TOP, SKY_DAY_TOP, dayFactor);
+  _dnSkyBottom.lerpColors(SKY_NIGHT_BOTTOM, SKY_DAY_BOTTOM, dayFactor);
+  if (scene.background && scene.background.isTexture) scene.background.dispose();
+  scene.background = makeSkyGradient('#' + _dnSkyTop.getHexString(), '#' + _dnSkyBottom.getHexString());
+}
+
+function updateDayNightCycle(dt) {
+  const phase = (Date.now() / 1000 % DAY_NIGHT_CYCLE_SECONDS) / DAY_NIGHT_CYCLE_SECONDS;
+  const angle = phase * Math.PI * 2;
+  _sunDir.set(Math.cos(angle), Math.sin(angle), 0.35).normalize();
+  _moonDir.set(-_sunDir.x, -_sunDir.y, -_sunDir.z);
+  const elev = _sunDir.y;
+  dayFactor = THREE.MathUtils.smoothstep(elev, -0.05, 0.05);
+
+  // Astres : deux meshes distincts aux extrémités opposées du même arc, cachés sous l'horizon.
+  if (sunMesh)  { sunMesh.position.copy(_sunDir).multiplyScalar(MOON_DISTANCE);  sunMesh.visible  = _sunDir.y  > -0.05; }
+  if (moonMesh) { moonMesh.position.copy(_moonDir).multiplyScalar(MOON_DISTANCE); moonMesh.visible = _moonDir.y > -0.05; }
+
+  // Lumière céleste unique : positionnée PRÈS DU JOUEUR (pas à la distance des astres) pour
+  // que le frustum de la caméra d'ombre reste petit et net (voir shadow.camera.* ci-dessus).
+  const activeDir = dayFactor > 0.5 ? _sunDir : _moonDir;
+  moonLight.position.copy(owlGroup.position).addScaledVector(activeDir, 150);
+  moonLight.target.position.copy(owlGroup.position);
+  moonLight.castShadow = dayFactor > 0.15 && !LOW_SPEC;
+
+  const nightIntensity = THREE.MathUtils.lerp(MOON_BASE_LIGHT, MOON_FULL_LIGHT, moon.fillProgress);
+  _dnNightColor.lerpColors(MOON_COLOR_NORMAL, MOON_COLOR_BLOOD, moon.state === 'blood' ? moon.fillProgress : 0);
+  const dayIntensity = THREE.MathUtils.lerp(SUN_BASE_LIGHT, SUN_PEAK_LIGHT, THREE.MathUtils.clamp(elev, 0, 1));
+  moonLight.intensity = THREE.MathUtils.lerp(nightIntensity, dayIntensity, dayFactor);
+  moonLight.color.lerpColors(_dnNightColor, SUN_COLOR, dayFactor);
+
+  _dnAmbientNightTarget.copy(moon.state === 'blood' ? AMBIENT_BLOOD_COLOR : AMBIENT_NIGHT_COLOR);
+  ambientLight.color.lerpColors(_dnAmbientNightTarget, AMBIENT_DAY_COLOR, dayFactor);
+  dayNightAmbientBase = THREE.MathUtils.lerp(AMBIENT_NIGHT_INTENSITY, AMBIENT_DAY_INTENSITY, dayFactor);
+
+  fillLight.color.lerpColors(FILL_SKY_NIGHT, FILL_SKY_DAY, dayFactor);
+  fillLight.groundColor.lerpColors(FILL_GROUND_NIGHT, FILL_GROUND_DAY, dayFactor);
+
+  if (starMat) starMat.opacity = 0.95 * (1 - dayFactor);
+
+  FOG_CLEAR.lerpColors(FOG_CLEAR_NIGHT, FOG_CLEAR_DAY, dayFactor);
+
+  skyGradientTimer -= dt;
+  if (skyGradientTimer <= 0) { skyGradientTimer = 1; updateSkyGradient(); }
+}
 
 // Le sol plat d'origine est remplacé par un terrain procédural (voir section TERRAIN) :
 // relief fBm, montagnes gaussiennes, lacs sous le niveau d'eau, colorisation par altitude/pente.
@@ -170,8 +254,9 @@ scene.add(fillLight);
 // ══════════════════════════════════════════════════
 let moonMesh;
 let moonMaterials = []; // matériaux émissifs de la lune (1 pour la sphère de repli, n pour le GLB)
-let starGeo, starBaseColors, starPhases;
+let starGeo, starBaseColors, starPhases, starMat;
 const MOON_DISTANCE    = 2400;  // distance au centre de l'arène, bien au-delà d'ARENA_RADIUS_XZ/Y
+const SUN_RADIUS       = 210;   // disque solaire, même ordre de grandeur que MOON_RADIUS
 const MOON_RADIUS      = 225;   // rayon de base (mis à l'échelle avec MOON_DISTANCE pour garder la taille apparente)
 const MOON_FULL_SCALE  = 1.7;
 const MOON_BASE_LIGHT  = 2.2, MOON_FULL_LIGHT = 3.6; // la lune éclaire davantage le sol qu'auparavant
@@ -224,11 +309,19 @@ function makeSky() {
   starGeo = new THREE.BufferGeometry();
   starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  const starMat = new THREE.PointsMaterial({
+  starMat = new THREE.PointsMaterial({
     size: 8, vertexColors: true, transparent: true, opacity: 0.95,
     depthWrite: false, sizeAttenuation: true, fog: false
   });
   scene.add(new THREE.Points(starGeo, starMat));
+
+  // Disque solaire : simple sphère non éclairée (toujours pleinement lumineuse), à l'opposé
+  // de la lune sur le même arc (voir updateDayNightCycle) — pas de cratères, pas de phases.
+  sunMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(SUN_RADIUS, 24, 16),
+    new THREE.MeshBasicMaterial({ color: SUN_COLOR, fog: false })
+  );
+  scene.add(sunMesh);
 
   const moonPos = moonLight.position.clone().normalize().multiplyScalar(MOON_DISTANCE);
   moonMesh = new THREE.Group(); // groupe extérieur : updateMoonVisual pilote scale/rotation dessus
@@ -419,83 +512,6 @@ function updateSmokeTrail(dt) {
   }
 }
 
-// ══════════════════════════════════════════════════
-//  LUCIOLES — nuées scintillantes au ras du sol, recyclées autour du hibou.
-//  La vie est en bas : elles attirent l'œil (et le vol) vers le sol, où les
-//  branches abondent et où le rase-mottes rapporte.
-// ══════════════════════════════════════════════════
-const FIREFLY_COUNT = LOW_SPEC ? 45 : 240;
-const FIREFLY_RANGE = 170;  // rayon d'ancrage autour du hibou
-let fireflies, fireflyData = [];
-const FIREFLY_COLORS = [new THREE.Color(0x9fff6a), new THREE.Color(0xffe08a), new THREE.Color(0x6affc8)];
-
-// (Ré)ancre une luciole près du hibou — plutôt DEVANT lui — au ras du terrain local.
-// La hauteur du sol est mémorisée à l'ancrage : zéro appel terrain par frame ensuite.
-function anchorFirefly(d) {
-  let ax, az;
-  if (velocity.lengthSq() > 4 && Math.random() < 0.55) {
-    const heading = Math.atan2(velocity.z, velocity.x);
-    const a = heading + rnd(-1.1, 1.1), r = rnd(40, FIREFLY_RANGE);
-    ax = owlGroup.position.x + Math.cos(a) * r;
-    az = owlGroup.position.z + Math.sin(a) * r;
-  } else {
-    const a = rnd(0, Math.PI * 2), r = rnd(15, FIREFLY_RANGE);
-    ax = owlGroup.position.x + Math.cos(a) * r;
-    az = owlGroup.position.z + Math.sin(a) * r;
-  }
-  d.x = ax; d.z = az;
-  d.groundY = effectiveGroundY(ax, az);
-  d.hover = rnd(0.6, 5);
-  d.phase = rnd(0, Math.PI * 2);
-  d.twinkle = rnd(1.5, 4);
-  d.wander = rnd(0.3, 1.1);
-  d.color = FIREFLY_COLORS[Math.floor(Math.random() * FIREFLY_COLORS.length)];
-}
-
-function makeFireflies() {
-  const positions = new Float32Array(FIREFLY_COUNT * 3);
-  const colors = new Float32Array(FIREFLY_COUNT * 3);
-  for (let i = 0; i < FIREFLY_COUNT; i++) {
-    const d = {};
-    anchorFirefly(d);
-    fireflyData.push(d);
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  const mat = new THREE.PointsMaterial({
-    map: glowTexture, size: 1.05, vertexColors: true, transparent: true,
-    blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true
-  });
-  fireflies = new THREE.Points(geo, mat);
-  fireflies.frustumCulled = false;
-  scene.add(fireflies);
-}
-
-function updateFireflies(dt) {
-  const pos = fireflies.geometry.attributes.position, col = fireflies.geometry.attributes.color;
-  const ox = owlGroup.position.x, oz = owlGroup.position.z;
-  for (let i = 0; i < FIREFLY_COUNT; i++) {
-    const d = fireflyData[i];
-    // Recyclage : trop loin derrière → réapparaît devant (nuée « infinie »)
-    const ddx = d.x - ox, ddz = d.z - oz;
-    if (ddx * ddx + ddz * ddz > FIREFLY_RANGE * FIREFLY_RANGE * 1.55) anchorFirefly(d);
-
-    d.phase += dt * d.twinkle;
-    d.x += Math.cos(d.phase * 0.7) * d.wander * dt;
-    d.z += Math.sin(d.phase * 0.9) * d.wander * dt;
-    pos.array[i * 3]     = d.x;
-    pos.array[i * 3 + 1] = d.groundY + d.hover + Math.sin(d.phase) * 0.6;
-    pos.array[i * 3 + 2] = d.z;
-    const a = 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(d.phase * 2.3)); // scintillement individuel
-    col.array[i * 3]     = d.color.r * a;
-    col.array[i * 3 + 1] = d.color.g * a;
-    col.array[i * 3 + 2] = d.color.b * a;
-  }
-  pos.needsUpdate = true;
-  col.needsUpdate = true;
-}
-
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h);
@@ -659,7 +675,7 @@ function makeInstancedFromModel(root, matrices) {
 //  ET aux collisions/placements — aucun échantillonnage de grille.
 // ══════════════════════════════════════════════════
 const TERRAIN_SIZE = 4500;  // x5 : couvre la nouvelle zone de jeu élargie (ARENA_RADIUS_XZ)
-const TERRAIN_SEGS = LOW_SPEC ? 72 : 160;
+const TERRAIN_SEGS = LOW_SPEC ? 96 : 240;
 const WATER_Y      = -3.0;  // niveau des lacs
 const HILL_AMP     = 24;    // amplitude des collines fBm (±) — terrain nettement plus vallonné
 const GROUND_DETAIL_AMP = 5.5; // bosses fines superposées, visibles même loin des montagnes/lacs
@@ -697,10 +713,22 @@ function valueNoise(x, z) {
   const c = hashNoise(ix, iz + 1), d = hashNoise(ix + 1, iz + 1);
   return a + (b - a) * sx + (c - a) * sz + (a - b - c + d) * sx * sz;
 }
-function fbm(x, z, octaves = 4) {
+function fbm(x, z, octaves = 5) {
   let sum = 0, amp = 0.5, freq = 1;
   for (let o = 0; o < octaves; o++) {
     sum += amp * valueNoise(x * freq, z * freq);
+    amp *= 0.5; freq *= 2.03;
+  }
+  return sum; // ~[0,1]
+}
+// Bruit "ridged" (crêtes franches, vallées larges) : mêmes octaves que fbm mais
+// on replie la valeur autour de 0.5 puis on la met au carré — plus de relief/détail
+// sans changer la forme macro (montagnes/muraille/lacs inchangés).
+function ridged(x, z, octaves = 3) {
+  let sum = 0, amp = 0.5, freq = 1;
+  for (let o = 0; o < octaves; o++) {
+    const n = 1 - Math.abs(valueNoise(x * freq, z * freq) * 2 - 1);
+    sum += amp * n * n;
     amp *= 0.5; freq *= 2.03;
   }
   return sum; // ~[0,1]
@@ -728,23 +756,84 @@ function fillMountainPeaks() {
 fillMountainPeaks(); // premier tirage au chargement (canonique, réutilisé par le multijoueur)
 const CANONICAL_MOUNTAIN_PEAKS = mountainPeaks.map(p => ({ ...p }));
 
-// Nouvelle carte à chaque partie SOLO : nouveau seed de bruit + nouveaux pics + nouvelle
-// forêt (treeRng reseedé). Le multijoueur, lui, ne doit JAMAIS voir un terrain différent
-// d'un client à l'autre : voir restoreCanonicalTerrain().
+// Rivières : PRNG dédié, seedé fixe (même patron que treeRng) — contrairement aux pics de
+// montagne (semés via Math.random() puis figés dans un snapshot), une rivière régénérée avec
+// la MÊME graine reproduit toujours le même tracé, donc pas besoin de snapshot : il suffit de
+// reseeder riverRng avec la constante fixe puis de rappeler fillRiverPaths().
+const RIVER_SEED = 20260716;
+let riverRng = mulberry32(RIVER_SEED);
+let riverPaths = []; // [{ points:[{x,z}], width, depth }]
+function fillRiverPaths() {
+  riverPaths = [];
+  const riverCount = 2 + Math.floor(riverRng() * 2); // 2 ou 3 rivières
+  for (let i = 0; i < riverCount; i++) {
+    const startAngle = (i / riverCount) * Math.PI * 2 + (riverRng() - 0.5);
+    let x = Math.cos(startAngle) * ARENA_RADIUS_XZ * 0.9; // source près de la muraille
+    let z = Math.sin(startAngle) * ARENA_RADIUS_XZ * 0.9;
+    let dirAngle = startAngle + Math.PI + (riverRng() - 0.5) * 0.6; // serpente vers le centre
+    const points = [{ x, z }];
+    const steps = 14 + Math.floor(riverRng() * 6);
+    const stepLen = (ARENA_RADIUS_XZ * 0.78) / steps;
+    for (let s = 0; s < steps; s++) {
+      dirAngle += (riverRng() - 0.5) * 0.7; // méandres
+      x += Math.cos(dirAngle) * stepLen;
+      z += Math.sin(dirAngle) * stepLen;
+      points.push({ x, z });
+    }
+    riverPaths.push({ points, width: 10 + riverRng() * 8, depth: 6 + riverRng() * 5 });
+  }
+}
+fillRiverPaths(); // premier tirage : déjà canonique, riverRng est seedé fixe (RIVER_SEED)
+
+// Distance au tracé de rivière le plus proche → creuse un chenal (s'élargit en fin de
+// tracé = embouchure/petit lac). Coût one-shot à la construction du maillage, négligeable.
+function riverCarve(x, z) {
+  let carve = 0;
+  for (const river of riverPaths) {
+    const pts = river.points;
+    let minDistSq = Infinity, tAlong = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const ax = pts[i].x, az = pts[i].z, bx = pts[i + 1].x, bz = pts[i + 1].z;
+      const abx = bx - ax, abz = bz - az;
+      const abLenSq = abx * abx + abz * abz || 1;
+      let t = ((x - ax) * abx + (z - az) * abz) / abLenSq;
+      t = Math.max(0, Math.min(1, t));
+      const px = ax + abx * t, pz = az + abz * t;
+      const dx = x - px, dz = z - pz;
+      const dSq = dx * dx + dz * dz;
+      if (dSq < minDistSq) { minDistSq = dSq; tAlong = (i + t) / (pts.length - 1); }
+    }
+    const dist = Math.sqrt(minDistSq);
+    const w = river.width * (1 + tAlong * 1.8);          // s'élargit vers l'embouchure
+    const depthHere = river.depth * (0.6 + tAlong * 0.8); // plus profond vers l'embouchure
+    carve += depthHere * (1 - THREE.MathUtils.smoothstep(dist, 0, w));
+  }
+  return carve;
+}
+
+// Nouvelle carte à chaque partie SOLO : nouveau seed de bruit + nouveaux pics + nouvelles
+// rivières + nouvelle forêt (treeRng reseedé). Le multijoueur, lui, ne doit JAMAIS voir un
+// terrain différent d'un client à l'autre : voir restoreCanonicalTerrain().
 function regenerateTerrainSeed() {
   terrainSeed = Math.random() * 1000;
   fillMountainPeaks();
+  riverRng = mulberry32(Math.floor(Math.random() * 1e9));
+  fillRiverPaths();
   treeRng = mulberry32(Math.floor(Math.random() * 1e9));
+  buildingRng = mulberry32(Math.floor(Math.random() * 1e9)); // makeBuildings() relit buildingRng au moment du placement
   worldRegenerated = true;
 }
 
-// Restaure le terrain canonique (seed fixe + pics + arbres d'origine) avant une manche
-// multijoueur, que le client ait joué une ou plusieurs parties solo entre-temps ou non.
+// Restaure le terrain canonique (seed fixe + pics + rivières + arbres + hameaux d'origine)
+// avant une manche multijoueur, que le client ait joué une ou plusieurs parties solo entre-temps ou non.
 function restoreCanonicalTerrain() {
   terrainSeed = CANONICAL_TERRAIN_SEED;
   mountainPeaks.length = 0;
   for (const p of CANONICAL_MOUNTAIN_PEAKS) mountainPeaks.push({ ...p });
+  riverRng = mulberry32(RIVER_SEED);
+  fillRiverPaths();
   treeRng = mulberry32(20260715);
+  buildingRng = mulberry32(BUILDING_SEED);
   worldRegenerated = false;
 }
 
@@ -779,6 +868,21 @@ function disposeWorldGeometry() {
   }
   mountainSceneryGroups = [];
   treeGroups = [];
+
+  // Hameaux/feux de camp : géométries/matériaux UNIQUES (procéduraux, pas de modèle GLB
+  // partagé) → on dispose vraiment, comme le terrain/l'eau.
+  for (const g of buildingGroups) {
+    scene.remove(g);
+    g.traverse(o => {
+      if (o.isMesh || o.isSprite) {
+        o.geometry && o.geometry.dispose();
+        o.material && o.material.dispose();
+      }
+    });
+  }
+  buildingGroups = [];
+  campfires = [];
+  for (const l of campfireLightPool) l.intensity = 0; // le pool lui-même persiste (créé une fois au boot)
 }
 
 function terrainHeight(x, z) {
@@ -786,6 +890,8 @@ function terrainHeight(x, z) {
   let h = (fbm(x * 0.008, z * 0.008) * 2 - 1) * HILL_AMP;
   // Relief fin superposé (fréquence plus haute) : bosses au sol même loin des montagnes/lacs
   h += (fbm(x * 0.035, z * 0.035, 3) * 2 - 1) * GROUND_DETAIL_AMP;
+  // Crêtes plus franches (bruit ridged) : casse la régularité du fBm, plus de polygones utiles
+  h += (ridged(x * 0.05, z * 0.05, 3) - 0.35) * (GROUND_DETAIL_AMP * 1.6);
   // Montagnes gaussiennes
   for (const p of mountainPeaks) {
     const dx = x - p.x, dz = z - p.z;
@@ -801,6 +907,7 @@ function terrainHeight(x, z) {
     const crag  = fbm(x * 0.008 - 5.1,  z * 0.008 + 44.2, 3);   // arêtes déchiquetées
     h += ringT * (RING_BASE + ridge * RING_VAR + crag * 90);
   }
+  h -= riverCarve(x, z); // chenaux de rivière creusés dans le relief (sous WATER_Y = eau visible)
   // Zone de départ aplanie (rayon ~25 autour du centre, fondu jusqu'à 80)
   const flat = THREE.MathUtils.smoothstep(d, 25, 80);
   return h * flat;
@@ -829,18 +936,29 @@ function makeTerrain() {
   const fpos = flat.attributes.position;
   const fnorm = flat.attributes.normal;
   const colors = new Float32Array(fpos.count * 3);
-  const c = new THREE.Color();
+  const c = new THREE.Color(), c2 = new THREE.Color();
+  // Palette élargie : chaque bande hauteur/pente mélange 2 variantes via un second canal
+  // de bruit ("humidité", décorrélé du relief) pour casser le banding et varier les teintes.
   const grassA = new THREE.Color(0x16321f), grassB = new THREE.Color(0x1e422a);
-  const sand   = new THREE.Color(0x4a4632), bed   = new THREE.Color(0x1c2822);
-  const rock   = new THREE.Color(0x3a3f46), snow  = new THREE.Color(0x9aa4b8);
+  const grassC = new THREE.Color(0x2a4a1e), grassD = new THREE.Color(0x3d5c28); // mousse sombre / herbe sèche claire
+  const sand    = new THREE.Color(0x4a4632), mud     = new THREE.Color(0x3a3020);
+  const bed     = new THREE.Color(0x1c2822);
+  const rockDark = new THREE.Color(0x2e333a), rockLight = new THREE.Color(0x4a5058);
+  const snow    = new THREE.Color(0x9aa4b8), snowBlue = new THREE.Color(0x7f92b8);
   for (let f = 0; f < fpos.count; f += 3) {
     const hAvg = (fpos.getY(f) + fpos.getY(f + 1) + fpos.getY(f + 2)) / 3;
     const nY   = (fnorm.getY(f) + fnorm.getY(f + 1) + fnorm.getY(f + 2)) / 3;
+    const fx = fpos.getX(f), fz = fpos.getZ(f);
+    const moisture = valueNoise(fx * 0.018 + 91.3, fz * 0.018 - 41.7);
     if (hAvg < WATER_Y - 0.5)       c.copy(bed);
-    else if (hAvg < WATER_Y + 1.2)  c.copy(sand);
-    else if (hAvg > SNOW_LINE)      c.copy(snow);
-    else if (nY < 0.62 || hAvg > TREE_LINE) c.copy(rock);
-    else c.lerpColors(grassA, grassB, valueNoise(fpos.getX(f) * 0.05, fpos.getZ(f) * 0.05));
+    else if (hAvg < WATER_Y + 1.2)  c.lerpColors(mud, sand, valueNoise(fx * 0.05, fz * 0.05));
+    else if (hAvg > SNOW_LINE)      c.lerpColors(snowBlue, snow, moisture);
+    else if (nY < 0.62 || hAvg > TREE_LINE) c.lerpColors(rockDark, rockLight, THREE.MathUtils.clamp((nY - 0.3) / 0.5, 0, 1));
+    else {
+      c.lerpColors(grassA, grassB, valueNoise(fx * 0.05, fz * 0.05));
+      c2.lerpColors(grassC, grassD, valueNoise(fx * 0.05 + 200, fz * 0.05 + 200));
+      c.lerp(c2, moisture);
+    }
     c.multiplyScalar(rnd(0.92, 1.08)); // léger tramage par facette
     for (let v = 0; v < 3; v++) {
       colors[(f + v) * 3] = c.r; colors[(f + v) * 3 + 1] = c.g; colors[(f + v) * 3 + 2] = c.b;
@@ -850,21 +968,44 @@ function makeTerrain() {
   const mesh = new THREE.Mesh(flat, new THREE.MeshStandardMaterial({
     vertexColors: true, flatShading: true, roughness: 1
   }));
+  mesh.receiveShadow = true;
   scene.add(mesh);
   terrainMesh = mesh;
 
-  // Lacs : un seul plan d'eau sous tout le terrain, visible dans les creux.
+  // Lacs/rivières : un seul plan d'eau sous tout le terrain, visible dans les creux.
+  // Segmenté (au lieu d'un quad 1×1) pour supporter une ondulation lente (updateWater) et
+  // pour que le polygonOffset limite le scintillement (z-fighting) au contact des berges.
+  const WATER_SEGS = LOW_SPEC ? 24 : 48;
   const water = new THREE.Mesh(
-    new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE),
+    new THREE.PlaneGeometry(TERRAIN_SIZE, TERRAIN_SIZE, WATER_SEGS, WATER_SEGS),
     new THREE.MeshStandardMaterial({
       color: 0x16305a, roughness: 0.15, metalness: 0.25,
-      transparent: true, opacity: 0.92
+      transparent: true, opacity: 0.92,
+      polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1
     })
   );
   water.rotation.x = -Math.PI / 2;
   water.position.y = WATER_Y;
+  water.receiveShadow = true;
   scene.add(water);
   waterMesh = water;
+}
+
+// Ondulation lente de la surface de l'eau : déplace la coordonnée Z locale du plan (qui
+// devient la hauteur monde une fois la rotation -90° sur X appliquée), pas un shader —
+// juste quelques milliers de sommets recalculés par frame, coût négligeable.
+let waterTime = 0;
+function updateWater(dt) {
+  if (!waterMesh) return;
+  waterTime += dt;
+  const pos = waterMesh.geometry.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const lx = pos.getX(i), ly = pos.getY(i);
+    const ripple = Math.sin(lx * 0.06 + waterTime * 0.6) * 0.18 + Math.cos(ly * 0.05 - waterTime * 0.45) * 0.18;
+    pos.setZ(i, ripple);
+  }
+  pos.needsUpdate = true;
+  waterMesh.geometry.computeVertexNormals();
 }
 
 // Chaînes de montagnes GLB plantées SUR la muraille procédurale : elles ajoutent
@@ -890,6 +1031,7 @@ function makeMountainScenery() {
     if (!matrices[i].length) return;
     const norm = normalizeModel(proto.clone(true), { height: 150, groundAlign: true });
     const group = makeInstancedFromModel(norm, matrices[i]);
+    group.traverse(o => { if (o.isInstancedMesh) { o.castShadow = true; o.receiveShadow = true; } });
     scene.add(group);
     mountainSceneryGroups.push(group);
   });
@@ -901,7 +1043,19 @@ function makeMountainScenery() {
 const CLOUD_COUNT  = LOW_SPEC ? 15 : 64;        // couvre l'arène élargie (l'ancien semis ±380 laissait le ciel vide au loin)
 const CLOUD_SPREAD = ARENA_RADIUS_XZ * 0.85;    // zone de semis
 const CLOUD_WRAP   = ARENA_RADIUS_XZ * 0.92;    // bord de recyclage de la dérive
+const CLOUD_OPACITY_TIERS = [0.35, 0.65, 0.92]; // léger / moyen / dense
 let cloudSets = []; // { group, data:[{pos, scale, rotY, speed}], parts }
+
+// Position de semis : ~60 % des nuages concentrés près de l'anneau de montagnes
+// (même rayon que makeMountainScenery), le reste dispersé sur toute l'arène.
+function pickCloudPos() {
+  if (Math.random() < 0.6) {
+    const angle = rnd(0, Math.PI * 2);
+    const dist = rnd(ARENA_RADIUS_XZ * 0.65, ARENA_RADIUS_XZ * 1.05);
+    return new THREE.Vector3(Math.cos(angle) * dist, rnd(110, 260), Math.sin(angle) * dist);
+  }
+  return new THREE.Vector3(rnd(-CLOUD_SPREAD, CLOUD_SPREAD), rnd(95, 240), rnd(-CLOUD_SPREAD, CLOUD_SPREAD));
+}
 
 function makeClouds() {
   const protos = [models.cloud1, models.cloud2, models.cloud3].filter(Boolean);
@@ -910,25 +1064,34 @@ function makeClouds() {
   const dummy = new THREE.Object3D();
   for (const proto of protos) {
     const norm = normalizeModel(proto.clone(true), { height: 6, groundAlign: false });
-    const data = [];
-    const matrices = [];
-    for (let i = 0; i < perType; i++) {
-      const d = {
-        pos: new THREE.Vector3(rnd(-CLOUD_SPREAD, CLOUD_SPREAD), rnd(95, 240), rnd(-CLOUD_SPREAD, CLOUD_SPREAD)),
-        scale: rnd(2.4, 6.5),
-        rotY: rnd(0, Math.PI * 2),
-        speed: rnd(1.2, 3.2)
-      };
-      data.push(d);
-      dummy.position.copy(d.pos);
-      dummy.rotation.set(0, d.rotY, 0);
-      dummy.scale.setScalar(d.scale);
-      dummy.updateMatrix();
-      matrices.push(dummy.matrix.clone());
+    // Sous-groupes par palier d'opacité : un InstancedMesh partage UN matériau pour toutes
+    // ses instances, donc l'opacité ne peut varier qu'entre groupes, pas par instance.
+    for (let tier = 0; tier < CLOUD_OPACITY_TIERS.length; tier++) {
+      const data = [];
+      const matrices = [];
+      const tierCount = Math.round(perType / CLOUD_OPACITY_TIERS.length);
+      for (let i = 0; i < tierCount; i++) {
+        const d = { pos: pickCloudPos(), scale: rnd(2.4, 6.5), rotY: rnd(0, Math.PI * 2), speed: rnd(1.2, 3.2) };
+        data.push(d);
+        dummy.position.copy(d.pos);
+        dummy.rotation.set(0, d.rotY, 0);
+        dummy.scale.setScalar(d.scale);
+        dummy.updateMatrix();
+        matrices.push(dummy.matrix.clone());
+      }
+      if (!matrices.length) continue;
+      const group = makeInstancedFromModel(norm, matrices);
+      group.traverse(o => {
+        if (o.isInstancedMesh) {
+          o.material = o.material.clone();
+          o.material.transparent = true;
+          o.material.opacity = CLOUD_OPACITY_TIERS[tier];
+          o.material.depthWrite = false; // limite les artefacts de tri entre nuages semi-transparents
+        }
+      });
+      scene.add(group);
+      cloudSets.push({ group, data });
     }
-    const group = makeInstancedFromModel(norm, matrices);
-    scene.add(group);
-    cloudSets.push({ group, data });
   }
 }
 
@@ -994,6 +1157,7 @@ function updateMoon(dt) {
     return;
   }
   if (moon.state === 'none') {
+    if (dayFactor > 0.5) return; // pas de déclenchement naturel en plein jour (les touches debug ci-dessus marchent toujours)
     moon.next -= dt;
     if (moon.next <= MOON_WARN_TIME && moon.fillProgress < 1) {
       moon.fillProgress = Math.min(1, moon.fillProgress + dt / MOON_WARN_TIME);
@@ -1017,10 +1181,8 @@ function updateMoonVisual(dt) {
     mat.emissive.lerpColors(MOON_COLOR_NORMAL, MOON_COLOR_BLOOD, isBlood ? t : 0);
     mat.emissiveIntensity = THREE.MathUtils.lerp(MOON_BASE_LIGHT, MOON_FULL_LIGHT, t);
   }
-
-  moonLight.intensity = THREE.MathUtils.lerp(MOON_BASE_LIGHT, MOON_FULL_LIGHT, t);
-  moonLight.color.lerp(new THREE.Color(isBlood ? 0xff5a5a : 0xccccff), 0.05);
-  ambientLight.color.lerp(new THREE.Color(isBlood ? 0xff6666 : 0x8899ff), 0.05);
+  // moonLight/ambientLight sont désormais pilotés par updateDayNightCycle (qui incorpore
+  // ce même moon.fillProgress/isBlood dans sa composante "nuit" avant de la mélanger au jour).
 }
 
 // Chaque étoile clignote indépendamment (alpha s.a oscillant entre 0.05 et 1
@@ -1274,7 +1436,7 @@ function updateWeatherLogic(dt) {
 }
 
 // Rendu météo (tourne aussi sur les écrans de menu : la pluie ne se fige pas).
-// Appelé APRÈS updateMoonVisual, qui fixe moonLight.intensity à chaque frame.
+// Appelé APRÈS updateMoonVisual/updateDayNightCycle, qui fixent moonLight/ambientLight/FOG_CLEAR.
 function updateWeatherFX(dt) {
   const target = storm.active ? 1 : weather.mode === 'rain' ? 0.7 : 0;
   weather.level += (target - weather.level) * Math.min(1, 1.2 * dt);
@@ -1284,7 +1446,7 @@ function updateWeatherFX(dt) {
   scene.fog.color.lerpColors(FOG_CLEAR, FOG_HEAVY, lv);
   scene.fog.near = ARENA_RADIUS_XZ * THREE.MathUtils.lerp(0.55, 0.28, lv);
   scene.fog.far  = ARENA_RADIUS_XZ * THREE.MathUtils.lerp(1.6, 0.95, lv);
-  ambientLight.intensity = 0.9 * (1 - 0.3 * lv) + lightningFlash * 1.6;
+  ambientLight.intensity = dayNightAmbientBase * (1 - 0.3 * lv) + lightningFlash * 1.6;
   moonLight.intensity = moonLight.intensity * (1 - 0.4 * lv) + lightningFlash * 2.5;
   lightningFlash = Math.max(0, lightningFlash - 3.2 * dt);
 
@@ -1414,8 +1576,207 @@ function makeTrees() {
   for (const type of types) {
     if (!type.matrices.length) continue;
     const group = makeInstancedFromModel(type.norm, type.matrices);
+    group.traverse(o => { if (o.isInstancedMesh) { o.castShadow = true; o.receiveShadow = true; } });
     scene.add(group);
     treeGroups.push(group);
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  HAMEAUX — chalets bois low-poly (simple / à étage / tour de guet) procéduraux,
+//  regroupés en hameaux ou éparpillés, + feux de camp. Purement décoratifs (comme
+//  la muraille de montagnes GLB) : pas de collision dédiée, juste du décor animé.
+//  Placement déterministe (buildingRng, même patron que treeRng) : doit être
+//  identique sur tous les clients multijoueur.
+// ══════════════════════════════════════════════════
+const BUILDING_SEED = 20260717;
+let buildingRng = mulberry32(BUILDING_SEED);
+const buildingRnd = (a, b) => a + buildingRng() * (b - a);
+
+let buildingGroups = [];
+let campfires = []; // { pos, group, flame }
+
+const WOOD_LIGHT = 0x8a6a3f, WOOD_DARK = 0x5a3d22, ROOF_COLOR = 0x2e2620, TOWER_ROOF_COLOR = 0x4a1e1e;
+
+// Toit pyramidal simplifié (cône à 4 côtés tourné de 45°) pour tous les bâtiments —
+// même langage visuel low-poly que la tour, robuste sans avoir besoin d'un vrai
+// prisme de toit à deux pans.
+function buildChalet(kind) {
+  const group = new THREE.Group();
+  const wallMat = new THREE.MeshStandardMaterial({ color: WOOD_LIGHT, roughness: 0.9, flatShading: true });
+  const trimMat = new THREE.MeshStandardMaterial({ color: WOOD_DARK, roughness: 0.9, flatShading: true });
+  const roofMat = new THREE.MeshStandardMaterial({ color: ROOF_COLOR, roughness: 0.85, flatShading: true });
+
+  if (kind === 'tower') {
+    const legR = 0.32, legH = 9, spread = 2.4;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(legR * 0.7, legR, legH, 5), trimMat);
+      leg.position.set(sx * spread, legH / 2, sz * spread);
+      leg.rotation.x = sz * 0.06; leg.rotation.z = -sx * 0.06; // légèrement inclinés : look pilotis
+      group.add(leg);
+    }
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.6, 3.4), wallMat);
+    cabin.position.y = legH + 1.3;
+    group.add(cabin);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.7, 2.2, 4), new THREE.MeshStandardMaterial({ color: TOWER_ROOF_COLOR, roughness: 0.85, flatShading: true }));
+    roof.position.y = legH + 2.6 + 1.1;
+    roof.rotation.y = Math.PI / 4;
+    group.add(roof);
+    group.userData.footprint = spread * 1.6;
+    return group;
+  }
+
+  const floors = kind === 'floor' ? 2 : 1;
+  const baseW = 4.2, baseD = 3.6, floorH = 2.6;
+  let y = 0;
+  for (let f = 0; f < floors; f++) {
+    const inset = f === 0 ? 1 : 0.88; // étage supérieur légèrement en retrait
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(baseW * inset, floorH, baseD * inset), f === 0 ? wallMat : trimMat);
+    wall.position.y = y + floorH / 2;
+    group.add(wall);
+    y += floorH;
+  }
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(baseW, baseD) * 0.78, 2.4, 4), roofMat);
+  roof.position.y = y + 1.2;
+  roof.rotation.y = Math.PI / 4;
+  group.add(roof);
+  group.userData.footprint = Math.max(baseW, baseD) * 1.05;
+  return group;
+}
+
+// Feu de camp : quelques bûches procédurales + un sprite flamme (emoji, même patron
+// que les autres éléments du HUD/monde en emojiTexture()) — pas de particule dédiée.
+const CAMPFIRE_LIGHT_COLOR = new THREE.Color(0xffa33e);
+function makeCampfire(x, groundY, z) {
+  const group = new THREE.Group();
+  const logMat = new THREE.MeshStandardMaterial({ color: 0x3f2c1c, roughness: 1, flatShading: true });
+  for (let i = 0; i < 4; i++) {
+    const log = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 1.4, 5), logMat);
+    log.rotation.z = Math.PI / 2;
+    log.rotation.y = (i / 4) * Math.PI * 2;
+    log.position.y = 0.15;
+    group.add(log);
+  }
+  group.traverse(o => { if (o.isMesh) o.castShadow = true; });
+
+  const flame = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: fireTexture, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+  }));
+  flame.scale.setScalar(1.6);
+  flame.position.y = 0.9;
+  group.add(flame);
+
+  group.position.set(x, groundY, z);
+  scene.add(group);
+  buildingGroups.push(group); // suit le même cycle de vie (dispose) que les bâtiments
+  campfires.push({ pos: new THREE.Vector3(x, groundY + 0.9, z), group, flame });
+}
+
+function makeBuildings() {
+  buildingGroups = [];
+  campfires = [];
+  const hamletCount = 3 + Math.floor(buildingRng() * 3); // 3 à 5
+  const hamletCenters = [];
+  let tries = 0;
+  while (hamletCenters.length < hamletCount && tries < 200) {
+    tries++;
+    const angle = buildingRnd(0, Math.PI * 2);
+    const r = 90 + buildingRng() * (TREE_SPREAD - 90);
+    const x = Math.cos(angle) * r, z = Math.sin(angle) * r;
+    const h = terrainHeight(x, z);
+    if (h < WATER_Y + 1.5 || h > TREE_LINE) continue;
+    const slope = Math.abs(terrainHeight(x + 3, z) - h) + Math.abs(terrainHeight(x, z + 3) - h);
+    if (slope > 1.4) continue; // terrain plat requis pour un hameau
+    let tooClose = false;
+    for (const c of hamletCenters) {
+      const dx = c.x - x, dz = c.z - z;
+      if (dx * dx + dz * dz < 130 * 130) { tooClose = true; break; }
+    }
+    if (tooClose) continue;
+    hamletCenters.push({ x, z, h });
+  }
+
+  function placeOne(x, z, kind) {
+    const h = terrainHeight(x, z);
+    if (h < WATER_Y + 1.2) return; // sécurité si le jitter retombe dans l'eau/la rivière
+    const group = buildChalet(kind);
+    group.position.set(x, h, z);
+    group.rotation.y = buildingRnd(0, Math.PI * 2);
+    group.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    scene.add(group);
+    buildingGroups.push(group);
+  }
+  function pickKind() {
+    const pick = buildingRng();
+    return pick < 0.55 ? 'simple' : pick < 0.9 ? 'floor' : 'tower';
+  }
+
+  for (const c of hamletCenters) {
+    const count = 4 + Math.floor(buildingRng() * 7); // 4 à 10 par hameau
+    for (let i = 0; i < count; i++) {
+      const a = buildingRnd(0, Math.PI * 2), r = buildingRnd(4, 22);
+      placeOne(c.x + Math.cos(a) * r, c.z + Math.sin(a) * r, pickKind());
+    }
+    makeCampfire(c.x, c.h, c.z); // un feu au centre de chaque hameau
+  }
+
+  const isolatedCount = 5 + Math.floor(buildingRng() * 6); // 5 à 10 isolés
+  let placed = 0, attempts = 0;
+  while (placed < isolatedCount && attempts < isolatedCount * 15) {
+    attempts++;
+    const angle = buildingRnd(0, Math.PI * 2);
+    const r = Math.sqrt(buildingRng()) * TREE_SPREAD;
+    const x = Math.cos(angle) * r, z = Math.sin(angle) * r;
+    if (r < 30) continue;
+    const h = terrainHeight(x, z);
+    if (h < WATER_Y + 1.5 || h > TREE_LINE) continue;
+    const slope = Math.abs(terrainHeight(x + 3, z) - h) + Math.abs(terrainHeight(x, z + 3) - h);
+    if (slope > 1.6) continue;
+    placeOne(x, z, pickKind());
+    if (buildingRng() < 0.3) makeCampfire(x, h, z); // 30 % de chance d'avoir son propre feu
+    placed++;
+  }
+}
+
+// Pool de vraies PointLight réassignées chaque frame aux feux les plus proches du joueur
+// (triées par distance) — pas d'ombre, pas de shader custom : peu gourmand par construction.
+const CAMPFIRE_POOL_SIZE = 7;
+let campfireLightPool = [];
+function initCampfireLightPool() {
+  for (const l of campfireLightPool) scene.remove(l);
+  campfireLightPool = [];
+  for (let i = 0; i < CAMPFIRE_POOL_SIZE; i++) {
+    const light = new THREE.PointLight(CAMPFIRE_LIGHT_COLOR, 0, 26, 2);
+    scene.add(light);
+    campfireLightPool.push(light);
+  }
+}
+
+const _cfDist = [];
+function updateCampfireLights() {
+  const now = performance.now();
+  for (const cf of campfires) {
+    cf.flame.scale.setScalar(1.4 + 0.2 * Math.sin(now * 0.01 + cf.pos.x));
+  }
+  if (!campfireLightPool.length) return;
+  if (!campfires.length) {
+    for (const l of campfireLightPool) l.intensity = 0;
+    return;
+  }
+  const px = owlGroup.position.x, py = owlGroup.position.y, pz = owlGroup.position.z;
+  _cfDist.length = 0;
+  for (const cf of campfires) {
+    const dx = cf.pos.x - px, dy = cf.pos.y - py, dz = cf.pos.z - pz;
+    _cfDist.push({ cf, d2: dx * dx + dy * dy + dz * dz });
+  }
+  _cfDist.sort((a, b) => a.d2 - b.d2);
+  for (let i = 0; i < campfireLightPool.length; i++) {
+    const light = campfireLightPool[i];
+    const entry = _cfDist[i];
+    if (!entry || entry.d2 > 90 * 90) { light.intensity = 0; continue; }
+    light.position.copy(entry.cf.pos);
+    const flicker = 0.85 + 0.15 * Math.sin(now * 0.006 + i * 7.3);
+    light.intensity = 2.4 * flicker;
   }
 }
 
@@ -1519,6 +1880,7 @@ function setupOwlVisual() {
     owlGroup.add(built.group);
     owl = { wings: built.wings, body: built.body, bob: built.group };
   }
+  owlGroup.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
 }
 
 // Caméra rigidement attachée au hibou : elle hérite de TOUTE son orientation (roulis inclus).
@@ -2193,6 +2555,7 @@ const branchTextures = {};
 for (const e of BRANCH_EMOJI) branchTextures[e] = emojiTexture(e);
 const bearTexture = emojiTexture('🐻', 160);
 const giftTexture = emojiTexture('🎁', 160);
+const fireTexture = emojiTexture('🔥', 128); // sprite des feux de camp (voir makeCampfire)
 
 // Halo radial doux (blanc → transparent), teinté à l'usage : lueur des branches et
 // du cadeau, menace des ours, points ronds des particules 3D et des lucioles.
@@ -2523,6 +2886,7 @@ let bearProto = null; // gabarit normalisé, cloné pour chaque ours
 function setupBearProto() {
   if (!models.bear) return;
   bearProto = normalizeModel(models.bear, { height: 1, groundAlign: false, yaw: BEAR_MODEL_YAW });
+  bearProto.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
 }
 
 function bearTarget() {
@@ -3786,6 +4150,7 @@ function beginMultiplayerGame(colorName) {
     makeTerrain();
     makeMountainScenery();
     makeTrees();
+    makeBuildings();
   }
 
   // Purge des systèmes solo : pas d'ours, pas de branches/cadeau/lune/tempête.
@@ -4622,6 +4987,7 @@ function beginGame() {
   makeTerrain();
   makeMountainScenery();
   makeTrees();
+  makeBuildings();
 
   state = S.PLAY;
   document.body.style.cursor = 'none';
@@ -4665,8 +5031,6 @@ function beginGame() {
   weather.mode = 'clear'; weather.timer = 0; weather.next = rnd(RAIN_NEXT[0], RAIN_NEXT[1]);
   lightningFlash = 0; lightningTimer = rnd(3, 7);
   for (const d of precipData) anchorDrop(d, false); // les gouttes suivent le hibou au point de départ
-
-  for (const d of fireflyData) anchorFirefly(d); // la nuée rejoint la clairière de départ
 }
 
 // ══════════════════════════════════════════════════
@@ -4744,15 +5108,17 @@ function update() {
   // local — tourne aussi en salon, en pause et sur l'écran de mort.
   if (mp && multiplayerMode) mp.update(dt);
   updateMoonVisual(dt);
-  updateWeatherFX(dt); // après updateMoonVisual (qui fixe moonLight.intensity chaque frame)
-  // Sur mobile, on gèle étoiles/nuages/lucioles sur les écrans vraiment inactifs (titre/pause/lobby)
+  updateDayNightCycle(dt); // après updateMoonVisual (mesh lune), avant updateWeatherFX (fixe moonLight/ambientLight/FOG_CLEAR)
+  updateWeatherFX(dt);
+  // Sur mobile, on gèle étoiles/nuages sur les écrans vraiment inactifs (titre/pause/lobby)
   // pour économiser du CPU — mais pas en LOOT/OVER/MP_DEAD où d'autres animations doivent finir.
   const mobileIdle = isMobile && (state === S.START || state === S.PAUSED || state === S.MP_LOBBY);
   if (!mobileIdle) updateStars(dt);
   if (!mobileIdle) updateClouds(dt);
+  if (!mobileIdle) updateWater(dt);
+  if (!mobileIdle) updateCampfireLights();
   updateParticles();
   updateFX3D(dt);      // les gerbes 3D finissent de retomber même en pause/game over
-  if (!mobileIdle) updateFireflies(dt); // la nuée scintille aussi sur les écrans de menu (desktop)
 }
 
 function render() {
@@ -4824,11 +5190,12 @@ loadAssets().then(() => {
   makeMountainScenery();
   makeClouds();
   makeTrees();
+  makeBuildings();
+  initCampfireLightPool();
   setupOwlVisual();
   setupBearProto();
   makeBoundaryGrid();
   makeFX3D();
-  makeFireflies();
   makeWeather();
 
   // Multijoueur : le module réseau reçoit via `hooks` les seules références du
