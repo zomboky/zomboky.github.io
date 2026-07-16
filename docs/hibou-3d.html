@@ -4313,7 +4313,10 @@ function drawStart() {
   hctx.font = 'bold 13px system-ui'; hctx.fillStyle = '#fff';
   hctx.fillText('SOLO', startSoloBtnRect.x + btnW / 2, btnY + btnH / 2);
   hctx.fillText('MULTIJOUEUR', startMultiBtnRect.x + btnW / 2, btnY + btnH / 2);
-  hctx.fillText('CAMPAGNE', startCampaignBtnRect.x + btnW / 2, btnY + btnH / 2);
+  hctx.font = 'bold 11px system-ui';
+  hctx.fillText('COMBAT', startCampaignBtnRect.x + btnW / 2, btnY + btnH / 2 - 8);
+  hctx.fillText("CONTRE L'IA", startCampaignBtnRect.x + btnW / 2, btnY + btnH / 2 + 8);
+  hctx.font = 'bold 13px system-ui';
   if (!isMobile) {
     hctx.fillStyle = '#9be0ff'; hctx.font = '11px system-ui';
     hctx.fillText('([M] = raccourci multijoueur)', cx, btnY + btnH + 20);
