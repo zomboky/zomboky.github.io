@@ -2988,7 +2988,7 @@ function updateMPFire(dt) {
   owlGroup.localToWorld(_firePos); // bouche du canon
   for (let i = 0; i < n; i++) {
     spawnBullet(_firePos, _fireDir, 'player');
-    mpAmmo--;
+    if (!vsBotMode) mpAmmo--; // munitions illimitées en campagne (mode de test)
     mp.sendFire();
   }
 }
@@ -3466,7 +3466,7 @@ function updateBotFlight(input, dt) {
 
 // ── IA de décision : choisit un état (approche/orbite/fuite/ravitaillement)
 //    et un point visé, converti en yaw/pitch/roll comme le ferait un joueur. ──
-const _aiToPlayer = new THREE.Vector3(), _aiLocal = new THREE.Vector3(), _aiFwd = new THREE.Vector3(), _aiUp = new THREE.Vector3(), _aiRight = new THREE.Vector3();
+const _aiToPlayer = new THREE.Vector3(), _aiLocal = new THREE.Vector3(), _aiFwd = new THREE.Vector3(), _aiUp = new THREE.Vector3(), _aiRight = new THREE.Vector3(), _aiProbeDir = new THREE.Vector3();
 function updateBotAI(dt) {
   const tuning = BOT_DIFFICULTY_TUNING[botDifficulty];
   bot.aiTimer -= dt;
@@ -3517,13 +3517,32 @@ function updateBotAI(dt) {
   _aiRight.set(1, 0, 0).applyQuaternion(q);
   _aiLocal.copy(bot.targetPoint).sub(bot.obj.position).normalize();
 
-  const yawIn   = THREE.MathUtils.clamp(_aiLocal.dot(_aiRight) * 3, -1, 1);
-  const pitchIn = THREE.MathUtils.clamp(-_aiLocal.dot(_aiUp) * 3, -1, 1);
-  const rollIn  = THREE.MathUtils.clamp(-yawIn * 1.2, -1, 1); // vire à plat façon virage coordonné
+  let yawIn   = THREE.MathUtils.clamp(_aiLocal.dot(_aiRight) * 3, -1, 1);
+  let pitchIn = THREE.MathUtils.clamp(-_aiLocal.dot(_aiUp) * 3, -1, 1);
+  let rollIn  = THREE.MathUtils.clamp(-yawIn * 1.2, -1, 1); // vire à plat façon virage coordonné
+  let thrustHeld = bot.aiState !== 'evade' || _aiLocal.dot(_aiFwd) > -0.3;
 
-  const thrustHeld = bot.aiState !== 'evade' || _aiLocal.dot(_aiFwd) > -0.3;
+  // Évitement de terrain : sonde le relief devant le bot, à chaque frame (pas
+  // au tick de décision — sinon un bot "Facile" au tick lent percute avant de
+  // réagir). Priorité absolue sur la cible visée tant que la marge est courte :
+  // cabrer, se remettre à plat et pousser les gaz à fond pour dégager.
+  _aiProbeDir.copy(_aiFwd).setY(0);
+  if (_aiProbeDir.lengthSq() > 1e-6) _aiProbeDir.normalize(); else _aiProbeDir.set(0, 0, -1);
+  const probeDist = THREE.MathUtils.clamp(bot.speed * 1.6, 12, 60);
+  const probeX = bot.obj.position.x + _aiProbeDir.x * probeDist;
+  const probeZ = bot.obj.position.z + _aiProbeDir.z * probeDist;
+  const safeAlt = effectiveGroundY(probeX, probeZ) + OWL_GROUND_CLEAR * 4;
+  const margin = bot.obj.position.y - safeAlt;
+  const avoidingTerrain = margin < 10;
+  if (avoidingTerrain) {
+    const urgency = THREE.MathUtils.clamp((10 - margin) / 10, 0, 1);
+    pitchIn = THREE.MathUtils.lerp(pitchIn, -1, urgency);
+    rollIn  = THREE.MathUtils.lerp(rollIn, 0, urgency);
+    thrustHeld = true;
+  }
+
   updateBotFlight({ yawIn, pitchIn, rollIn, thrustHeld, brakeHeld: false }, dt);
-  bot.throttle = Math.min(bot.throttle, tuning.throttleCap);
+  bot.throttle = avoidingTerrain ? bot.throttle : Math.min(bot.throttle, tuning.throttleCap);
 
   // Décision de tir : cône de précision + délai de réaction, seulement en approche/orbite.
   const aimable = bot.aiState === 'approach' || bot.aiState === 'orbit';
@@ -3558,7 +3577,7 @@ function updateBotFire(dt) {
   bot.obj.localToWorld(_botFirePos);
   for (let i = 0; i < n; i++) {
     spawnBullet(_botFirePos, _botFireDir, 'bot');
-    bot.ammo--;
+    // munitions illimitées en campagne (mode de test) — pas de décompte
   }
 }
 
