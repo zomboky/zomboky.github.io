@@ -501,8 +501,16 @@ function update() {
   owl.px = owl.x; owl.py = owl.y;
   if (mouse.on) {
     const lerpF = getMouseLerp(buffs.speed > 0);
-    owl.x += (mouse.x - owl.x) * lerpF;
-    owl.y += (mouse.y - owl.y) * lerpF;
+    let dx = (mouse.x - owl.x) * lerpF;
+    let dy = (mouse.y - owl.y) * lerpF;
+    // Après un wrap-around, la souris reste au même endroit à l'écran alors que le hibou
+    // vient d'être téléporté à l'opposé : la distance explose et lerpF*distance donne un
+    // bond de vitesse énorme. On plafonne la vitesse du suivi souris pour l'empêcher.
+    const maxStep = owl.speed * 8;
+    const stepMag = Math.hypot(dx, dy);
+    if (stepMag > maxStep) { const k = maxStep / stepMag; dx *= k; dy *= k; }
+    owl.x += dx;
+    owl.y += dy;
   } else {
     if (keys['ArrowLeft']  || keys['a']) owl.x -= owl.speed;
     if (keys['ArrowRight'] || keys['d']) owl.x += owl.speed;
