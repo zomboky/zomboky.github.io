@@ -168,7 +168,7 @@ export function initMultiplayer(hooks) {
         roomId = msg.roomId;
         myColor = msg.color;
         myId = msg.youId;
-        roster = msg.players || [];
+        roster = (msg.players || []).map((p) => ({ kills: 0, ...p }));
         lobbyError = '';
         for (const p of roster) {
           if (p.id !== myId) addRemote(p);
@@ -183,7 +183,7 @@ export function initMultiplayer(hooks) {
       }
 
       case 'player-joined': {
-        roster.push({ id: msg.id, pseudo: msg.pseudo, color: msg.color, alive: true });
+        roster.push({ id: msg.id, pseudo: msg.pseudo, color: msg.color, alive: true, kills: 0 });
         addRemote({ id: msg.id, pseudo: msg.pseudo, color: msg.color, alive: true });
         break;
       }
@@ -200,6 +200,7 @@ export function initMultiplayer(hooks) {
         r.targetPos.fromArray(msg.pos);
         r.targetQuat.fromArray(msg.quat).normalize();
         if (Array.isArray(msg.vel)) r.vel.fromArray(msg.vel);
+        if (Array.isArray(msg.dmg)) r.dmg = msg.dmg; // [leftWing, rightWing, tail] — pour la fumée de dégâts
         r.timeSincePacket = 0;
         r.alive = msg.alive !== false;
         if (!r.hasState) {
@@ -262,6 +263,13 @@ export function initMultiplayer(hooks) {
         break;
       }
 
+      case 'kill': {
+        const killer = roster.find((p) => p.id === msg.killerId);
+        if (killer) killer.kills = (killer.kills || 0) + 1;
+        if (hooks.onKill) hooks.onKill(msg.killerId, msg.targetId);
+        break;
+      }
+
       case 'error': {
         lobbyError = msg.message || 'Erreur serveur.';
         break;
@@ -294,6 +302,7 @@ export function initMultiplayer(hooks) {
       timeSincePacket: 0,
       hasState: false,
       alive: p.alive !== false,
+      dmg: [0, 0, 0],
     });
   }
 
@@ -369,6 +378,7 @@ export function initMultiplayer(hooks) {
 
     // — état consultable par le jeu —
     inRoom() { return roomId !== null; },
+    myId() { return myId; },
     myColor() { return myColor; },
     roster() { return roster; },
     remotesList() {
@@ -405,6 +415,7 @@ export function initMultiplayer(hooks) {
               pos: [round2(s.pos.x), round2(s.pos.y), round2(s.pos.z)],
               quat: [round3(s.quat.x), round3(s.quat.y), round3(s.quat.z), round3(s.quat.w)],
               vel: [round2(s.vel.x), round2(s.vel.y), round2(s.vel.z)],
+              dmg: Array.isArray(s.dmg) ? s.dmg.map(round3) : undefined,
               seq: seq++,
             });
           }

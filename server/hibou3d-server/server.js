@@ -22,6 +22,7 @@ const MAX_PLAYERS_PER_ROOM = 4;
 const MAG_CAP = 150;          // taille du chargeur (côté client aussi)
 const FIRE_RATE_PER_SEC = 100; // 6000 coups/min
 const AMMO_PICKUP_GRANT = 60;  // munitions rendues par caisse ramassée
+const KILL_AMMO_GRANT = 80;    // munitions rendues au tireur pour un kill confirmé
 
 // Les 4 auras, assignées dans l'ordre à mesure que les joueurs rejoignent.
 const AURA_COLOR_ORDER = ['brown', 'purple', 'yellow', 'green'];
@@ -75,6 +76,13 @@ function broadcastRoom(room, message, exclude) {
   for (const ws of room.players.keys()) {
     if (ws !== exclude) send(ws, message);
   }
+}
+
+function findPlayerEntryById(room, id) {
+  for (const [ws, p] of room.players) {
+    if (p.id === id) return { ws, player: p };
+  }
+  return null;
 }
 
 function roomRoster(room) {
@@ -132,6 +140,7 @@ function joinRoom(ws, room) {
     ammo: MAG_CAP,
     fireTokens: FIRE_RATE_PER_SEC,
     lastTokenRefill: Date.now(),
+    lastHitBy: null, // dernier tireur nous ayant touché — crédité du kill si on meurt
   };
   room.players.set(ws, player);
   room.colorsInUse.add(color);
@@ -309,6 +318,7 @@ function handleMessage(ws, msg) {
         pos: msg.pos,
         quat: msg.quat,
         vel: msg.vel,
+        dmg: Array.isArray(msg.dmg) ? msg.dmg : undefined,
         alive: player.alive,
         seq: msg.seq,
       }, ws);
@@ -329,10 +339,13 @@ function handleMessage(ws, msg) {
     case 'hit': {
       const { room, player } = currentPlayer(ws);
       if (!room || !player || !player.alive) return;
-      const location = ['head', 'left-wing', 'right-wing', 'body'].includes(msg.location)
+      const location = ['head', 'left-wing', 'right-wing', 'tail', 'body'].includes(msg.location)
         ? msg.location : 'body';
       // Relaie à toute la room (y compris la victime, qui applique elle-même
-      // l'effet sur son propre hibou).
+      // l'effet sur son propre hibou), et mémorise le tireur pour créditer un
+      // kill si la victime meurt de ce coup (voir 'died' ci-dessous).
+      const target = findPlayerEntryById(room, msg.targetId);
+      if (target) target.player.lastHitBy = player.id;
       broadcastRoom(room, { type: 'hit', shooterId: player.id, targetId: msg.targetId, location });
       break;
     }
@@ -342,6 +355,15 @@ function handleMessage(ws, msg) {
       if (!room || !player) return;
       player.alive = false;
       room.lastActivity = Date.now();
+      if (player.lastHitBy) {
+        const shooter = findPlayerEntryById(room, player.lastHitBy);
+        if (shooter) {
+          shooter.player.ammo = Math.min(MAG_CAP, shooter.player.ammo + KILL_AMMO_GRANT);
+          send(shooter.ws, { type: 'ammo', ammo: shooter.player.ammo });
+          broadcastRoom(room, { type: 'kill', killerId: shooter.player.id, targetId: player.id });
+        }
+        player.lastHitBy = null;
+      }
       broadcastRoom(room, { type: 'died', id: player.id, cause: msg.cause === 'headshot' ? 'headshot' : 'other' }, ws);
       break;
     }
