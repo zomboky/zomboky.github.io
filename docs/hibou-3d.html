@@ -274,7 +274,8 @@ const FX3D_KINDS = {
   dust:    { colors: [0x8a7a5c, 0x6f6a58, 0x9c8f70], speed: [2, 7],     life: [0.6, 1.1],  grav: 6,   up: 5 },
   burst:   { colors: [0xff5533, 0xffaa00, 0xffffff], speed: [5, 14],    life: [0.4, 0.8],  grav: 4,   up: 3 },
   sparkle: { colors: [0xffe066, 0xfff2b0, 0xffc030], speed: [3, 9],     life: [0.7, 1.3],  grav: -1,  up: 5 },
-  trail:   { colors: [0x9fd8ff, 0xe8f6ff],           speed: [0.4, 1.6], life: [0.25, 0.5], grav: 0,   up: 0.5 }
+  trail:   { colors: [0x9fd8ff, 0xe8f6ff],           speed: [0.4, 1.6], life: [0.25, 0.5], grav: 0,   up: 0.5 },
+  smoke:   { colors: [0x1a1a1a, 0x0d0d0d, 0x2a2a2a], speed: [0.3, 1.0], life: [0.6, 1.4],  grav: -0.4, up: 0.8 }
 };
 
 function makeFX3D() {
@@ -384,6 +385,33 @@ function updateComboCascade(dt) {
     comboFxAccum -= rate;
     _trailTmp.set(rnd(-0.8, 0.8), rnd(-0.3, 0.6), rnd(0.4, 1.6)).applyQuaternion(owlGroup.quaternion).add(owlGroup.position);
     spawnFX3D(_trailTmp, 1, 'sparkle');
+  }
+}
+
+// Fumée noire de dégâts : plus la perte de contrôle max sur une gouverne est
+// élevée, plus la fumée est dense (amount) et la traînée continue (rate
+// resserré). Émise depuis l'arrière du hibou — locale ET adverses (via le
+// résumé `dmg` reçu dans les paquets d'état réseau, voir hibou3d-multiplayer.js).
+function emitSmokeAt(obj, severity, accumState, dt) {
+  if (severity <= 0) { accumState.v = 0; return; }
+  const rate = Math.max(0.02, 0.09 - severity * 0.07);
+  const amount = 1 + Math.round(severity * 2);
+  accumState.v += dt;
+  while (accumState.v > rate) {
+    accumState.v -= rate;
+    _trailTmp.set(rnd(-0.3, 0.3), rnd(-0.1, 0.2), 1.1).applyQuaternion(obj.quaternion).add(obj.position);
+    spawnFX3D(_trailTmp, amount, 'smoke');
+  }
+}
+let smokeAccum = { v: 0 };
+function updateSmokeTrail(dt) {
+  emitSmokeAt(owlGroup, lastDriftSeverity, smokeAccum, dt);
+  if (mp) {
+    for (const r of mp.remotesList()) {
+      if (!r.alive || !Array.isArray(r.dmg)) continue;
+      if (!r._smokeAccum) r._smokeAccum = { v: 0 };
+      emitSmokeAt(r.obj, Math.max(r.dmg[0] || 0, r.dmg[1] || 0, r.dmg[2] || 0), r._smokeAccum, dt);
+    }
   }
 }
 
@@ -1692,6 +1720,7 @@ window.addEventListener('keydown', e => {
     return;
   }
   if (e.key === 'Escape') { settingsOpen = false; return; }
+  if (multiplayerMode && state === S.PLAY && /^[1-3]$/.test(e.key)) { useInventorySlot(Number(e.key) - 1); return; }
   if ((e.key === 'm' || e.key === 'M') && (state === S.START || state === S.OVER) && !isMobile) { enterMultiplayerLobby(); return; }
   if (multiplayerMode && state === S.PAUSED && e.key === 'Backspace') { leaveMultiplayerGame(); return; }
   if (state === S.START || state === S.OVER) beginGame();
@@ -1706,6 +1735,8 @@ let mouseDX = 0, mouseDY = 0;
 // ── Vue arrière (clic droit maintenu) : la caméra reste fixée au hibou mais
 //    pivote de 180° tant que le bouton est enfoncé (voir updateCameraClip).
 let lookBack = false;
+// Zones cliquables des boutons Solo/Multijoueur de l'écran d'accueil (recalculées à chaque drawStart())
+let startSoloBtnRect = null, startMultiBtnRect = null;
 glCanvas.addEventListener('contextmenu', e => e.preventDefault());
 window.addEventListener('blur', () => { lookBack = false; });
 function requestFlightPointerLock() {
@@ -1739,7 +1770,12 @@ window.addEventListener('pointerdown', e => {
   }
   if (state === S.MP_LOBBY) { if (mp) mp.onLobbyClick(e.clientX, e.clientY); return; }
   if (multiplayerMode && state === S.PLAY && e.button === 0) mouseFireHeld = true;
-  if (state === S.START || state === S.OVER) beginGame();
+  if (state === S.START) {
+    const inRect = (r) => r && e.clientX >= r.x && e.clientX <= r.x + r.w && e.clientY >= r.y && e.clientY <= r.y + r.h;
+    if (inRect(startMultiBtnRect)) { enterMultiplayerLobby(); return; }
+    beginGame(); // clic sur SOLO ou n'importe où ailleurs sur l'écran d'accueil
+  }
+  else if (state === S.OVER) beginGame();
   else if (state === S.PLAY || state === S.PAUSED) requestFlightPointerLock();
 });
 
@@ -1853,16 +1889,20 @@ function updateFlight(dt) {
   // n'est plus une girouette instantanée — il faut « emmancher » la rotation).
   // Aucun axe ne « recentre » automatiquement quand on relâche : l'inclinaison
   // tenue reste tenue, il faut contre-braquer pour revenir à plat, comme un vrai avion.
-  // Multijoueur : des ailes abîmées (balles reçues) réduisent l'autorité de
-  // roulis, et une asymétrie gauche/droite tire le roulis vers l'aile touchée.
-  // En solo wingDamage reste à {1,1} : les termes ci-dessous sont neutres.
-  const wingAvg = (wingDamage.left + wingDamage.right) / 2;
-  _tgtAng.set(pitchIn * PITCH_RATE, yawIn * YAW_RATE, rollIn * ROLL_RATE * wingAvg).multiplyScalar(authority);
+  // Multijoueur : une gouverne touchée (aile ou queue) réduit l'autorité des
+  // axes qu'elle contrôle — aile = roulis+lacet, queue = tangage+lacet — et
+  // fait dériver le hibou latéralement vers le côté touché (voir plus bas).
+  // En solo governEff reste à {0,0,0} : les termes ci-dessous sont neutres.
+  const rollMult  = 1 - Math.max(governEff.leftWing, governEff.rightWing);
+  const pitchMult = 1 - governEff.tail;
+  const yawMult   = 1 - Math.max(governEff.leftWing, governEff.rightWing, governEff.tail);
+  _tgtAng.set(pitchIn * PITCH_RATE * pitchMult, yawIn * YAW_RATE * yawMult,
+              rollIn * ROLL_RATE * rollMult).multiplyScalar(authority);
   const kAng = 1 - Math.exp(-ANG_RESPONSE * dt); // lissage exponentiel, stable quel que soit dt
   angRate.lerp(_tgtAng, kAng);
   owlGroup.rotateX(angRate.x * dt);
   owlGroup.rotateY(angRate.y * dt);
-  owlGroup.rotateZ((angRate.z + (wingDamage.right - wingDamage.left) * WING_DMG_TORQUE) * dt);
+  owlGroup.rotateZ(angRate.z * dt);
   owlGroup.rotateY(mdx); // souris = pilotage fin, appliqué directement (crisp)
   owlGroup.rotateX(-mdy); // tangage inversé : souris vers le bas = cabrer, comme un manche
 
@@ -1936,7 +1976,8 @@ function updateFlight(dt) {
   const dynLift  = AIR_LIFT * v * v * CL * (1 + 0.3 * groundEffect);
   const flapLift = FLAP_LIFT * (0.35 + 0.65 * throttle) * Math.max(0, 1 - v / FLAP_FADE)
                  * (1 - THREE.MathUtils.smoothstep(_fwd.y, 0.35, 0.8));
-  _acc.addScaledVector(_up, (dynLift + flapLift) * wingAvg * OWL_MASS); // wingAvg : portance amputée si les ailes sont touchées (multijoueur)
+  const wingLiftMult = 1 - (governEff.leftWing + governEff.rightWing) / 2; // portance amputée si les ailes sont touchées (multijoueur)
+  _acc.addScaledVector(_up, (dynLift + flapLift) * wingLiftMult * OWL_MASS);
 
   // Traînée : parasite (∝ v²) + induite (∝ CL²), opposée à la vitesse.
   // Le frein (Shift/✋) déploie des aérofreins : traînée renforcée, décélération en douceur.
@@ -1966,6 +2007,14 @@ function updateFlight(dt) {
 
   // ── 9. Intégration semi-implicite du vecteur vitesse puis de la position ──
   velocity.addScaledVector(_acc, dt);
+  // Dérive latérale : une gouverne endommagée tire le hibou vers le côté touché
+  // (translation, distincte du couple de roulis déjà géré par rollMult ci-dessus).
+  const driftSeverity = Math.max(governEff.leftWing, governEff.rightWing, governEff.tail);
+  lastDriftSeverity = driftSeverity;
+  if (driftSeverity > 0) {
+    const driftSign = governEff.leftWing > governEff.rightWing ? -1 : 1; // vers l'aile abîmée
+    velocity.addScaledVector(_right, driftSign * DRIFT_ACCEL * driftSeverity * dt);
+  }
   const vmax = MAX_SPEED * speedBoost * 1.2;
   if (velocity.lengthSq() > vmax * vmax) velocity.setLength(vmax);
   owlGroup.position.addScaledVector(velocity, dt);
@@ -2641,14 +2690,35 @@ function updateBears(dt) {
 // ══════════════════════════════════════════════════
 let mp = null;                    // API du module réseau (initMultiplayer au boot)
 let multiplayerMode = false;      // gate global : ours à 0, munitions au lieu des branches, etc.
-let wingDamage = { left: 1, right: 1 }; // 1 = aile intacte — lu chaque frame par updateFlight()
+let life = 10;                    // LIFE_MAX coups avant la mort (hors tête = instantané)
+let governEff = { leftWing: 0, rightWing: 0, tail: 0 }; // 0 = intact, 1 = 100% perte de contrôle
+let controlLostShown = { leftWing: false, rightWing: false, tail: false }; // anti-spam texte
+let lastHitTime = 0;              // performance.now() du dernier impact — cercle de réparation
+let degradeAccum = 0;             // accumulateur de dégradation périodique (5s)
+let repairProgress = 0;           // 0..1 — cercle de réparation autour du réticule
+let lastDriftSeverity = 0;        // gouverne la plus abîmée — pilote aussi la fumée noire
+let localKillStreak = 0;          // kills sans être touché — remis à 0 au moindre impact
+let lastShooterId = null;         // dernier tireur nous ayant touché (info locale, crédit fait serveur-side)
+let inventory = [null, null, null]; // slot 0 réservé aux kits de soin (streak de 5 kills)
 let mpAmmo = 150;                 // munitions restantes dans le canon
 let mpRespawnTimer = 0;
 let mpDeathCause = 'headshot';    // 'headshot' | 'crash' — titre de l'écran de mort
 let mouseFireHeld = false;        // clic gauche maintenu (tir)
 let mpFireAccum = 0;              // accumulateur de cadence (100 coups/s)
 
-const MP_RESPAWN_DELAY = 15;      // s — cooldown avant réapparition
+const LIFE_MAX = 10;
+const CRIT_CHANCE = 0.1;             // 1/10 chance de -1 vie supplémentaire par impact non-tête
+const GOVERN_FIRST_HIT_MIN = 0.10, GOVERN_FIRST_HIT_MAX = 1.0; // perte aléatoire au 1er impact d'une gouverne
+const GOVERN_REPEAT_HIT_ADD = 0.15;  // impact suivant sur une gouverne déjà touchée
+const GOVERN_DEGRADE_INTERVAL = 5;   // s
+const GOVERN_DEGRADE_CHANCE = 0.5;
+const GOVERN_DEGRADE_STEP = 0.10;
+const REPAIR_TIME = 30;              // s sans nouvel impact → réparation complète
+const DRIFT_ACCEL = 6;               // u/s² de dérive latérale à perte max
+const MP_KILL_AMMO_GRANT = 80;
+const KILLSTREAK_HEALKIT_THRESHOLD = 5;
+
+const MP_RESPAWN_DELAY = 5;       // s — cooldown avant réapparition
 const MP_MAG_CAP = 150;           // taille du chargeur
 const MP_FIRE_RATE = 100;         // coups/s (6000 coups/min)
 const MP_BULLET_SPEED = 120;      // u/s (~3,5× MAX_SPEED : esquivable mais rapide)
@@ -2656,9 +2726,7 @@ const MP_BULLET_LIFE = 2.5;       // s de vol (~300 u de portée)
 const MP_BULLET_MAX = 400;        // plafond de sprites (balles locales + tracers adverses)
 const MP_AMMO_CRATE_COUNT = 3;    // pool de caisses — bien plus rare que les 14 branches du solo
 const MP_AMMO_GRANT = 60;        // munitions par caisse (le serveur fait foi via 'ammo')
-const WING_HIT_MULT = 0.6;        // chaque balle dans une aile multiplie sa perf par 0.6…
-const WING_DAMAGE_FLOOR = 0.25;   // …avec un plancher : le vol reste possible, juste pénible
-const WING_DMG_TORQUE = 0.6;      // rad/s de dérive de roulis vers l'aile abîmée (à dégât max)
+const MP_HEALKIT_COUNT = 2;       // pool de kits de soin — plus rare que les caisses de munitions
 
 let devEspEnabled = false;        // mode triche dev : position des adversaires sur le HUD
 try { devEspEnabled = localStorage.getItem('h3d_dev_esp') === '1'; } catch (_e) { /* stockage indisponible */ }
@@ -2668,6 +2736,7 @@ function toggleDevEsp() {
 }
 
 const ammoCrateTexture = emojiTexture('📦', 160);
+const healKitTexture = emojiTexture('💚', 160);
 
 // ── Aura colorée : halo additif enfant du groupe d'un hibou — même technique
 //    que le halo de menace des ours et le halo du cadeau ──
@@ -2761,9 +2830,9 @@ function clearBullets() {
   bullets = [];
 }
 
-// Impact classé en tête / aile gauche / aile droite / corps, par position dans
-// le repère LOCAL du hibou touché (boîte englobante OWL_HITBOX, avant = -Z,
-// droite du hibou = +X).
+// Impact classé en tête / aile gauche / aile droite / queue / corps, par position
+// dans le repère LOCAL du hibou touché (boîte englobante OWL_HITBOX, avant = -Z,
+// droite du hibou = +X, queue = arrière = +Z).
 const _hitLocal = new THREE.Vector3();
 function classifyHitLocation(remoteObj, worldPos) {
   _hitLocal.copy(worldPos);
@@ -2772,6 +2841,7 @@ function classifyHitLocation(remoteObj, worldPos) {
     return _hitLocal.x > 0 ? 'right-wing' : 'left-wing';
   }
   if (_hitLocal.z < -OWL_HITBOX.d * 0.15 && _hitLocal.y > -OWL_HITBOX.h * 0.1) return 'head';
+  if (_hitLocal.z > OWL_HITBOX.d * 0.3) return 'tail';
   return 'body';
 }
 
@@ -2796,7 +2866,12 @@ function updateBullets(dt) {
     b.life -= dt;
     _segA.copy(b.sprite.position);
     b.sprite.position.addScaledVector(b.vel, dt);
-    if (b.life <= 0 || b.sprite.position.y < effectiveGroundY(b.sprite.position.x, b.sprite.position.z)) {
+    if (b.sprite.position.y < effectiveGroundY(b.sprite.position.x, b.sprite.position.z)) {
+      spawnFX3D(b.sprite.position, 6, 'dust'); // impact au sol
+      removeBullet(i);
+      continue;
+    }
+    if (b.life <= 0) {
       removeBullet(i);
       continue;
     }
@@ -2893,8 +2968,60 @@ function updateAmmoCrates() {
   }
 }
 
-// ── Mort / respawn multijoueur : touche à la tête (ou crash au sol) → écran de
-//    mort 15 s → réapparition automatique à un point aléatoire de l'arène ──
+// ── Kits de soin : collectible plus rare que les caisses de munitions, PAS
+//    indiqué par l'ESP (contrairement à ammoCrates), qui répare intégralement
+//    (vie + gouvernes) un hibou endommagé qui le ramasse. ──
+let healKits = [];
+function newHealKit() {
+  const mat = new THREE.SpriteMaterial({ map: healKitTexture, transparent: true });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(2.2, 2.2, 1);
+  const pos = collectibleSpawnPos(80, 280);
+  sprite.position.copy(pos);
+  scene.add(sprite);
+  const glowMat = new THREE.SpriteMaterial({
+    map: glowTexture, color: 0x4caf50, transparent: true, opacity: 0.5,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  const glow = new THREE.Sprite(glowMat);
+  glow.scale.setScalar(2.6);
+  sprite.add(glow);
+  return { sprite, glowMat, w: rnd(0, Math.PI * 2), ws: rnd(0.03, 0.07), baseY: pos.y };
+}
+function removeHealKit(i) {
+  scene.remove(healKits[i].sprite);
+  healKits[i].sprite.material.dispose();
+  healKits[i].glowMat.dispose();
+  healKits.splice(i, 1);
+}
+function clearHealKits() { while (healKits.length) removeHealKit(0); }
+function resetHealKits() {
+  clearHealKits();
+  healKits = Array.from({ length: MP_HEALKIT_COUNT }, newHealKit);
+}
+function updateHealKits() {
+  for (let i = healKits.length - 1; i >= 0; i--) {
+    const k = healKits[i];
+    k.w += k.ws;
+    k.sprite.position.y = k.baseY + Math.sin(k.w) * 0.4;
+    k.glowMat.opacity = 0.5 + Math.sin(k.w * 2) * 0.14;
+    if (k.sprite.position.distanceTo(owlGroup.position) > BRANCH_RECYCLE_DIST) {
+      const p = collectibleSpawnPos(100, 280);
+      k.sprite.position.copy(p);
+      k.baseY = p.y;
+    }
+    if (owlGroup.position.distanceTo(k.sprite.position) < COLLECT_RADIUS) {
+      const damaged = life < LIFE_MAX || governEff.leftWing > 0 || governEff.rightWing > 0 || governEff.tail > 0;
+      if (damaged) repairOwl();
+      screenShake = Math.max(screenShake, 4);
+      removeHealKit(i);
+      healKits.push(newHealKit());
+    }
+  }
+}
+
+// ── Mort / respawn multijoueur : touche à la tête (ou vie à 0) → écran de
+//    mort MP_RESPAWN_DELAY s → réapparition automatique à un point aléatoire de l'arène ──
 function mpDie(cause) {
   if (state !== S.PLAY || !multiplayerMode) return;
   mpDeathCause = cause;
@@ -2925,7 +3052,12 @@ function mpSpawnLocalOwl() {
   throttle = CRUISE_THROTTLE;
   flight.aoa = 0; flight.stall = false; flight.climb = 0; flight.throttle = throttle;
   stallMode = false; stallTimer = 0;
-  wingDamage.left = 1; wingDamage.right = 1;
+  life = LIFE_MAX;
+  governEff.leftWing = 0; governEff.rightWing = 0; governEff.tail = 0;
+  controlLostShown.leftWing = false; controlLostShown.rightWing = false; controlLostShown.tail = false;
+  degradeAccum = 0;
+  lastHitTime = performance.now();
+  lastShooterId = null;
   mpAmmo = MP_MAG_CAP;
   owlInvul = 90;   // protection de spawn (clignotement), comme en solo
   treeCooldown = 0;
@@ -2942,16 +3074,90 @@ function doMPRespawn() {
 
 // Balle reçue sur MON hibou (relais 'hit' du serveur) : c'est toujours la
 // victime qui applique l'effet sur elle-même — jamais le client du tireur.
-function onMPHitMe(location) {
+// Le crédit de kill (+munitions au tireur, tableau des scores) est géré par
+// le serveur lui-même (voir server.js, cas 'hit'/'died') : rien à renvoyer ici.
+function onMPHitMe(location, shooterId) {
   if (!multiplayerMode || state !== S.PLAY) return;
   if (owlInvul > 0) return; // protection de spawn
-  if (location === 'head') { mpDie('headshot'); return; }
-  if (location === 'left-wing')  wingDamage.left  = Math.max(WING_DAMAGE_FLOOR, wingDamage.left  * WING_HIT_MULT);
-  if (location === 'right-wing') wingDamage.right = Math.max(WING_DAMAGE_FLOOR, wingDamage.right * WING_HIT_MULT);
+  lastShooterId = shooterId;
+  lastHitTime = performance.now(); // relance/reset le cercle de réparation
+  localKillStreak = 0; // un impact subi casse le streak "5 kills sans être touché"
+
+  if (location === 'head') {
+    spawnFX(owlGroup.position, 10, 'death', 'COUP CRITIQUE : HEADSHOT');
+    mpDie('headshot');
+    return;
+  }
+
+  life--;
+  let crit = false;
+  if (Math.random() < CRIT_CHANCE) { life--; crit = true; }
+
+  const govPart = location === 'left-wing' ? 'leftWing' : location === 'right-wing' ? 'rightWing' : location === 'tail' ? 'tail' : null;
+  if (govPart) {
+    if (governEff[govPart] > 0) governEff[govPart] = Math.min(1, governEff[govPart] + GOVERN_REPEAT_HIT_ADD);
+    else governEff[govPart] = rnd(GOVERN_FIRST_HIT_MIN, GOVERN_FIRST_HIT_MAX);
+    if (governEff[govPart] >= 1 && !controlLostShown[govPart]) {
+      controlLostShown[govPart] = true;
+      spawnFX(owlGroup.position, 0, 'controlloss', 'PERTE DE CONTRÔLE');
+    }
+  }
+
   screenShake = Math.max(screenShake, location === 'body' ? 6 : 12);
   hitFlash = Math.max(hitFlash, location === 'body' ? 0.2 : 0.35);
   if (location === 'left-wing')  spawnFX(owlGroup.position, 10, 'death', 'AILE GAUCHE 🩸');
   if (location === 'right-wing') spawnFX(owlGroup.position, 10, 'death', 'AILE DROITE 🩸');
+  if (location === 'tail')       spawnFX(owlGroup.position, 10, 'death', 'QUEUE 🩸');
+  if (crit) spawnFX(owlGroup.position, 8, 'death', 'COUP CRITIQUE');
+
+  if (life <= 0) mpDie('shot');
+}
+
+// Kill confirmé par le serveur (crédit déjà appliqué aux munitions côté serveur,
+// voir server.js) : on suit juste le streak local "5 kills sans être touché"
+// pour offrir un kit de soin d'inventaire.
+function onLocalKillConfirmed() {
+  localKillStreak++;
+  if (localKillStreak % KILLSTREAK_HEALKIT_THRESHOLD === 0 && inventory[0] === null) {
+    inventory[0] = 'healkit'; // slot 1 (touche &) est réservé aux kits de soin
+    spawnFX(owlGroup.position, 10, 'collect', '🎁 KIT DE SOIN GAGNÉ !');
+  }
+}
+
+// ── Dégradation périodique (gouvernes déjà touchées, +10%/5s à 50% de chance)
+//    et réparation passive (30 s sans nouvel impact → tout redevient intact) ──
+function updateDamageSystems(dt) {
+  const damaged = life < LIFE_MAX || governEff.leftWing > 0 || governEff.rightWing > 0 || governEff.tail > 0;
+  if (!damaged) { repairProgress = 0; return; }
+
+  degradeAccum += dt;
+  if (degradeAccum >= GOVERN_DEGRADE_INTERVAL) {
+    degradeAccum -= GOVERN_DEGRADE_INTERVAL;
+    for (const part of ['leftWing', 'rightWing', 'tail']) {
+      if (governEff[part] > 0 && governEff[part] < 1 && Math.random() < GOVERN_DEGRADE_CHANCE) {
+        governEff[part] = Math.min(1, governEff[part] + GOVERN_DEGRADE_STEP);
+        if (governEff[part] >= 1 && !controlLostShown[part]) {
+          controlLostShown[part] = true;
+          spawnFX(owlGroup.position, 0, 'controlloss', 'PERTE DE CONTRÔLE');
+        }
+      }
+    }
+  }
+
+  repairProgress = THREE.MathUtils.clamp((performance.now() - lastHitTime) / 1000 / REPAIR_TIME, 0, 1);
+  if (repairProgress >= 1) repairOwl();
+}
+
+// Réparation complète : réutilisée par le timer passif 30s, le kit de soin au
+// sol et le kit de soin d'inventaire (streak de 5 kills).
+function repairOwl() {
+  life = LIFE_MAX;
+  governEff.leftWing = 0; governEff.rightWing = 0; governEff.tail = 0;
+  controlLostShown.leftWing = false; controlLostShown.rightWing = false; controlLostShown.tail = false;
+  degradeAccum = 0;
+  repairProgress = 0;
+  lastHitTime = performance.now();
+  spawnFX(owlGroup.position, 10, 'repaired', 'RÉPARÉ');
 }
 
 // ── Entrée / sortie du mode multijoueur ──
@@ -2978,9 +3184,13 @@ function exitMultiplayerToStart() {
 function clearMultiplayerWorld() {
   clearBullets();
   clearAmmoCrates();
+  clearHealKits();
   removeLocalAura();
   setLocalCannon(false);
-  wingDamage.left = 1; wingDamage.right = 1;
+  life = LIFE_MAX;
+  governEff.leftWing = 0; governEff.rightWing = 0; governEff.tail = 0;
+  inventory = [null, null, null];
+  localKillStreak = 0;
   mouseFireHeld = false; mpFireAccum = 0;
 }
 
@@ -3027,7 +3237,10 @@ function beginMultiplayerGame(colorName) {
   setLocalAura(colorName);
   setLocalCannon(true);
   resetAmmoCrates();
+  resetHealKits();
   clearBullets();
+  inventory = [null, null, null];
+  localKillStreak = 0;
   mpSpawnLocalOwl();
   requestFlightPointerLock();
 }
@@ -3127,6 +3340,8 @@ function drawHUD() {
   hctx.save();
   if (multiplayerMode) {
     drawMPStatusBox();
+    drawScoreboard();
+    drawInventoryBar();
     hctx.restore();
   } else {
   rrect(12, 12, 230, 100, 14, 'rgba(8,8,35,0.82)', 'rgba(100,90,220,0.4)');
@@ -3271,21 +3486,34 @@ function drawHUD() {
   }
 }
 
-// Panneau haut-gauche du multijoueur : munitions, état des ailes, joueurs de la partie.
+// Panneau haut-gauche du multijoueur : munitions, gouvernes, vie, joueurs de la partie.
 function drawMPStatusBox() {
   const rosterList = mp ? mp.roster() : [];
-  const boxH = 68 + rosterList.length * 18;
+  const boxH = 128 + rosterList.length * 18;
   rrect(12, 12, 230, boxH, 14, 'rgba(8,8,35,0.82)', 'rgba(100,90,220,0.4)');
   hctx.fillStyle = '#dde'; hctx.font = 'bold 15px system-ui';
   hctx.textAlign = 'left'; hctx.textBaseline = 'middle';
   hctx.fillText('Munitions : ' + mpAmmo + ' / ' + MP_MAG_CAP, 24, 32);
+
   hctx.font = '11px system-ui'; hctx.fillStyle = '#9fb0d8';
-  hctx.fillText('Ailes', 24, 54);
-  rrect(62, 50, 70, 8, 4, 'rgba(255,255,255,0.12)');
-  rrect(62, 50, 70 * wingDamage.left, 8, 4, wingDamage.left > 0.7 ? '#8fe06a' : '#ff9a6a');
-  rrect(142, 50, 70, 8, 4, 'rgba(255,255,255,0.12)');
-  rrect(142, 50, 70 * wingDamage.right, 8, 4, wingDamage.right > 0.7 ? '#8fe06a' : '#ff9a6a');
-  let yy = 76;
+  const govBars = [['Aile G', governEff.leftWing], ['Aile D', governEff.rightWing], ['Queue', governEff.tail]];
+  let by = 52;
+  for (const [label, loss] of govBars) {
+    const eff = 1 - loss;
+    hctx.fillText(label, 24, by);
+    rrect(80, by - 4, 130, 8, 4, 'rgba(255,255,255,0.12)');
+    rrect(80, by - 4, 130 * eff, 8, 4, eff > 0.7 ? '#8fe06a' : eff > 0.3 ? '#ff9a6a' : '#ff4444');
+    by += 16;
+  }
+
+  hctx.fillText('Vie', 24, by);
+  for (let i = 0; i < LIFE_MAX; i++) {
+    hctx.fillStyle = i < life ? '#ff5a6a' : 'rgba(255,255,255,0.15)';
+    hctx.fillText('♥', 54 + i * 14, by);
+  }
+  by += 20;
+
+  let yy = by;
   hctx.font = 'bold 12px system-ui';
   for (const p of rosterList) {
     hctx.fillStyle = mp.colorCss(p.color);
@@ -3293,6 +3521,65 @@ function drawMPStatusBox() {
     hctx.fillStyle = p.alive ? '#e8ecff' : '#888899';
     hctx.fillText(p.pseudo + (p.alive ? '' : ' 💀'), 40, yy);
     yy += 18;
+  }
+}
+
+// Tableau des scores, haut-centre : éliminations de chaque joueur de la partie.
+function drawScoreboard() {
+  const rosterList = mp ? mp.roster().slice().sort((a, b) => (b.kills || 0) - (a.kills || 0)) : [];
+  if (!rosterList.length) return;
+  const W = hudCanvas.width;
+  const boxW = 190, boxH = 30 + rosterList.length * 20;
+  const x = W / 2 - boxW / 2, y = 10;
+  rrect(x, y, boxW, boxH, 12, 'rgba(8,8,35,0.82)', 'rgba(100,90,220,0.4)');
+  hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+  hctx.fillStyle = '#dde'; hctx.font = 'bold 13px system-ui';
+  hctx.fillText('SCORE', W / 2, y + 16);
+  hctx.font = '12px system-ui'; hctx.textAlign = 'left';
+  let yy = y + 36;
+  for (const p of rosterList) {
+    hctx.fillStyle = mp.colorCss(p.color);
+    hctx.fillText('●', x + 12, yy);
+    hctx.fillStyle = p.alive ? '#e8ecff' : '#888899';
+    hctx.fillText(p.pseudo, x + 28, yy);
+    hctx.textAlign = 'right';
+    hctx.fillText(String(p.kills || 0), x + boxW - 14, yy);
+    hctx.textAlign = 'left';
+    yy += 20;
+  }
+}
+
+// Barre d'inventaire, bas-centre : 3 slots (touches 1-3), slot 1 réservé aux
+// kits de soin gagnés par streak de kills. Grisé si vide.
+const INVENTORY_ICONS = { healkit: '💚' };
+function drawInventoryBar() {
+  const W = hudCanvas.width, H = hudCanvas.height;
+  const slotSize = 44, gap = 8, total = 3 * slotSize + 2 * gap;
+  const x0 = W / 2 - total / 2, y0 = H - slotSize - 20;
+  hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+  for (let i = 0; i < 3; i++) {
+    const x = x0 + i * (slotSize + gap);
+    const filled = !!inventory[i];
+    rrect(x, y0, slotSize, slotSize, 8, filled ? 'rgba(30,60,30,0.85)' : 'rgba(20,20,40,0.6)', filled ? 'rgba(140,255,140,0.6)' : 'rgba(255,255,255,0.2)');
+    hctx.font = '20px system-ui';
+    hctx.fillStyle = filled ? '#fff' : 'rgba(255,255,255,0.3)';
+    hctx.fillText(inventory[i] ? (INVENTORY_ICONS[inventory[i]] || '?') : '', x + slotSize / 2, y0 + slotSize / 2 - 3);
+    hctx.font = '10px system-ui';
+    hctx.fillStyle = 'rgba(255,255,255,0.5)';
+    hctx.fillText(String(i + 1), x + slotSize / 2, y0 + slotSize - 8);
+  }
+}
+
+// Utilisation d'un objet d'inventaire (touches 1-3). Le kit de soin ne se
+// consomme que si le hibou est réellement endommagé — sinon on le garde.
+function useInventorySlot(i) {
+  const item = inventory[i];
+  if (!item) return;
+  if (item === 'healkit') {
+    const damaged = life < LIFE_MAX || governEff.leftWing > 0 || governEff.rightWing > 0 || governEff.tail > 0;
+    if (!damaged) return;
+    inventory[i] = null;
+    repairOwl();
   }
 }
 
@@ -3312,6 +3599,12 @@ function drawCrosshair() {
   hctx.moveTo(s.x, s.y - 9); hctx.lineTo(s.x, s.y - 3);
   hctx.moveTo(s.x, s.y + 3); hctx.lineTo(s.x, s.y + 9);
   hctx.stroke();
+  if (repairProgress > 0) {
+    hctx.strokeStyle = 'rgba(255,255,255,0.85)'; hctx.lineWidth = 2.4;
+    hctx.beginPath();
+    hctx.arc(s.x, s.y, 16, -Math.PI / 2, -Math.PI / 2 + repairProgress * Math.PI * 2);
+    hctx.stroke();
+  }
   hctx.restore();
 }
 
@@ -3398,12 +3691,20 @@ function drawStart() {
     hctx.fillStyle = '#ffe08a';
     hctx.fillText('Rase le sol parmi les lucioles : +' + SKIM_SCORE + '/s. Suis les flèches 🎁 🌿', cx, cy + 78);
   }
-  hctx.fillStyle = '#fff'; hctx.font = 'bold 18px system-ui';
-  hctx.fillText('Clique ou appuie sur une touche', cx, cy + 100);
-  hctx.fillText('pour décoller', cx, cy + 124);
+  hctx.fillStyle = '#fff'; hctx.font = 'bold 15px system-ui';
+  hctx.fillText('Choisis un mode', cx, cy + 102);
+
+  const btnW = 150, btnH = 44, btnGap = 16, btnY = cy + 120;
+  startSoloBtnRect = { x: cx - btnW - btnGap / 2, y: btnY, w: btnW, h: btnH };
+  startMultiBtnRect = { x: cx + btnGap / 2, y: btnY, w: btnW, h: btnH };
+  rrect(startSoloBtnRect.x, btnY, btnW, btnH, 10, 'rgba(120,110,255,0.3)', 'rgba(180,170,255,0.8)');
+  rrect(startMultiBtnRect.x, btnY, btnW, btnH, 10, 'rgba(60,180,255,0.25)', 'rgba(120,220,255,0.8)');
+  hctx.font = 'bold 16px system-ui'; hctx.fillStyle = '#fff';
+  hctx.fillText('SOLO', startSoloBtnRect.x + btnW / 2, btnY + btnH / 2);
+  hctx.fillText('MULTIJOUEUR', startMultiBtnRect.x + btnW / 2, btnY + btnH / 2);
   if (!isMobile) {
-    hctx.fillStyle = '#9be0ff'; hctx.font = 'bold 13px system-ui';
-    hctx.fillText('[M] = Multijoueur (combat aérien à 4, clic = tir)', cx, cy + 156);
+    hctx.fillStyle = '#9be0ff'; hctx.font = '11px system-ui';
+    hctx.fillText('([M] = raccourci multijoueur)', cx, btnY + btnH + 20);
   }
   hctx.restore();
 }
@@ -3601,10 +3902,12 @@ function drawOverlay() {
     for (const p of particles) {
       hctx.save(); hctx.globalAlpha = Math.max(0, p.life);
       if (p.type === 'txt') {
-        hctx.fillStyle = p.tType === 'death' ? '#ff3333' : '#ffd700';
+        hctx.fillStyle = p.tType === 'controlloss' ? '#ff2222' : p.tType === 'repaired' ? '#ffe066' : p.tType === 'death' ? '#ff3333' : '#ffd700';
         hctx.font = '900 24px system-ui';
         hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
         hctx.shadowColor = '#000'; hctx.shadowBlur = 8;
+        // Clignotement pour les alertes de contrôle (toutes les ~6 frames)
+        if ((p.tType === 'controlloss' || p.tType === 'repaired') && Math.floor(p.life * 30) % 12 >= 6) { hctx.restore(); continue; }
         hctx.fillText(p.txt, p.x, p.y);
       } else {
         hctx.fillStyle = p.c;
@@ -3740,6 +4043,9 @@ function update() {
       updateMPFire(dt);
       updateBullets(dt);
       updateAmmoCrates();
+      updateHealKits();
+      updateDamageSystems(dt);
+      updateSmokeTrail(dt);
     } else {
       updateSkim(dt);
       updateBranches();
@@ -3807,7 +4113,7 @@ function drawLoading() {
 // Sonde de debug/test (lecture seule) : état du jeu inspectable depuis la console.
 window.__hibouDebug = () => ({
   state, score, lives, assetsReady,
-  multiplayerMode, mpAmmo, wingDamage: { ...wingDamage },
+  multiplayerMode, mpAmmo, life, governEff: { ...governEff }, inventory: [...inventory],
   mpRespawnTimer: Math.round(mpRespawnTimer * 10) / 10,
   bullets: bullets.length, ammoCrates: ammoCrates.length,
   mpInRoom: mp ? mp.inRoom() : false,
@@ -3864,11 +4170,13 @@ loadAssets().then(() => {
     getMyState: () => ({
       pos: owlGroup.position, quat: owlGroup.quaternion, vel: velocity,
       alive: state !== S.MP_DEAD,
+      dmg: [governEff.leftWing, governEff.rightWing, governEff.tail],
     }),
     onJoined: (color) => beginMultiplayerGame(color),
     onLeftRoom: onMPLeftRoom,
-    onHitMe: (location) => onMPHitMe(location),
+    onHitMe: (location, shooterId) => onMPHitMe(location, shooterId),
     onAmmo: (n) => { mpAmmo = n; },
+    onKill: (killerId) => { if (mp && killerId === mp.myId()) onLocalKillConfirmed(); },
     onRemoteFire: onMPRemoteFire,
     spawnFX,
   });
