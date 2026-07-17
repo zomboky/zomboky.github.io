@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Hibou 3D — entraînement du bot</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #ffffff; color: #111111; }
+  body {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 14px;
+    padding: 24px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: #666; margin: 0 0 24px; font-size: 12px; }
+  section { margin-bottom: 22px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #888; margin: 0 0 8px; font-weight: 600; }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { text-align: left; padding: 3px 10px 3px 0; font-size: 13px; white-space: nowrap; }
+  th { color: #888; font-weight: 500; }
+  .kpi-row { display: flex; gap: 28px; flex-wrap: wrap; }
+  .kpi { min-width: 120px; }
+  .kpi .v { font-size: 20px; font-weight: 600; }
+  .kpi .l { font-size: 11px; color: #888; }
+  .bar-track { background: #eee; height: 8px; border-radius: 4px; overflow: hidden; }
+  .bar-fill { background: #111; height: 100%; }
+  .stale { color: #b00; }
+  .ok { color: #0a0; }
+  #err { color: #b00; font-size: 12px; margin-top: 20px; }
+</style>
+</head>
+<body>
+  <h1>Hibou 3D — entraînement par self-play</h1>
+  <p class="sub" id="lastUpdate">connexion…</p>
+
+  <section>
+    <h2>Progression</h2>
+    <div class="kpi-row">
+      <div class="kpi"><div class="v" id="gen">–</div><div class="l">génération</div></div>
+      <div class="kpi"><div class="v" id="matchInGen">–</div><div class="l">match (dans la génération)</div></div>
+      <div class="kpi"><div class="v" id="eta">–</div><div class="l">temps restant estimé</div></div>
+      <div class="kpi"><div class="v" id="elapsed">–</div><div class="l">temps écoulé</div></div>
+    </div>
+    <div style="margin-top:10px" class="bar-track"><div class="bar-fill" id="genBar" style="width:0%"></div></div>
+  </section>
+
+  <section>
+    <h2>Dernier match</h2>
+    <table>
+      <tr><th>type</th><td id="mLabel">–</td></tr>
+      <tr><th>durée du match</th><td id="mDuration">–</td></tr>
+      <tr><th>kills A / B</th><td id="mKills">–</td></tr>
+      <tr><th>crashes A / B</th><td id="mCrashes">–</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>Benchmark de performance</h2>
+    <div class="kpi-row">
+      <div class="kpi"><div class="v" id="mps">–</div><div class="l">matchs / seconde</div></div>
+      <div class="kpi"><div class="v" id="bestFitness">–</div><div class="l">meilleur fitness (historique)</div></div>
+      <div class="kpi"><div class="v" id="avgFitness">–</div><div class="l">fitness moyen (génération)</div></div>
+      <div class="kpi"><div class="v" id="diversity">–</div><div class="l">diversité génétique</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Hall of Fame (anti-oubli catastrophique)</h2>
+    <div class="kpi-row">
+      <div class="kpi"><div class="v" id="hofSize">–</div><div class="l">membres archivés</div></div>
+      <div class="kpi"><div class="v" id="hofLast">–</div><div class="l">dernier ajout (génération)</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Meilleur bot vs archétypes humains fixes (anti-overfitting)</h2>
+    <table id="archTable">
+      <tr><th>archétype</th><th>kills</th><th>deaths</th><th>ratio</th></tr>
+    </table>
+  </section>
+
+  <p id="err"></p>
+
+<script>
+(function () {
+  var errEl = document.getElementById('err');
+  var lastUpdateEl = document.getElementById('lastUpdate');
+
+  function fmt(n, d) {
+    if (n === null || n === undefined || Number.isNaN(n)) return '–';
+    return typeof n === 'number' ? n.toFixed(d === undefined ? 1 : d) : n;
+  }
+  function fmtDuration(s) {
+    if (s === null || s === undefined) return '–';
+    s = Math.round(s);
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    if (h > 0) return h + 'h' + String(m).padStart(2, '0') + 'm';
+    if (m > 0) return m + 'm' + String(sec).padStart(2, '0') + 's';
+    return sec + 's';
+  }
+
+  function render(state) {
+    document.getElementById('gen').textContent = (state.generation ?? '–') + ' / ' + (state.totalGenerations ?? '–');
+    document.getElementById('matchInGen').textContent = (state.matchInGen ?? 0) + ' / ' + (state.matchesPerGenEstimate ?? '–');
+    document.getElementById('eta').textContent = fmtDuration(state.etaSeconds);
+    document.getElementById('elapsed').textContent = fmtDuration(state.elapsedSeconds);
+    var genPct = state.totalGenerations ? Math.min(100, 100 * (state.generation || 0) / state.totalGenerations) : 0;
+    document.getElementById('genBar').style.width = genPct + '%';
+
+    var lm = state.lastMatch || {};
+    document.getElementById('mLabel').textContent = lm.label || '–';
+    document.getElementById('mDuration').textContent = lm.duration ? lm.duration + ' s (simulées)' : '–';
+    document.getElementById('mKills').textContent = (lm.killsA ?? '–') + ' / ' + (lm.killsB ?? '–');
+    document.getElementById('mCrashes').textContent = (lm.crashesA ?? '–') + ' / ' + (lm.crashesB ?? '–');
+
+    document.getElementById('mps').textContent = fmt(state.matchesPerSecond, 2);
+    document.getElementById('bestFitness').textContent = fmt(state.bestFitnessEver, 3);
+    document.getElementById('avgFitness').textContent = fmt(state.avgFitnessGen, 3);
+    document.getElementById('diversity').textContent = fmt(state.genomeDiversity, 3);
+
+    document.getElementById('hofSize').textContent = state.hofSize ?? '–';
+    document.getElementById('hofLast').textContent = state.hofLastAddedGen ?? '–';
+
+    var table = document.getElementById('archTable');
+    table.innerHTML = '<tr><th>archétype</th><th>kills</th><th>deaths</th><th>ratio</th></tr>';
+    var scores = state.archetypeScores || {};
+    Object.keys(scores).forEach(function (name) {
+      var s = scores[name];
+      var ratio = s.deaths > 0 ? (s.kills / s.deaths) : s.kills;
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + name + '</td><td>' + s.kills + '</td><td>' + s.deaths + '</td>' +
+        '<td class="' + (ratio >= 1.5 ? 'ok' : 'stale') + '">' + fmt(ratio, 2) + '</td>';
+      table.appendChild(tr);
+    });
+
+    lastUpdateEl.textContent = 'mis à jour ' + new Date().toLocaleTimeString('fr-FR');
+    errEl.textContent = '';
+  }
+
+  function poll() {
+    fetch('/api/status', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(render)
+      .catch(function (e) { errEl.textContent = 'connexion perdue : ' + e.message; })
+      .finally(function () { setTimeout(poll, 1200); });
+  }
+  poll();
+})();
+</script>
+</body>
+</html>
