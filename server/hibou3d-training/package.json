@@ -1,0 +1,17 @@
+{
+  "name": "hibou3d-training",
+  "version": "1.0.0",
+  "description": "Environnement d'entraînement par self-play évolutionnaire du bot campagne de Hibou 3D (zomboky.github.io) — aucun rendu, simulation headless.",
+  "private": true,
+  "type": "module",
+  "main": "src/train.js",
+  "scripts": {
+    "start": "node src/train.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "three": "^0.169.0"
+  }
+}
