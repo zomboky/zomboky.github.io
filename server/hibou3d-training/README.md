@@ -130,6 +130,21 @@ performance (scores contre population/HoF/archétypes, comportement observé).
 C'est ce fichier qui sert de base à la Phase 8 (réinjection dans
 `BOT_DIFFICULTY_TUNING` côté jeu).
 
+## Comparer la force du bot entraîné au niveau actuel (Elo)
+
+```bash
+node src/elo.js --matches-per-pair 6 --match-duration 45
+```
+
+Fait s'affronter en round-robin les 3 niveaux ACTUELS du jeu (`jeu:easy` /
+`jeu:medium` / `jeu:hard`), les 4 archétypes humains fixes et le meilleur
+génome entraîné (`results/best-genome.json`), puis calcule un classement Elo
+(base 1200, échelle chess-like — 400 points d'écart ≈ 10× plus de chances de
+gagner). Affiche en plus l'écart direct entraîné-vs-`jeu:hard` et la
+probabilité de victoire correspondante. Coûte `matchesPerPair × C(n,2)`
+matchs simulés (n = nb de concurrents) — augmenter `--matches-per-pair`
+réduit le bruit du classement au prix du temps de calcul.
+
 ## Structure
 
 | Fichier | Rôle |
@@ -148,3 +163,4 @@ C'est ce fichier qui sert de base à la Phase 8 (réinjection dans
 | `src/evolution.js` | Boucle évolutionnaire (fitness, sélection, sharing) |
 | `src/dashboard-server.js` + `src/dashboard.html` | Suivi en direct |
 | `src/train.js` | CLI, checkpointing, orchestration |
+| `src/elo.js` | Classement Elo : niveaux actuels du jeu vs archétypes vs génome entraîné |
