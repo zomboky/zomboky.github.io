@@ -3183,7 +3183,7 @@ const MP_HEALKIT_COUNT = 2;       // pool de kits de soin — plus rare que les 
 //  pour l'architecture multijoueur existante réutilisée.
 // ══════════════════════════════════════════════════
 let vsBotMode = false;
-let botDifficulty = 'medium'; // 'easy' | 'medium' | 'hard'
+let botDifficulty = 'medium'; // 'easy' | 'medium' | 'hard' | 'expert'
 let bot = null;                // créé une fois par spawnBotEntity(), réutilisé ensuite
 let campaignKills = 0, campaignDeaths = 0; // compteurs HUD, bac à sable (pas de fin de partie)
 
@@ -3199,10 +3199,22 @@ let campaignKills = 0, campaignDeaths = 0; // compteurs HUD, bac à sable (pas d
 //   breakChance        : probabilité de break défensif quand le joueur le vise/le touche
 //   jinkPeriod         : période (s) du zigzag en break/fuite (0 = trajectoire prévisible)
 //   fireDist           : portée d'ouverture du feu
+//   extendDist         : distance sous laquelle une passe est jugée terminée (déclenche 'extend')
+//   extendClimb        : montée (u) ajoutée à la cible pendant 'extend'
+//   jinkAmplitude      : intensité du zigzag pendant break/fuite
+//   breakPerpWeight    : force de la composante perpendiculaire du virage de break
+//   aggressionBias     : réduit breakChance d'autant (bot moins enclin à rompre le combat)
+//
+// easy/medium/hard : les 5 derniers champs sont fixés à leur valeur d'origine
+// (comportement inchangé). expert : génome trouvé par entraînement par
+// self-play évolutionnaire (server/hibou3d-training/, génération 75, voir
+// results/best-genome.json) — bat systématiquement les archétypes de test
+// (rusher/sniper/acrobat/newbie) et le Hall of Fame de l'entraînement.
 const BOT_DIFFICULTY_TUNING = {
-  easy:   { aiTickInterval: 0.5,  aimConeRad: THREE.MathUtils.degToRad(12),  reactionDelay: 0.9,  leadFactor: 0,    throttleCap: 0.7, evadeLifeThreshold: 6, breakChance: 0,    jinkPeriod: 0,    fireDist: 150 },
-  medium: { aiTickInterval: 0.3,  aimConeRad: THREE.MathUtils.degToRad(6),   reactionDelay: 0.4,  leadFactor: 0.55, throttleCap: 0.9, evadeLifeThreshold: 4, breakChance: 0.45, jinkPeriod: 0.9,  fireDist: 200 },
-  hard:   { aiTickInterval: 0.15, aimConeRad: THREE.MathUtils.degToRad(3.5), reactionDelay: 0.15, leadFactor: 1,    throttleCap: 1.0, evadeLifeThreshold: 3, breakChance: 0.8,  jinkPeriod: 0.55, fireDist: 240 },
+  easy:   { aiTickInterval: 0.5,  aimConeRad: THREE.MathUtils.degToRad(12),  reactionDelay: 0.9,  leadFactor: 0,    throttleCap: 0.7, evadeLifeThreshold: 6,   breakChance: 0,    jinkPeriod: 0,    fireDist: 150, extendDist: 30, extendClimb: 25, jinkAmplitude: 0.45, breakPerpWeight: 1,    aggressionBias: 0 },
+  medium: { aiTickInterval: 0.3,  aimConeRad: THREE.MathUtils.degToRad(6),   reactionDelay: 0.4,  leadFactor: 0.55, throttleCap: 0.9, evadeLifeThreshold: 4,   breakChance: 0.45, jinkPeriod: 0.9,  fireDist: 200, extendDist: 30, extendClimb: 25, jinkAmplitude: 0.45, breakPerpWeight: 1,    aggressionBias: 0 },
+  hard:   { aiTickInterval: 0.15, aimConeRad: THREE.MathUtils.degToRad(3.5), reactionDelay: 0.15, leadFactor: 1,    throttleCap: 1.0, evadeLifeThreshold: 3,   breakChance: 0.8,  jinkPeriod: 0.55, fireDist: 240, extendDist: 30, extendClimb: 25, jinkAmplitude: 0.45, breakPerpWeight: 1,    aggressionBias: 0 },
+  expert: { aiTickInterval: 0.08, aimConeRad: THREE.MathUtils.degToRad(6.64),reactionDelay: 0.07, leadFactor: 0.85, throttleCap: 0.85,evadeLifeThreshold: 3.4, breakChance: 0.12, jinkPeriod: 0.37, fireDist: 229, extendDist: 22, extendClimb: 48, jinkAmplitude: 0.2,  breakPerpWeight: 0.97, aggressionBias: 0.23 },
 };
 
 let devEspEnabled = false;        // mode triche dev : position des adversaires sur le HUD
@@ -3937,13 +3949,13 @@ function updateBotAI(dt) {
     if (!locked) {
       if (bot.life <= tuning.evadeLifeThreshold) {
         bot.aiState = 'evade'; // blessé : rompt le combat le temps de la réparation passive
-      } else if ((underAim || bot.hitReact) && bot.breakCooldown <= 0 && Math.random() < tuning.breakChance) {
+      } else if ((underAim || bot.hitReact) && bot.breakCooldown <= 0 && Math.random() < THREE.MathUtils.clamp(tuning.breakChance - tuning.aggressionBias, 0, 1)) {
         bot.aiState = 'break';
         bot.stateTimer = rnd(1.4, 2.2);
         bot.breakCooldown = rnd(3.5, 6);
         bot.jinkSign = Math.random() < 0.5 ? -1 : 1;
         bot.jinkTimer = 0;
-      } else if (distToPlayer < 30) {
+      } else if (distToPlayer < tuning.extendDist) {
         bot.aiState = 'extend'; // passe terminée : reprend de la séparation avant de revenir
         bot.stateTimer = rnd(2, 3);
       } else {
@@ -3965,13 +3977,13 @@ function updateBotAI(dt) {
       if (_aiTmp.lengthSq() < 1e-4) _aiTmp.set(0, 0, -1);
       _aiTmp.normalize();
       bot.targetPoint.copy(bot.obj.position).addScaledVector(_aiTmp, 130);
-      bot.targetPoint.y += 25;
+      bot.targetPoint.y += tuning.extendClimb;
     } else if (bot.aiState === 'break') {
       // Virage serré perpendiculaire à la ligne de visée du joueur, côté tiré au sort.
       _aiTmp.copy(bot.obj.position).sub(owlGroup.position).setY(0);
       if (_aiTmp.lengthSq() < 1e-4) _aiTmp.set(1, 0, 0); // joueur pile au-dessus : direction arbitraire
       _aiTmp.normalize();
-      _aiTmp2.set(-_aiTmp.z, 0, _aiTmp.x).multiplyScalar(bot.jinkSign);
+      _aiTmp2.set(-_aiTmp.z, 0, _aiTmp.x).multiplyScalar(bot.jinkSign * tuning.breakPerpWeight);
       bot.targetPoint.copy(bot.obj.position).addScaledVector(_aiTmp2, 90).addScaledVector(_aiTmp, 30);
       bot.targetPoint.y += rnd(-10, 22);
     } else { // evade — fuit à l'opposé du joueur (la vie se répare passivement, voir updateBotDamage)
@@ -3993,7 +4005,7 @@ function updateBotAI(dt) {
   if ((bot.aiState === 'break' || bot.aiState === 'evade') && tuning.jinkPeriod > 0) {
     bot.jinkTimer -= dt;
     if (bot.jinkTimer <= 0) { bot.jinkTimer = tuning.jinkPeriod * rnd(0.7, 1.3); bot.jinkSign = -bot.jinkSign; }
-    _aiSteer.addScaledVector(_aiRight, bot.jinkSign * 0.45).normalize();
+    _aiSteer.addScaledVector(_aiRight, bot.jinkSign * tuning.jinkAmplitude).normalize();
   }
 
   // ── Garde-fou bordure : si la trajectoire prédite (~2 s) sort de l'ellipsoïde
@@ -4740,13 +4752,14 @@ const CAMPAIGN_DIFFICULTIES = [
   { level: 'easy',   label: 'FACILE' },
   { level: 'medium', label: 'MOYEN' },
   { level: 'hard',   label: 'DIFFICILE' },
+  { level: 'expert', label: 'EXPERT 🧬' },
 ];
 function drawCampaignSelect() {
   const W = hudCanvas.width, H = hudCanvas.height;
   hctx.save();
   hctx.fillStyle = 'rgba(4,4,18,0.8)'; hctx.fillRect(0, 0, W, H);
   const cx = W / 2, cy = H / 2;
-  const pw = Math.min(420, W - 40), ph = 260;
+  const pw = Math.min(480, W - 40), ph = 260;
   const px = cx - pw / 2, py = cy - ph / 2;
   rrect(px, py, pw, ph, 24, 'rgba(12,12,48,0.96)', 'rgba(180,90,255,0.5)');
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
@@ -4755,8 +4768,11 @@ function drawCampaignSelect() {
   hctx.fillStyle = '#9fb0d8'; hctx.font = '13px system-ui';
   hctx.fillText('Mode de test : toi contre un hibou IA, mêmes specs de vol.', cx, py + 66);
 
-  const btnW = 110, btnH = 48, btnGap = 14;
-  const totalW = btnW * 3 + btnGap * 2, x0 = cx - totalW / 2, btnY = py + 110;
+  // btnW dérivé de la largeur dispo plutôt que fixé en dur, pour rester
+  // valable quel que soit le nombre de niveaux (voir CAMPAIGN_DIFFICULTIES).
+  const n = CAMPAIGN_DIFFICULTIES.length, btnGap = 12, btnH = 48;
+  const btnW = Math.min(110, Math.floor((pw - 40 - btnGap * (n - 1)) / n));
+  const totalW = btnW * n + btnGap * (n - 1), x0 = cx - totalW / 2, btnY = py + 110;
   campaignDifficultyRects = [];
   for (let i = 0; i < CAMPAIGN_DIFFICULTIES.length; i++) {
     const d = CAMPAIGN_DIFFICULTIES[i];
