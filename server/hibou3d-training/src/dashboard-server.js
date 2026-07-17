@@ -11,7 +11,11 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DASHBOARD_HTML = fs.readFileSync(path.join(__dirname, 'dashboard.html'), 'utf8');
 
-export function startDashboard(port, getState) {
+// `host` par défaut = 127.0.0.1 : le dashboard n'a aucune authentification,
+// donc sur un serveur public (Oracle) on n'écoute QUE en local par défaut —
+// accès depuis l'extérieur via tunnel SSH (voir README.md), pas d'exposition
+// involontaire. Passer host='0.0.0.0' explicitement pour l'exposer publiquement.
+export function startDashboard(port, getState, host = '127.0.0.1') {
   const server = http.createServer((req, res) => {
     if (req.url === '/' || req.url === '/index.html') {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -26,8 +30,12 @@ export function startDashboard(port, getState) {
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('not found');
   });
-  server.listen(port, () => {
-    console.log(`[dashboard] http://localhost:${port} (ou l'IP publique du serveur, port ${port})`);
+  server.listen(port, host, () => {
+    if (host === '127.0.0.1') {
+      console.log(`[dashboard] http://localhost:${port} (local uniquement — tunnel SSH requis à distance : ssh -L ${port}:127.0.0.1:${port} user@serveur)`);
+    } else {
+      console.log(`[dashboard] http://<ip-publique>:${port} (exposé sur toutes les interfaces)`);
+    }
   });
   return server;
 }

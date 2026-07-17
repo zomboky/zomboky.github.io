@@ -52,6 +52,22 @@ jobs:
             sudo chown -R hibou3dd:hibou3dd /opt/hibou3d-server
             cd /var/www/html
 
+            # --- Hibou 3D self-play training environment (job MANUEL, pas un
+            # service permanent — voir server/hibou3d-training/README.md).
+            # Contrairement aux autres dossiers /opt/*, on ne fait PAS un
+            # rm -rf complet : checkpoints/ et results/ doivent survivre aux
+            # déploiements suivants (des heures d'entraînement en cours ne
+            # doivent pas être perdues par un push sans rapport). Seuls
+            # src/ et les fichiers package.json sont rafraîchis. ---
+            sudo mkdir -p /opt/hibou3d-training/checkpoints /opt/hibou3d-training/results
+            sudo rm -rf /opt/hibou3d-training/src
+            sudo cp -R /var/www/html/server/hibou3d-training/src /opt/hibou3d-training/
+            sudo cp /var/www/html/server/hibou3d-training/package.json /var/www/html/server/hibou3d-training/package-lock.json /var/www/html/server/hibou3d-training/README.md /opt/hibou3d-training/
+            cd /opt/hibou3d-training
+            sudo npm install --omit=dev
+            sudo chown -R hibou3dd:hibou3dd /opt/hibou3d-training
+            cd /var/www/html
+
             # --- Orange-disease API (seule source de données, protégée par
             # mot de passe — voir server/orange-server/README.md) ---
             id -u oranged >/dev/null 2>&1 || sudo useradd -r -s /sbin/nologin oranged

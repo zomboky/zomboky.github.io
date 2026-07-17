@@ -27,6 +27,7 @@ function parseArgs(argv) {
     elite: 2,
     mutationRate: 0.2,
     dashboardPort: 3000,
+    dashboardHost: '127.0.0.1',
     checkpointInterval: 5,
     resume: null,
   };
@@ -41,6 +42,7 @@ function parseArgs(argv) {
     '--elite': ['elite', Number],
     '--mutation-rate': ['mutationRate', Number],
     '--dashboard-port': ['dashboardPort', Number],
+    '--dashboard-host': ['dashboardHost', String],
     '--checkpoint-interval': ['checkpointInterval', Number],
     '--resume': ['resume', String],
   };
@@ -102,7 +104,7 @@ async function main() {
     archetypeScores: bestEver ? bestEver.archetypeScores : {},
   };
 
-  startDashboard(opts.dashboardPort, () => trainingState);
+  startDashboard(opts.dashboardPort, () => trainingState, opts.dashboardHost);
 
   const trainStart = Date.now();
   let matchCount = 0;

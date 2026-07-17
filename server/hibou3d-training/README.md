@@ -60,13 +60,52 @@ node src/train.js \
   --elite 2 \                # nombre d'individus élites conservés intacts
   --mutation-rate 0.2 \      # probabilité de mutation par gène
   --dashboard-port 3000 \    # port du dashboard web de suivi
+  --dashboard-host 127.0.0.1 \ # écoute locale par défaut (aucune auth sur le dashboard) — voir "Sur Oracle" ci-dessous
   --checkpoint-interval 5    # sauvegarde un checkpoint toutes les N générations
 ```
 
-Puis ouvrir `http://<ip-du-serveur>:3000` dans un navigateur : la page (fond
-blanc, zéro dépendance) affiche en direct le résultat de chaque match, sa
-durée, le débit de matchs/seconde et l'ETA, le meilleur/moyen fitness, la
-diversité génétique et les scores du meilleur bot contre les 4 archétypes.
+Puis ouvrir `http://localhost:3000` (ou l'IP si `--dashboard-host 0.0.0.0`) dans
+un navigateur : la page (fond blanc, zéro dépendance) affiche en direct le
+résultat de chaque match, sa durée, le débit de matchs/seconde et l'ETA, le
+meilleur/moyen fitness, la diversité génétique et les scores du meilleur bot
+contre les 4 archétypes.
+
+## Sur le serveur Oracle
+
+Le pipeline `.github/workflows/deploy.yml` copie automatiquement ce dossier
+vers `/opt/hibou3d-training` à chaque déploiement (push sur `master`), avec
+`npm install` déjà fait — **mais ce n'est volontairement PAS un service
+systemd** : contrairement aux serveurs WebSocket/API du site, c'est un job
+ponctuel de plusieurs heures que tu démarres/arrêtes toi-même. Seuls `src/` et
+les fichiers `package.json` sont rafraîchis à chaque déploiement ;
+`checkpoints/` et `results/` sont préservés (un push sans rapport ne détruit
+pas un entraînement en cours).
+
+Le dossier appartient à l'utilisateur système `hibou3dd` (même compte que le
+serveur multijoueur). Pour lancer/reprendre un entraînement en arrière-plan
+malgré la déconnexion SSH :
+
+```bash
+ssh <user>@<ip-oracle>
+sudo -u hibou3dd screen -S hibou3d-training
+cd /opt/hibou3d-training
+sudo -u hibou3dd node src/train.js --generations 150 --population 24
+# Ctrl+A puis D pour détacher l'écran sans tuer le process
+```
+
+Pour revenir voir la progression : `sudo -u hibou3dd screen -r
+hibou3d-training`. Pour reprendre après interruption :
+`node src/train.js --resume checkpoints/latest.json ...`.
+
+Le dashboard écoute en local uniquement par défaut (`127.0.0.1`, pas
+d'authentification). Pour le consulter depuis ton poste, ouvre un tunnel SSH
+plutôt que d'exposer le port publiquement :
+
+```bash
+ssh -L 3000:127.0.0.1:3000 <user>@<ip-oracle>
+```
+
+puis ouvre `http://localhost:3000` dans ton navigateur.
 
 Les débits réels dépendent fortement du CPU — la page affiche le débit mesuré
 et l'ETA recalculée en direct, donc pas besoin de deviner à l'avance : lancer,
