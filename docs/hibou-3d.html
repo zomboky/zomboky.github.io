@@ -78,7 +78,7 @@ import { initMultiplayer, auraColorHex } from './scripts/hibou3d-multiplayer.js'
 // ══════════════════════════════════════════════════
 //  ÉTAT DU JEU
 // ══════════════════════════════════════════════════
-const S = { START: 0, PLAY: 1, OVER: 2, PAUSED: 3, LOOT: 4, MP_LOBBY: 5, MP_DEAD: 6, CAMPAIGN_SELECT: 7, LEVEL_END: 8, CUTSCENE: 9, CAMPAIGN_LOCK: 10 };
+const S = { START: 0, PLAY: 1, OVER: 2, PAUSED: 3, LOOT: 4, MP_LOBBY: 5, MP_DEAD: 6, CAMPAIGN_SELECT: 7, LEVEL_END: 8, CUTSCENE: 9, CAMPAIGN_LOCK: 10, QUICK_SELECT: 11 };
 let state = S.START;
 
 const MAX_COMBO_TIME = 120;
@@ -2147,6 +2147,7 @@ function handleTouchStart(e) {
     const inRect = (r) => r && t.clientX >= r.x && t.clientX <= r.x + r.w && t.clientY >= r.y && t.clientY <= r.y + r.h;
     if (state === S.START && inRect(startMultiBtnRect)) { enterMultiplayerLobby(); e.preventDefault(); return; }
     if (state === S.START && inRect(startCampaignBtnRect)) { requestCampaignEntry(); e.preventDefault(); return; }
+    if (state === S.START && inRect(startQuickIaBtnRect)) { state = S.QUICK_SELECT; e.preventDefault(); return; }
     beginGame(); e.preventDefault(); return;
   }
   if (state === S.MP_LOBBY) {
@@ -2158,6 +2159,12 @@ function handleTouchStart(e) {
   if (state === S.CAMPAIGN_SELECT) {
     const t = e.changedTouches[0];
     handleCampaignSelectClick(t.clientX, t.clientY);
+    e.preventDefault();
+    return;
+  }
+  if (state === S.QUICK_SELECT) {
+    const t = e.changedTouches[0];
+    handleQuickSelectClick(t.clientX, t.clientY);
     e.preventDefault();
     return;
   }
@@ -2219,6 +2226,10 @@ window.addEventListener('keydown', e => {
     if (e.key === 'Escape') { state = S.START; return; }
     return;
   }
+  if (state === S.QUICK_SELECT) {
+    if (e.key === 'Escape') { state = S.START; return; }
+    return;
+  }
   if (state === S.CUTSCENE) {
     if (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape') skipCutscene();
     return;
@@ -2247,7 +2258,7 @@ let mouseDX = 0, mouseDY = 0;
 //    pivote de 180° tant que le bouton est enfoncé (voir updateCameraClip).
 let lookBack = false;
 // Zones cliquables des boutons Solo/Multijoueur/Campagne de l'écran d'accueil (recalculées à chaque drawStart())
-let startSoloBtnRect = null, startMultiBtnRect = null, startCampaignBtnRect = null;
+let startSoloBtnRect = null, startMultiBtnRect = null, startCampaignBtnRect = null, startQuickIaBtnRect = null;
 // Zones cliquables des nœuds de niveau de la carte de campagne (recalculées à chaque drawCampaignSelect())
 let campaignNodeRects = [];
 // Zones cliquables des boutons de l'écran de fin de niveau (recalculées à chaque drawLevelEnd())
@@ -2375,6 +2386,7 @@ window.addEventListener('pointerdown', e => {
   }
   if (state === S.MP_LOBBY) { if (mp) mp.onLobbyClick(e.clientX, e.clientY); return; }
   if (state === S.CAMPAIGN_SELECT) { handleCampaignSelectClick(e.clientX, e.clientY); return; }
+  if (state === S.QUICK_SELECT) { handleQuickSelectClick(e.clientX, e.clientY); return; }
   if (state === S.CUTSCENE) { skipCutscene(); return; }
   if (state === S.LEVEL_END) { handleLevelEndClick(e.clientX, e.clientY); return; }
   if (multiplayerMode && state === S.PLAY && e.button === 0) mouseFireHeld = true;
@@ -2382,6 +2394,7 @@ window.addEventListener('pointerdown', e => {
     const inRect = (r) => r && e.clientX >= r.x && e.clientX <= r.x + r.w && e.clientY >= r.y && e.clientY <= r.y + r.h;
     if (inRect(startMultiBtnRect)) { enterMultiplayerLobby(); return; }
     if (inRect(startCampaignBtnRect)) { requestCampaignEntry(); return; }
+    if (inRect(startQuickIaBtnRect)) { state = S.QUICK_SELECT; return; }
     beginGame(); // clic sur SOLO ou n'importe où ailleurs sur l'écran d'accueil
   }
   else if (state === S.OVER) beginGame();
@@ -4684,6 +4697,20 @@ function beginCampaignDogfight(level) {
   botRespawn();
 }
 
+// ── Combat libre contre l'IA (bouton COMBAT VS IA de l'écran d'accueil) : même
+// duel 1v1 que la campagne (voir beginCampaignDogfight) mais sans niveau/carte/
+// verrou — campaignCtx reste null, donc pas d'objectif ni de limite de vies :
+// on respawn indéfiniment jusqu'à quitter (Retour arrière en pause). ──
+function beginQuickDogfight(difficulty) {
+  if (!assetsReady) return;
+  beginMultiplayerGame('brown');
+  vsBotMode = true;
+  botDifficulty = difficulty;
+  campaignKills = 0; campaignDeaths = 0;
+  spawnBotEntity('owl');
+  botRespawn();
+}
+
 // Niveau au sol : mode survie solo paramétré — effectif d'ours fixe et
 // immobile (voir newBear/updateBears), événements aléatoires désactivés.
 function beginCampaignGround(level) {
@@ -4819,15 +4846,19 @@ function beginMultiplayerGame(colorName) {
 }
 
 // Quitter la partie en cours (Retour arrière depuis la pause) : retour au salon
-// multijoueur réseau, ou au menu si c'était une campagne (pas de salon pour l'IA).
+// multijoueur réseau, à la carte si c'était un niveau de campagne, au menu si
+// c'était un combat libre contre l'IA (pas de salon ni de carte pour ce mode).
 function leaveMultiplayerGame() {
-  const wasCampaign = vsBotMode;
+  const wasBot = vsBotMode, wasCampaign = !!campaignCtx;
   if (mp) mp.leaveRoom();
   clearMultiplayerWorld();
   if (wasCampaign) { // abandon d'un niveau de campagne : retour à la carte
     multiplayerMode = false;
     campaignCtx = null;
     state = S.CAMPAIGN_SELECT;
+  } else if (wasBot) { // abandon d'un combat libre contre l'IA : retour au menu
+    multiplayerMode = false;
+    state = S.START;
   } else {
     state = S.MP_LOBBY;
   }
@@ -5298,7 +5329,7 @@ function drawStart() {
   hctx.save();
   hctx.fillStyle = 'rgba(4,4,18,0.75)'; hctx.fillRect(0, 0, W, H);
   const cx = W / 2, cy = H / 2;
-  rrect(cx - 190, cy - 220, 380, 420, 28, 'rgba(12,12,48,0.96)', 'rgba(110,90,255,0.45)');
+  rrect(cx - 190, cy - 220, 380, 480, 28, 'rgba(12,12,48,0.96)', 'rgba(110,90,255,0.45)');
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
   hctx.font = '60px serif'; hctx.fillText('🦉', cx, cy - 160);
   hctx.fillStyle = '#cbc3ff'; hctx.font = '900 28px system-ui';
@@ -5326,24 +5357,30 @@ function drawStart() {
   hctx.fillStyle = '#fff'; hctx.font = 'bold 15px system-ui';
   hctx.fillText('Choisis un mode', cx, cy + 102);
 
-  const btnW = 112, btnH = 44, btnGap = 10, btnY = cy + 120;
-  const btnTotalW = btnW * 3 + btnGap * 2, btnX0 = cx - btnTotalW / 2;
-  startSoloBtnRect     = { x: btnX0,                     y: btnY, w: btnW, h: btnH };
-  startMultiBtnRect    = { x: btnX0 + btnW + btnGap,     y: btnY, w: btnW, h: btnH };
-  startCampaignBtnRect = { x: btnX0 + 2 * (btnW + btnGap), y: btnY, w: btnW, h: btnH };
-  rrect(startSoloBtnRect.x, btnY, btnW, btnH, 10, 'rgba(120,110,255,0.3)', 'rgba(180,170,255,0.8)');
-  rrect(startMultiBtnRect.x, btnY, btnW, btnH, 10, 'rgba(60,180,255,0.25)', 'rgba(120,220,255,0.8)');
-  rrect(startCampaignBtnRect.x, btnY, btnW, btnH, 10, 'rgba(180,90,255,0.25)', 'rgba(220,140,255,0.8)');
+  // Grille 2×2 : ligne 1 = SOLO/MULTIJOUEUR, ligne 2 = CAMPAGNE/COMBAT VS IA
+  const btnW = 175, btnH = 44, btnGap = 10, rowGap = 8;
+  const row1Y = cy + 120, row2Y = row1Y + btnH + rowGap;
+  const btnTotalW = btnW * 2 + btnGap, btnX0 = cx - btnTotalW / 2;
+  startSoloBtnRect     = { x: btnX0,             y: row1Y, w: btnW, h: btnH };
+  startMultiBtnRect    = { x: btnX0 + btnW + btnGap, y: row1Y, w: btnW, h: btnH };
+  startCampaignBtnRect = { x: btnX0,             y: row2Y, w: btnW, h: btnH };
+  startQuickIaBtnRect  = { x: btnX0 + btnW + btnGap, y: row2Y, w: btnW, h: btnH };
+  rrect(startSoloBtnRect.x, row1Y, btnW, btnH, 10, 'rgba(120,110,255,0.3)', 'rgba(180,170,255,0.8)');
+  rrect(startMultiBtnRect.x, row1Y, btnW, btnH, 10, 'rgba(60,180,255,0.25)', 'rgba(120,220,255,0.8)');
+  rrect(startCampaignBtnRect.x, row2Y, btnW, btnH, 10, 'rgba(180,90,255,0.25)', 'rgba(220,140,255,0.8)');
+  rrect(startQuickIaBtnRect.x, row2Y, btnW, btnH, 10, 'rgba(255,120,90,0.25)', 'rgba(255,160,120,0.8)');
   hctx.font = 'bold 13px system-ui'; hctx.fillStyle = '#fff';
-  hctx.fillText('SOLO', startSoloBtnRect.x + btnW / 2, btnY + btnH / 2);
-  hctx.fillText('MULTIJOUEUR', startMultiBtnRect.x + btnW / 2, btnY + btnH / 2);
+  hctx.fillText('SOLO', startSoloBtnRect.x + btnW / 2, row1Y + btnH / 2);
+  hctx.fillText('MULTIJOUEUR', startMultiBtnRect.x + btnW / 2, row1Y + btnH / 2);
   hctx.font = 'bold 11px system-ui';
-  hctx.fillText('CAMPAGNE', startCampaignBtnRect.x + btnW / 2, btnY + btnH / 2 - 8);
-  hctx.fillText('🐻 vs 🦉', startCampaignBtnRect.x + btnW / 2, btnY + btnH / 2 + 8);
+  hctx.fillText('CAMPAGNE', startCampaignBtnRect.x + btnW / 2, row2Y + btnH / 2 - 8);
+  hctx.fillText('🐻 vs 🦉', startCampaignBtnRect.x + btnW / 2, row2Y + btnH / 2 + 8);
+  hctx.fillText('COMBAT VS IA', startQuickIaBtnRect.x + btnW / 2, row2Y + btnH / 2 - 8);
+  hctx.fillText('⚔️ duel libre', startQuickIaBtnRect.x + btnW / 2, row2Y + btnH / 2 + 8);
   hctx.font = 'bold 13px system-ui';
   if (!isMobile) {
     hctx.fillStyle = '#9be0ff'; hctx.font = '11px system-ui';
-    hctx.fillText('([M] = raccourci multijoueur)', cx, btnY + btnH + 20);
+    hctx.fillText('([M] = raccourci multijoueur)', cx, row2Y + btnH + 20);
   }
   hctx.restore();
 }
@@ -5355,6 +5392,8 @@ function drawStart() {
 // ══════════════════════════════════════════════════
 let mapAnim = null; // { fromIdx, toIdx, t } — vol du hibou entre deux nœuds (t: 0..1)
 let campaignBackBtnRect = null;
+// Zones cliquables de l'écran S.QUICK_SELECT (combat libre vs IA, voir drawQuickSelect())
+let quickDifficultyRects = [], quickBackBtnRect = null;
 
 // Position écran (pixels) du nœud d'un niveau — la zone jouable évite les bords.
 function campaignNodePoint(i) {
@@ -5473,6 +5512,63 @@ function handleCampaignSelectClick(x, y) {
       if (r.unlocked) beginCampaignGame(r.id);
       return;
     }
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  COMBAT LIBRE CONTRE L'IA (S.QUICK_SELECT) — choix de la difficulté avant un
+//  duel 1v1 sans campagne ni verrou (voir beginQuickDogfight).
+// ══════════════════════════════════════════════════
+const QUICK_DIFFICULTIES = [
+  { id: 'easy',   label: 'Facile' },
+  { id: 'medium', label: 'Moyen' },
+  { id: 'hard',   label: 'Difficile' },
+  { id: 'expert', label: 'Expert' },
+];
+
+function drawQuickSelect() {
+  const W = hudCanvas.width, H = hudCanvas.height;
+  hctx.save();
+  const bgGrad = hctx.createLinearGradient(0, 0, 0, H);
+  bgGrad.addColorStop(0, 'rgba(4,4,24,0.88)'); bgGrad.addColorStop(1, 'rgba(10,4,30,0.82)');
+  hctx.fillStyle = bgGrad; hctx.fillRect(0, 0, W, H);
+
+  const cx = W / 2, cy = H / 2;
+  hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+  hctx.fillStyle = '#cbc3ff'; hctx.font = '900 26px system-ui';
+  hctx.fillText('⚔️ COMBAT CONTRE L\'IA', cx, cy - 90);
+  hctx.fillStyle = '#9fb0d8'; hctx.font = '13px system-ui';
+  hctx.fillText('Duel libre 1v1, sans progression — choisis la difficulté.', cx, cy - 62);
+
+  const btnW = 150, btnH = 48, gap = 14;
+  quickDifficultyRects = [];
+  QUICK_DIFFICULTIES.forEach((d, i) => {
+    const col = i % 2, row = Math.floor(i / 2);
+    const x = cx - btnW - gap / 2 + col * (btnW + gap);
+    const y = cy - 20 + row * (btnH + gap);
+    const r = { x, y, w: btnW, h: btnH, id: d.id };
+    quickDifficultyRects.push(r);
+    rrect(x, y, btnW, btnH, 12, 'rgba(255,120,90,0.22)', 'rgba(255,160,120,0.75)');
+    hctx.font = 'bold 15px system-ui'; hctx.fillStyle = '#fff';
+    hctx.fillText(d.label, x + btnW / 2, y + btnH / 2);
+  });
+
+  quickBackBtnRect = { x: 16, y: 16, w: 96, h: 34 };
+  rrect(quickBackBtnRect.x, quickBackBtnRect.y, quickBackBtnRect.w, quickBackBtnRect.h, 10, 'rgba(110,90,255,0.25)', 'rgba(180,170,255,0.7)');
+  hctx.font = 'bold 12px system-ui'; hctx.fillStyle = '#fff'; hctx.textAlign = 'center';
+  hctx.fillText('← Menu', quickBackBtnRect.x + quickBackBtnRect.w / 2, quickBackBtnRect.y + quickBackBtnRect.h / 2);
+  if (!isMobile) {
+    hctx.fillStyle = '#cbc3dd'; hctx.font = '12px system-ui';
+    hctx.fillText('[Échap] Retour au menu', cx, cy - 20 + 2 * (btnH + gap) + 24);
+  }
+  hctx.restore();
+}
+
+function handleQuickSelectClick(x, y) {
+  const b = quickBackBtnRect;
+  if (b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { state = S.START; return; }
+  for (const r of quickDifficultyRects) {
+    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) { beginQuickDogfight(r.id); return; }
   }
 }
 
@@ -5729,6 +5825,8 @@ function drawOverlay() {
     if (mp) mp.drawLobby();
   } else if (state === S.CAMPAIGN_SELECT) {
     drawCampaignSelect();
+  } else if (state === S.QUICK_SELECT) {
+    drawQuickSelect();
   } else {
     if (state === S.PLAY) drawSpeedFX();
     for (const p of particles) {
