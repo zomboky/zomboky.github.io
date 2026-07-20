@@ -2052,7 +2052,15 @@ function updateFlap(dt, speedRatio) {
 // ══════════════════════════════════════════════════
 //  ENTRÉES — clavier (ZQSD/AE) + souris (joystick additionnel) + tactile (mobile)
 // ══════════════════════════════════════════════════
-const isMobile = LOW_SPEC; // même détection, évaluée en tête de module (les budgets en dépendent)
+// LOW_SPEC seul faisait basculer en mode « mobile » (joystick tactile à l'écran,
+// pointer lock jamais demandé → curseur souris libre de sortir de la fenêtre) tout
+// PC dont l'API tactile répond positivement — écran tactile présent mais inutilisé,
+// ou pilote de pavé tactile « precision » qui fait remonter maxTouchPoints > 0 sans
+// écran tactile réel. On ne garde le mode tactile que si, en plus, l'appareil n'a
+// PAS de pointeur précis et survolable (souris/trackpad) : un PC avec souris a
+// toujours `pointer: fine` + `hover: hover`, même s'il expose aussi du tactile.
+const HAS_FINE_POINTER = !!(window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches);
+const isMobile = LOW_SPEC && !HAS_FINE_POINTER;
 
 const keys = {};
 const ARROW_KEYS = ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
