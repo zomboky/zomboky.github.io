@@ -49,6 +49,12 @@ export function initMultiplayer(hooks) {
   let myColor = null;
   let roster = []; // [{id, pseudo, color, alive}] — tous les joueurs de ma partie
 
+  // Objets ramassables partagés (voir server.js) : graine de la partie + génération courante
+  // de chaque emplacement. Le jeu calcule les positions de façon déterministe à partir de là.
+  let matchSeed = 0;
+  let crateGen = [];
+  let healGen = [];
+
   let presenceUsers = []; // [{id, pseudo, away, you}]
   let lobbyRooms = [];    // [{id, count, max, players:[{pseudo,color}]}]
 
@@ -156,6 +162,9 @@ export function initMultiplayer(hooks) {
         myColor = msg.color;
         myId = msg.youId;
         roster = (msg.players || []).map((p) => ({ kills: 0, ...p }));
+        matchSeed = (msg.seed >>> 0) || 1;
+        crateGen = Array.isArray(msg.crateGen) ? msg.crateGen.slice() : [];
+        healGen = Array.isArray(msg.healGen) ? msg.healGen.slice() : [];
         lobbyError = '';
         for (const p of roster) {
           if (p.id !== myId) addRemote(p);
@@ -250,6 +259,21 @@ export function initMultiplayer(hooks) {
         break;
       }
 
+      case 'crate-taken': {
+        const idx = msg.idx | 0;
+        if (idx >= 0 && idx < crateGen.length) crateGen[idx] = msg.gen >>> 0;
+        // Le jeu déplace la caisse idx vers sa nouvelle position déterministe (même chez tous).
+        if (hooks.onCrateTaken) hooks.onCrateTaken(idx, msg.gen >>> 0, msg.by === myId);
+        break;
+      }
+
+      case 'heal-taken': {
+        const idx = msg.idx | 0;
+        if (idx >= 0 && idx < healGen.length) healGen[idx] = msg.gen >>> 0;
+        if (hooks.onHealTaken) hooks.onHealTaken(idx, msg.gen >>> 0, msg.by === myId);
+        break;
+      }
+
       case 'kill': {
         const killer = roster.find((p) => p.id === msg.killerId);
         if (killer) killer.kills = (killer.kills || 0) + 1;
@@ -306,6 +330,9 @@ export function initMultiplayer(hooks) {
     roomId = null;
     myColor = null;
     roster = [];
+    matchSeed = 0;
+    crateGen = [];
+    healGen = [];
   }
 
   // ---------- API ----------
@@ -362,12 +389,19 @@ export function initMultiplayer(hooks) {
     sendDied(cause) { send({ type: 'died', cause }); },
     sendRespawn() { send({ type: 'respawn-request' }); },
     sendPickupAmmo() { send({ type: 'pickup-ammo' }); },
+    // Ramassage synchronisé : on envoie l'index + la génération qu'on croit courante ; le
+    // serveur ne l'honore que si elle correspond (empêche les doubles), puis relaie à tous.
+    sendPickupCrate(idx, gen) { send({ type: 'pickup-crate', idx, gen }); },
+    sendPickupHeal(idx, gen) { send({ type: 'pickup-heal', idx, gen }); },
 
     // — état consultable par le jeu —
     inRoom() { return roomId !== null; },
     myId() { return myId; },
     myColor() { return myColor; },
     roster() { return roster; },
+    matchSeed() { return matchSeed; },
+    crateGen(idx) { return crateGen[idx] || 0; },
+    healGen(idx) { return healGen[idx] || 0; },
     remotesList() {
       const out = [];
       for (const r of remotes.values()) {
