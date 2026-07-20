@@ -1,5 +1,5 @@
 (function () {
-  var API_URL = 'https://bear.servebeer.com/orange-api/api/visitor-count';
+  var API_URL = 'https://bear.servebeer.com/zomboky-api/api/visitor-count';
   var el = document.getElementById('visitor-counter-digits');
   if (!el) return;
 

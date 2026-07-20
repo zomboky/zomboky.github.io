@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  var API_BASE = 'https://bear.servebeer.com/orange-api';
+  var API_BASE = 'https://bear.servebeer.com/zomboky-api';
   var SESSION_KEY = 'h3d_v6_token';
 
   var lock = document.getElementById('hibou-lock');

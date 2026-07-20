@@ -19,11 +19,51 @@
   html, body { width: 100%; height: 100%; overflow: hidden; background: #04040e; }
   canvas { position: fixed; top: 0; left: 0; display: block; }
   #hud { pointer-events: none; }
+  #campaign-lock {
+    display: none;
+    position: fixed; inset: 0; z-index: 10;
+    align-items: center; justify-content: center;
+    background: rgba(4,4,14,0.88); backdrop-filter: blur(2px);
+    font-family: system-ui, sans-serif; color: #fff;
+  }
+  #campaign-lock.open { display: flex; }
+  #campaign-lock-form {
+    width: min(320px, 86vw); text-align: center;
+    background: rgba(20,16,48,0.96); border: 1px solid rgba(180,140,255,0.5);
+    border-radius: 14px; padding: 1.6rem 1.4rem;
+  }
+  #campaign-lock-title { font-size: 0.95rem; font-weight: bold; margin: 0 0 1.1rem; line-height: 1.4; color: #d8c8ff; }
+  #campaign-lock-form label { display: block; text-align: left; margin-bottom: 0.4rem; font-size: 0.8rem; color: #cbc3dd; }
+  #campaign-lock-input {
+    width: 100%; padding: 0.5rem 0.6rem; font-size: 1rem; border-radius: 8px;
+    border: 1px solid rgba(180,140,255,0.5); background: #16122e; color: #fff;
+  }
+  #campaign-lock-form button {
+    margin-top: 0.9rem; width: 100%; padding: 0.55rem; border: none; border-radius: 8px;
+    background: rgba(180,90,255,0.7); color: #fff; font-weight: bold; font-size: 0.9rem; cursor: pointer;
+  }
+  #campaign-lock-form button:disabled { opacity: 0.6; cursor: default; }
+  #campaign-lock-cancel {
+    display: block; margin-top: 0.7rem; background: none; border: none; color: #9b93cc;
+    font-size: 0.78rem; text-decoration: underline; cursor: pointer; width: 100%;
+  }
+  #campaign-lock-error { display: none; color: #ff6666; margin: 0.8rem 0 0; font-size: 0.82rem; }
 </style>
 </head>
 <body>
 <canvas id="gl"></canvas>
 <canvas id="hud"></canvas>
+
+<div id="campaign-lock">
+  <form id="campaign-lock-form">
+    <p id="campaign-lock-title">🚧 Mode campagne en développement<br>Accès réservé — code de test requis</p>
+    <label for="campaign-lock-input">Code d'accès</label>
+    <input type="password" id="campaign-lock-input" autocomplete="off">
+    <p id="campaign-lock-error">Code incorrect.</p>
+    <button type="submit">Valider</button>
+    <button type="button" id="campaign-lock-cancel">Retour</button>
+  </form>
+</div>
 
 <script type="module">
 import * as THREE from 'three';
@@ -38,7 +78,7 @@ import { initMultiplayer, auraColorHex } from './scripts/hibou3d-multiplayer.js'
 // ══════════════════════════════════════════════════
 //  ÉTAT DU JEU
 // ══════════════════════════════════════════════════
-const S = { START: 0, PLAY: 1, OVER: 2, PAUSED: 3, LOOT: 4, MP_LOBBY: 5, MP_DEAD: 6, CAMPAIGN_SELECT: 7 };
+const S = { START: 0, PLAY: 1, OVER: 2, PAUSED: 3, LOOT: 4, MP_LOBBY: 5, MP_DEAD: 6, CAMPAIGN_SELECT: 7, LEVEL_END: 8, CUTSCENE: 9, CAMPAIGN_LOCK: 10 };
 let state = S.START;
 
 const MAX_COMBO_TIME = 120;
@@ -602,9 +642,16 @@ const MODEL_URLS = {
 const models = {};
 const modelClips = {}; // clips d'animation (le cas échéant) du .glb, indexés comme MODEL_URLS
 let assetsReady = false;
+// Suivi de progression (par fichier, pas par octet — suffisant pour montrer que
+// le chargement avance) : évite un écran de chargement figé sur ~12 Mo d'assets.
+let loadProgress = 0;
+const loadManager = new THREE.LoadingManager();
+loadManager.onProgress = (url, itemsLoaded, itemsTotal) => {
+  loadProgress = itemsTotal ? itemsLoaded / itemsTotal : 0;
+};
 
 async function loadAssets() {
-  const loader = new GLTFLoader();
+  const loader = new GLTFLoader(loadManager);
   const entries = Object.entries(MODEL_URLS);
   const results = await Promise.allSettled(entries.map(([, url]) => loader.loadAsync(url)));
   results.forEach((res, i) => {
@@ -620,7 +667,7 @@ async function loadAssets() {
   // d'origine. On retint une teinte par pièce nommée (Roof/Cabin/Chimney/Door dans le .obj
   // source), assortie à la palette bois/toit déjà utilisée par les chalets procéduraux.
   try {
-    const cabinRoot = await new OBJLoader().loadAsync('models/cabin.obj');
+    const cabinRoot = await new OBJLoader(loadManager).loadAsync('models/cabin.obj');
     const CABIN_PART_COLORS = { Roof: ROOF_COLOR, Cabin: WOOD_LIGHT, Chimney: 0x6b6058, Door: WOOD_DARK };
     cabinRoot.traverse(o => {
       if (o.isMesh) {
@@ -2099,7 +2146,7 @@ function handleTouchStart(e) {
     const t = e.changedTouches[0];
     const inRect = (r) => r && t.clientX >= r.x && t.clientX <= r.x + r.w && t.clientY >= r.y && t.clientY <= r.y + r.h;
     if (state === S.START && inRect(startMultiBtnRect)) { enterMultiplayerLobby(); e.preventDefault(); return; }
-    if (state === S.START && inRect(startCampaignBtnRect)) { state = S.CAMPAIGN_SELECT; e.preventDefault(); return; }
+    if (state === S.START && inRect(startCampaignBtnRect)) { requestCampaignEntry(); e.preventDefault(); return; }
     beginGame(); e.preventDefault(); return;
   }
   if (state === S.MP_LOBBY) {
@@ -2111,6 +2158,17 @@ function handleTouchStart(e) {
   if (state === S.CAMPAIGN_SELECT) {
     const t = e.changedTouches[0];
     handleCampaignSelectClick(t.clientX, t.clientY);
+    e.preventDefault();
+    return;
+  }
+  if (state === S.CUTSCENE) {
+    skipCutscene();
+    e.preventDefault();
+    return;
+  }
+  if (state === S.LEVEL_END) {
+    const t = e.changedTouches[0];
+    handleLevelEndClick(t.clientX, t.clientY);
     e.preventDefault();
     return;
   }
@@ -2143,6 +2201,7 @@ if (isMobile) {
 }
 
 window.addEventListener('keydown', e => {
+  if (state === S.CAMPAIGN_LOCK) return; // saisie du code : gérée par le formulaire, pas par les contrôles du jeu
   keys[e.key.toLowerCase()] = true;
   if (e.key === ' ' || ARROW_KEYS.includes(e.key.toLowerCase())) e.preventDefault();
   // Bascule du mode triche dev (indicateurs de position des adversaires) —
@@ -2160,10 +2219,21 @@ window.addEventListener('keydown', e => {
     if (e.key === 'Escape') { state = S.START; return; }
     return;
   }
+  if (state === S.CUTSCENE) {
+    if (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape') skipCutscene();
+    return;
+  }
+  if (state === S.LEVEL_END) {
+    if (e.key === 'Escape') { campaignReturnToMap(); return; }
+    if (e.key === 'Enter' || e.key === ' ') { campaignReplay(); return; }
+    return;
+  }
   if (e.key === 'Escape') { settingsOpen = false; return; }
   if (multiplayerMode && state === S.PLAY && /^[1-3]$/.test(e.key)) { useInventorySlot(Number(e.key) - 1); return; }
   if ((e.key === 'm' || e.key === 'M') && (state === S.START || state === S.OVER) && !isMobile) { enterMultiplayerLobby(); return; }
   if (multiplayerMode && state === S.PAUSED && e.key === 'Backspace') { leaveMultiplayerGame(); return; }
+  // Niveau de campagne au sol (hors multijoueur) : abandon depuis la pause → retour carte
+  if (campaignCtx && !multiplayerMode && state === S.PAUSED && e.key === 'Backspace') { campaignReturnToMap(); return; }
   if (state === S.START || state === S.OVER) beginGame();
   else if (state === S.PAUSED) requestFlightPointerLock();
 });
@@ -2178,8 +2248,100 @@ let mouseDX = 0, mouseDY = 0;
 let lookBack = false;
 // Zones cliquables des boutons Solo/Multijoueur/Campagne de l'écran d'accueil (recalculées à chaque drawStart())
 let startSoloBtnRect = null, startMultiBtnRect = null, startCampaignBtnRect = null;
-// Zones cliquables des 3 boutons de difficulté de l'écran S.CAMPAIGN_SELECT (recalculées à chaque drawCampaignSelect())
-let campaignDifficultyRects = [];
+// Zones cliquables des nœuds de niveau de la carte de campagne (recalculées à chaque drawCampaignSelect())
+let campaignNodeRects = [];
+// Zones cliquables des boutons de l'écran de fin de niveau (recalculées à chaque drawLevelEnd())
+let levelEndBtnRects = [];
+
+// ══════════════════════════════════════════════════
+//  VERROU CAMPAGNE (développement en cours, accès solo réservé)
+//  Le déverrouillage n'est jamais purement client : `campaignUnlocked` ne
+//  passe à true qu'après une réponse serveur (token vérifié). Modifier le
+//  CSS ou l'état local depuis les devtools ne donne accès à rien, puisque
+//  `state`/`campaignUnlocked` vivent dans la portée du module (pas sur
+//  `window`) et que `handleCampaignSelectClick`/le contenu des niveaux ne
+//  sont atteignables qu'en passant par S.CAMPAIGN_SELECT.
+// ══════════════════════════════════════════════════
+const CAMPAIGN_API_BASE = 'https://bear.servebeer.com/zomboky-api';
+const CAMPAIGN_TOKEN_KEY = 'h3d_campaign_token';
+let campaignUnlocked = false;
+let campaignAuthToken = null;
+let campaignReturnState = S.START; // état à restaurer si l'utilisateur annule
+
+const campaignLockEl = document.getElementById('campaign-lock');
+const campaignLockForm = document.getElementById('campaign-lock-form');
+const campaignLockInput = document.getElementById('campaign-lock-input');
+const campaignLockError = document.getElementById('campaign-lock-error');
+const campaignLockSubmitBtn = campaignLockForm.querySelector('button[type="submit"]');
+const campaignLockCancelBtn = document.getElementById('campaign-lock-cancel');
+
+// Empêche les touches/clics saisis dans le formulaire de remonter jusqu'aux
+// contrôles du jeu écoutés sur window (même pattern que hibou3d-lock.js).
+['keydown', 'keyup', 'keypress', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'touchstart', 'touchend']
+  .forEach(type => campaignLockEl.addEventListener(type, e => e.stopPropagation()));
+
+function openCampaignLock() {
+  campaignReturnState = state;
+  state = S.CAMPAIGN_LOCK;
+  campaignLockError.style.display = 'none';
+  campaignLockInput.value = '';
+  campaignLockEl.classList.add('open');
+  if (!isMobile) campaignLockInput.focus();
+}
+function closeCampaignLock(toState) {
+  campaignLockEl.classList.remove('open');
+  state = toState;
+}
+// Clic sur le bouton CAMPAGNE : ne rentre dans S.CAMPAIGN_SELECT que si un
+// token a déjà été vérifié cette session, sinon affiche le verrou.
+function requestCampaignEntry() {
+  if (campaignUnlocked) { state = S.CAMPAIGN_SELECT; return; }
+  openCampaignLock();
+}
+function campaignLoginAttempt(password) {
+  campaignLockSubmitBtn.disabled = true;
+  fetch(CAMPAIGN_API_BASE + '/api/hibou3d/campaign-login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  })
+    .then(res => {
+      if (!res.ok) return res.json().catch(() => ({})).then(body => { throw new Error(body.error || ('HTTP ' + res.status)); });
+      return res.json();
+    })
+    .then(body => {
+      campaignAuthToken = body.token;
+      sessionStorage.setItem(CAMPAIGN_TOKEN_KEY, body.token);
+      campaignUnlocked = true;
+      closeCampaignLock(S.CAMPAIGN_SELECT);
+    })
+    .catch(err => {
+      campaignLockError.textContent = err.message === 'mot de passe incorrect' ? 'Code incorrect.' : 'Connexion au serveur impossible (' + err.message + ').';
+      campaignLockError.style.display = 'block';
+      campaignLockInput.value = '';
+      campaignLockInput.focus();
+    })
+    .finally(() => { campaignLockSubmitBtn.disabled = false; });
+}
+function verifyStoredCampaignToken() {
+  const token = sessionStorage.getItem(CAMPAIGN_TOKEN_KEY);
+  if (!token) return;
+  fetch(CAMPAIGN_API_BASE + '/api/hibou3d/campaign-verify', { headers: { Authorization: 'Bearer ' + token } })
+    .then(res => {
+      if (!res.ok) throw new Error('invalid');
+      campaignAuthToken = token;
+      campaignUnlocked = true;
+    })
+    .catch(() => sessionStorage.removeItem(CAMPAIGN_TOKEN_KEY));
+}
+campaignLockForm.addEventListener('submit', e => {
+  e.preventDefault();
+  campaignLockError.style.display = 'none';
+  campaignLoginAttempt(campaignLockInput.value);
+});
+campaignLockCancelBtn.addEventListener('click', () => closeCampaignLock(campaignReturnState));
+verifyStoredCampaignToken();
+
 glCanvas.addEventListener('contextmenu', e => e.preventDefault());
 window.addEventListener('blur', () => { lookBack = false; });
 function requestFlightPointerLock() {
@@ -2213,11 +2375,13 @@ window.addEventListener('pointerdown', e => {
   }
   if (state === S.MP_LOBBY) { if (mp) mp.onLobbyClick(e.clientX, e.clientY); return; }
   if (state === S.CAMPAIGN_SELECT) { handleCampaignSelectClick(e.clientX, e.clientY); return; }
+  if (state === S.CUTSCENE) { skipCutscene(); return; }
+  if (state === S.LEVEL_END) { handleLevelEndClick(e.clientX, e.clientY); return; }
   if (multiplayerMode && state === S.PLAY && e.button === 0) mouseFireHeld = true;
   if (state === S.START) {
     const inRect = (r) => r && e.clientX >= r.x && e.clientX <= r.x + r.w && e.clientY >= r.y && e.clientY <= r.y + r.h;
     if (inRect(startMultiBtnRect)) { enterMultiplayerLobby(); return; }
-    if (inRect(startCampaignBtnRect)) { state = S.CAMPAIGN_SELECT; return; }
+    if (inRect(startCampaignBtnRect)) { requestCampaignEntry(); return; }
     beginGame(); // clic sur SOLO ou n'importe où ailleurs sur l'écran d'accueil
   }
   else if (state === S.OVER) beginGame();
@@ -2568,8 +2732,6 @@ function onGroundCrash() {
   if (state !== S.PLAY) return;
   if (multiplayerMode) { mpDie('crash'); return; } // en multijoueur : cooldown de respawn, pas de game over solo
   best = Math.max(best, score);
-  state = S.OVER;
-  overReason = 'crash';
   owlGroup.visible = false;
   document.body.style.cursor = 'default';
   if (document.pointerLockElement) document.exitPointerLock();
@@ -2577,6 +2739,9 @@ function onGroundCrash() {
   hitFlash = Math.max(hitFlash, 0.6);
   triggerHitStop(0.3, 0.15);
   spawnFX(owlGroup.position, 24, 'death', '💥 CRASHÉ !');
+  if (campaignCtx) { campaignLose('CRASHÉ !'); return; } // campagne au sol : écran de fin de niveau
+  state = S.OVER;
+  overReason = 'crash';
 }
 
 // ══════════════════════════════════════════════════
@@ -2880,6 +3045,7 @@ function updateBranches() {
         spawnFX(br.sprite.position, 12, 'collect', `+${gain}`);
         spawnFX3D(br.sprite.position, 14, 'collect'); // gerbe dorée dans la scène
         combo = Math.max(1, combo) + 1; comboTimer = MAX_COMBO_TIME;
+        if (campaignCtx && campaignCtx.level.type === 'ground') campaignCtx.progress++; // objectif de collecte
         while (bears.length < bearTarget()) bears.push(newBear());
       }
       removeBranch(i);
@@ -2934,6 +3100,8 @@ function setupBearProto() {
 
 function bearTarget() {
   if (multiplayerMode) return 0; // multijoueur : les ours disparaissent (tous les sites de spawn passent par ce plafond)
+  // Niveau de campagne au sol : effectif FIXE défini par le niveau (pas de rampe ni de lunes)
+  if (campaignCtx && campaignCtx.level.type === 'ground') return campaignCtx.level.bears.count;
   if (moon.state === 'blood') return 18;
   if (moon.state === 'full')  return 12;
   // Rampe de début de partie : on démarre à 1 ours et on rejoint la base de 2 en BEAR_RAMP_TIME.
@@ -2983,6 +3151,10 @@ function newBear() {
   pos = ARENA_CENTER.clone().add(offset);
   pos.y = Math.max(effectiveGroundY(pos.x, pos.z) + 2.5,
                    Math.min(pos.y, ARENA_CENTER.y + ARENA_RADIUS_Y * 0.55));
+  // Campagne au sol : ours IMMOBILE, posé au sol sur la trajectoire du hibou
+  // (le placement « une fois sur deux devant le hibou » en fait une embuscade).
+  const isStatic = !!(campaignCtx && campaignCtx.level.type === 'ground');
+  if (isStatic) pos.y = effectiveGroundY(pos.x, pos.z) + 1.2;
   sprite.position.copy(pos);
   scene.add(sprite);
 
@@ -2995,6 +3167,7 @@ function newBear() {
   const speedRamp = (isFullMoon || isBloodMoon) ? 1 : THREE.MathUtils.lerp(0.55, 1, ramp);
   return {
     sprite, menaceMat,
+    static: isStatic, // campagne au sol : l'ours ne bouge pas (embuscade), voir updateBears
     life: isBloodMoon ? rnd(400, 900) : isFullMoon ? rnd(300, 600) : rnd(1000, 2000),
     spdBase: ((isBloodMoon ? 22 : isFullMoon ? 16 : 11) + Math.min(score * 0.15, 10)) * speedRamp, // unités/s (mouvement mis à l'échelle par dt)
     lead: rnd(0.5, 1.5),         // anticipation : l'ours vise là où le hibou SERA, pas là où il est
@@ -3033,6 +3206,20 @@ function updateBears(dt) {
     if (b.spawnGrace > 0) b.spawnGrace--;
     b.bob += 0.12;
     if (b.spawnPulse > 0) b.spawnPulse = Math.max(0, b.spawnPulse - 0.05);
+
+    // Ours immobile (campagne au sol) : pas de poursuite ni de charge — juste la
+    // respiration, un halo de menace discret et le contact « mangé ».
+    if (b.static) {
+      b.sprite.position.y = effectiveGroundY(b.sprite.position.x, b.sprite.position.z) + 1.2 + Math.sin(b.bob) * 0.06;
+      b.menaceMat.opacity = THREE.MathUtils.lerp(b.menaceMat.opacity, 0.3 + 0.12 * Math.sin(b.bob * 2), 0.1);
+      b.sprite.scale.setScalar(BEAR_SCALE * (1 - b.spawnPulse * 0.6));
+      if (!b.sprite.isSprite) { // l'ours suit le hibou du regard (rotation seule, sans bouger)
+        _tmp.copy(owlGroup.position); _tmp.y = b.sprite.position.y;
+        b.sprite.lookAt(_tmp);
+      }
+      bearContactCheck(b);
+      continue;
+    }
 
     const slowMul = buffs.slow > 0 ? 0.3 : 1;
     const dist = b.sprite.position.distanceTo(owlGroup.position);
@@ -3108,25 +3295,35 @@ function updateBears(dt) {
       b.sprite.lookAt(_tmp);
     }
 
-    if (owlInvul <= 0 && buffs.invincible <= 0 && b.spawnGrace <= 0 && owlGroup.position.distanceTo(b.sprite.position) < COLLECT_RADIUS + 1) {
-      lives--;
-      screenShake = 25; hitFlash = 0.6;
-      triggerHitStop(0.24, 0.2);
-      spawnFX(b.sprite.position, 16, 'death');
-      if (lives <= 0) {
-        best = Math.max(best, score);
-        state = S.OVER;
-        overReason = 'eaten';
-        owlGroup.visible = false;
-        document.body.style.cursor = 'default';
-        if (document.pointerLockElement) document.exitPointerLock();
-      } else {
-        owlInvul = 120;
-        spawnFX(owlGroup.position, 30, 'death', '-1 Vie !');
-      }
-    }
+    bearContactCheck(b);
   }
   if (bears.length < bearTarget() && Math.random() < 0.02) bears.push(newBear());
+}
+
+// Contact hibou/ours (« mangé ») — partagé entre ours mobiles et immobiles.
+// En campagne, la défaite passe par l'écran de fin de niveau, pas par S.OVER.
+function bearContactCheck(b) {
+  if (owlInvul <= 0 && buffs.invincible <= 0 && b.spawnGrace <= 0 && owlGroup.position.distanceTo(b.sprite.position) < COLLECT_RADIUS + 1) {
+    lives--;
+    screenShake = 25; hitFlash = 0.6;
+    triggerHitStop(0.24, 0.2);
+    spawnFX(b.sprite.position, 16, 'death');
+    if (lives <= 0) {
+      best = Math.max(best, score);
+      owlGroup.visible = false;
+      document.body.style.cursor = 'default';
+      if (document.pointerLockElement) document.exitPointerLock();
+      if (campaignCtx) {
+        campaignLose('MANGÉ !');
+      } else {
+        state = S.OVER;
+        overReason = 'eaten';
+      }
+    } else {
+      owlInvul = 120;
+      spawnFX(owlGroup.position, 30, 'death', '-1 Vie !');
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════
@@ -3217,6 +3414,233 @@ const BOT_DIFFICULTY_TUNING = {
   expert: { aiTickInterval: 0.08, aimConeRad: THREE.MathUtils.degToRad(6.64),reactionDelay: 0.07, leadFactor: 0.85, throttleCap: 0.85,evadeLifeThreshold: 3.4, breakChance: 0.12, jinkPeriod: 0.37, fireDist: 229, extendDist: 22, extendClimb: 48, jinkAmplitude: 0.2,  breakPerpWeight: 0.97, aggressionBias: 0.23 },
 };
 
+// ══════════════════════════════════════════════════
+//  CAMPAGNE SOLO — suite de niveaux data-driven contre des ours.
+//  Deux types de niveaux :
+//   - 'ground'   : mode survie paramétré — ours au sol IMMOBILES (embuscades sur
+//                  la trajectoire), objectif de collecte de branches, pas de
+//                  lunes/tempêtes/cadeaux (événements aléatoires coupés).
+//   - 'dogfight' : combat aérien 1v1 contre un OURS VOLANT piloté par l'IA de
+//                  bot existante (BOT_DIFFICULTY_TUNING), mesh d'ours à la
+//                  place du hibou adverse — l'IA et le vol sont inchangés.
+//  La progression (niveaux débloqués) est sauvée en localStorage, voir
+//  plans/hibou3d-campagne.md pour la feuille de route (IA ours entraînée,
+//  N adversaires, télémétrie…).
+// ══════════════════════════════════════════════════
+
+// Chaque niveau est une entrée autonome : le nombre d'ours (`bears.count`),
+// l'adversaire volant (`opponent.difficulty`), l'objectif et les cinématiques
+// (`intro`/`outroWin`) s'éditent ici sans toucher au reste du code.
+// mapPos = position (0..1) du nœud sur la carte de campagne.
+const CAMPAIGN_LEVELS = [
+  {
+    id: 'lv1', name: 'La Clairière', type: 'ground',
+    bears: { count: 4 },
+    objective: { type: 'collect', count: 8, timeLimit: 180 },
+    playerLives: 2,
+    mapPos: { x: 0.14, y: 0.72 },
+    intro: [
+      { dur: 3.2, look: 'player', cam: { from: [0, 60, 120], to: [4, 12, 26] }, text: 'La forêt n’est plus sûre : les ours montent la garde…' },
+      { dur: 2.6, look: 'player', cam: { from: [4, 12, 26], to: [-6, 6, 14] }, text: 'Ramasse des branches sans te faire attraper.' },
+    ],
+  },
+  {
+    id: 'lv2', name: 'Premier Envol', type: 'dogfight',
+    opponent: { kind: 'bear', difficulty: 'easy' },
+    objective: { type: 'kills', count: 2 },
+    playerLives: 3,
+    mapPos: { x: 0.30, y: 0.50 },
+    intro: [
+      { dur: 3.0, look: 'bot', cam: { orbit: 16, height: 5, speed: 0.7 }, text: 'Un ours a pris l’air… et il est armé.' },
+      { dur: 2.4, look: 'player', cam: { from: [0, 8, 22], to: [0, 3, 12] }, text: 'Abats-le avant qu’il ne t’abatte !' },
+    ],
+  },
+  {
+    id: 'lv3', name: 'La Meute', type: 'ground',
+    bears: { count: 8 },
+    objective: { type: 'collect', count: 12, timeLimit: 150 },
+    playerLives: 2,
+    mapPos: { x: 0.46, y: 0.68 },
+    intro: [
+      { dur: 3.0, look: 'player', cam: { from: [0, 50, 100], to: [-5, 10, 20] }, text: 'La meute s’est installée. Ils sont partout.' },
+    ],
+  },
+  {
+    id: 'lv4', name: 'Le Rival', type: 'dogfight',
+    opponent: { kind: 'bear', difficulty: 'medium' },
+    objective: { type: 'kills', count: 3 },
+    playerLives: 3,
+    mapPos: { x: 0.62, y: 0.46 },
+    intro: [
+      { dur: 3.0, look: 'bot', cam: { orbit: 14, height: 3, speed: 0.9 }, text: 'Celui-là a appris à voler pour de bon.' },
+    ],
+  },
+  {
+    id: 'lv5', name: 'Le Chef de Meute', type: 'dogfight',
+    opponent: { kind: 'bear', difficulty: 'hard' },
+    objective: { type: 'kills', count: 3 },
+    playerLives: 2,
+    mapPos: { x: 0.76, y: 0.64 },
+    intro: [
+      { dur: 3.0, look: 'bot', cam: { orbit: 12, height: 2, speed: 1.1 }, text: 'Le chef de meute ne pardonne aucune erreur.' },
+    ],
+  },
+  {
+    id: 'lv6', name: 'L’Ours Alpha 🧬', type: 'dogfight',
+    opponent: { kind: 'bear', difficulty: 'expert' },
+    objective: { type: 'kills', count: 3 },
+    playerLives: 2,
+    mapPos: { x: 0.88, y: 0.40 },
+    intro: [
+      { dur: 3.4, look: 'bot', cam: { orbit: 11, height: 2, speed: 1.3 }, text: 'L’Alpha. Entraîné par des générations de combats.' },
+      { dur: 2.2, look: 'player', cam: { from: [0, 6, 18], to: [0, 2, 10] }, text: 'Montre-lui qui règne sur ce ciel.' },
+    ],
+    outroWin: [
+      { dur: 3.4, look: 'player', cam: { orbit: 14, height: 6, speed: 0.6 }, text: 'L’Alpha est tombé. La forêt respire à nouveau…' },
+      { dur: 2.6, look: 'player', cam: { from: [0, 10, 24], to: [0, 40, 80] }, text: '🦉 Le ciel t’appartient. Bravo !' },
+    ],
+  },
+];
+
+// ── Progression joueur (localStorage, clé versionnée pour pouvoir migrer).
+//    `pid` = identifiant anonyme aléatoire, prévu pour la future télémétrie. ──
+const CAMPAIGN_SAVE_KEY = 'h3d_campaign_v1';
+function makeAnonymousPid() {
+  const bytes = new Uint8Array(8);
+  (window.crypto || {}).getRandomValues ? crypto.getRandomValues(bytes) : bytes.forEach((_, i) => { bytes[i] = Math.floor(Math.random() * 256); });
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+function loadCampaignProgress() {
+  let p = null;
+  try { p = JSON.parse(localStorage.getItem(CAMPAIGN_SAVE_KEY)); } catch (_e) { /* stockage indisponible ou corrompu */ }
+  if (!p || typeof p !== 'object') p = {};
+  if (typeof p.pid !== 'string') p.pid = makeAnonymousPid();
+  if (typeof p.unlocked !== 'number') p.unlocked = 0;
+  p.unlocked = Math.max(0, Math.min(p.unlocked, CAMPAIGN_LEVELS.length - 1));
+  if (!p.levels || typeof p.levels !== 'object') p.levels = {};
+  if (!Array.isArray(p.seenIntros)) p.seenIntros = [];
+  return p;
+}
+function saveCampaignProgress() {
+  try { localStorage.setItem(CAMPAIGN_SAVE_KEY, JSON.stringify(campaignProgress)); } catch (_e) { /* stockage indisponible */ }
+}
+const campaignProgress = loadCampaignProgress();
+function campaignLevelRecord(id) {
+  if (!campaignProgress.levels[id]) campaignProgress.levels[id] = { wins: 0, attempts: 0, bestTimeS: null };
+  return campaignProgress.levels[id];
+}
+
+// Contexte du niveau de campagne EN COURS (null hors campagne : tous les hooks
+// dans le code survie/multijoueur sont gardés par `campaignCtx` et ne changent
+// rien aux modes classiques).
+let campaignCtx = null; // { level, idx, progress, playerLives, elapsed, outcome, loseReason, unlockedNew }
+
+// ── Fondu au noir générique pour les transitions carte → cinématique → jeu → fin ──
+let screenFade = 0;
+function triggerScreenFade() { screenFade = 1; }
+
+// ══════════════════════════════════════════════════
+//  CINÉMATIQUES — mini-timeline data-driven : une cutscene = tableau d'étapes
+//  { dur, look, cam, text } jouées en séquence. La caméra est pilotée en
+//  OFFSETS autour d'une cible (`look`) pour rester valable où que soient le
+//  hibou et l'adversaire. Skippable (clic/touche), caméra restaurée à la fin.
+// ══════════════════════════════════════════════════
+let cutscene = null; // { steps, idx, t, onEnd, savedPos, savedQuat, skipGuard }
+const _csTarget = new THREE.Vector3(), _csPos = new THREE.Vector3();
+
+function cutsceneLookTarget(look) {
+  if (look === 'bot' && bot) return _csTarget.copy(bot.obj.position);
+  if (look === 'center') return _csTarget.copy(ARENA_CENTER);
+  return _csTarget.copy(owlGroup.position); // 'player' (et repli de 'bot' sans bot)
+}
+
+function startCutscene(steps, onEnd) {
+  cutscene = {
+    steps, idx: 0, t: 0, onEnd,
+    savedPos: camera.position.clone(), savedQuat: camera.quaternion.clone(),
+    skipGuard: 0.3, // garde anti double-clic : le clic qui lance le niveau ne doit pas sauter l'intro
+  };
+  state = S.CUTSCENE;
+  triggerScreenFade();
+  document.body.style.cursor = 'default';
+  if (document.pointerLockElement) document.exitPointerLock();
+}
+
+function endCutscene() {
+  camera.position.copy(cutscene.savedPos);
+  camera.quaternion.copy(cutscene.savedQuat);
+  const cb = cutscene.onEnd;
+  cutscene = null;
+  if (cb) cb();
+}
+
+function skipCutscene() {
+  if (!cutscene || cutscene.skipGuard > 0) return;
+  endCutscene();
+}
+
+function updateCutscene(dt) {
+  if (!cutscene) return;
+  cutscene.skipGuard -= dt;
+  cutscene.t += dt;
+  let step = cutscene.steps[cutscene.idx];
+  while (step && cutscene.t >= step.dur) {
+    cutscene.t -= step.dur;
+    cutscene.idx++;
+    step = cutscene.steps[cutscene.idx];
+  }
+  if (!step) { endCutscene(); return; }
+
+  const target = cutsceneLookTarget(step.look);
+  const c = step.cam || {};
+  if (c.orbit) {
+    // Caméra en orbite autour de la cible (rayon/hauteur/vitesse angulaire)
+    const angle = cutscene.t * (c.speed || 0.7);
+    _csPos.set(target.x + Math.cos(angle) * c.orbit, target.y + (c.height || 4), target.z + Math.sin(angle) * c.orbit);
+  } else {
+    // Travelling : offset interpolé (smoothstep) entre `from` et `to`, relatif à la cible
+    const k = THREE.MathUtils.smoothstep(cutscene.t / step.dur, 0, 1);
+    _csPos.set(
+      target.x + THREE.MathUtils.lerp(c.from[0], c.to[0], k),
+      target.y + THREE.MathUtils.lerp(c.from[1], c.to[1], k),
+      target.z + THREE.MathUtils.lerp(c.from[2], c.to[2], k)
+    );
+  }
+  camera.position.copy(_csPos);
+  camera.lookAt(target);
+
+  // Les modèles restent vivants pendant le plan (battements d'ailes)
+  if (owlMixer) owlMixer.update(dt);
+  if (bot && bot.mixer) bot.mixer.update(dt);
+}
+
+function drawCutscene() {
+  const W = hudCanvas.width, H = hudCanvas.height;
+  if (!cutscene) return;
+  const step = cutscene.steps[cutscene.idx];
+  hctx.save();
+  // Barres letterbox « cinéma »
+  const barH = Math.round(H * 0.12);
+  hctx.fillStyle = '#000';
+  hctx.fillRect(0, 0, W, barH);
+  hctx.fillRect(0, H - barH, W, barH);
+  if (step && step.text) {
+    // Texte : fondu d'apparition sur la première demi-seconde de l'étape
+    hctx.globalAlpha = Math.min(1, cutscene.t / 0.5);
+    hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+    hctx.font = 'italic bold 20px system-ui';
+    hctx.fillStyle = '#f2eeff';
+    hctx.shadowColor = '#000'; hctx.shadowBlur = 10;
+    hctx.fillText(step.text, W / 2, H - barH / 2);
+    hctx.shadowBlur = 0;
+  }
+  hctx.globalAlpha = 0.75;
+  hctx.font = '12px system-ui'; hctx.textAlign = 'right'; hctx.textBaseline = 'middle';
+  hctx.fillStyle = '#cbc3dd';
+  hctx.fillText(isMobile ? 'Touche l’écran pour passer' : '[Espace] Passer', W - 20, barH / 2);
+  hctx.restore();
+}
+
 let devEspEnabled = false;        // mode triche dev : position des adversaires sur le HUD
 try { devEspEnabled = localStorage.getItem('h3d_dev_esp') === '1'; } catch (_e) { /* stockage indisponible */ }
 function toggleDevEsp() {
@@ -3288,6 +3712,35 @@ function makeRemoteOwlVisual() {
   const built = buildOwl(); // repli procédural, comme pour le hibou local
   built.group.add(makeCannonMesh());
   return { obj: built.group, mixer: null };
+}
+
+// ── Adversaire de campagne « ours volant » : mesh d'ours monté sur le MÊME
+//    squelette de vol/IA que le bot hibou (seul le visuel change). Le modèle
+//    est tourné de 180° pour respecter la convention nez = -Z du vol. ──
+function makeBotBearVisual() {
+  const g = new THREE.Group();
+  let inner = null, mixer = null;
+  const clips = modelClips.bear;
+  if (bearProto) {
+    // skeletonClone uniquement si le GLB est animé (sinon clone léger classique)
+    inner = (clips && clips.length) ? skeletonClone(bearProto) : bearProto.clone(true);
+    if (clips && clips.length) {
+      mixer = new THREE.AnimationMixer(inner);
+      mixer.clipAction(clips[0]).play();
+    }
+  } else {
+    const mat = new THREE.SpriteMaterial({ map: bearTexture, transparent: true });
+    inner = new THREE.Sprite(mat); // repli emoji 🐻, comme les ours au sol
+  }
+  inner.scale.setScalar(1.8); // gabarit de combat proche du hibou (la hitbox OWL_HITBOX est inchangée)
+  inner.rotation.y = Math.PI;  // le proto regarde +Z (convention lookAt des ours), le vol veut -Z
+  g.add(inner);
+  g.add(makeCannonMesh());
+  return { obj: g, mixer, bobMesh: mixer ? null : inner };
+}
+
+function makeAdversaryVisual(kind) {
+  return kind === 'bear' ? makeBotBearVisual() : makeRemoteOwlVisual();
 }
 
 // ── Balles : projectiles réels (pas de hitscan). Les balles locales testent la
@@ -3539,8 +3992,6 @@ function mpDie(cause) {
   if (state !== S.PLAY || !multiplayerMode) return;
   if (vsBotMode) campaignDeaths++;
   mpDeathCause = cause;
-  mpRespawnTimer = MP_RESPAWN_DELAY;
-  state = S.MP_DEAD;
   owlGroup.visible = false;
   velocity.set(0, 0, 0);
   document.body.style.cursor = 'default';
@@ -3548,6 +3999,13 @@ function mpDie(cause) {
   screenShake = Math.max(screenShake, 25);
   hitFlash = Math.max(hitFlash, 0.6);
   spawnFX(owlGroup.position, 24, 'death', cause === 'headshot' ? '💥 TÊTE TOUCHÉE !' : '💥 CRASHÉ !');
+  // Campagne : les vies sont comptées — plus de vie = défaite du niveau, pas de respawn
+  if (campaignCtx) {
+    campaignCtx.playerLives--;
+    if (campaignCtx.playerLives <= 0) { campaignLose(cause === 'crash' ? 'CRASHÉ !' : 'ABATTU !'); return; }
+  }
+  mpRespawnTimer = MP_RESPAWN_DELAY;
+  state = S.MP_DEAD;
   if (mp) mp.sendDied(cause);
 }
 
@@ -3680,14 +4138,21 @@ function repairOwl() {
 //  "Choix d'architecture clé : ne PAS toucher à updateFlight").
 // ══════════════════════════════════════════════════
 
-// Crée le visuel du bot une seule fois (réutilisé à chaque campagne suivante).
-function spawnBotEntity() {
-  if (bot) return;
-  const visual = makeRemoteOwlVisual();
+// Crée le visuel du bot (réutilisé tant que le type d'adversaire — hibou ou
+// ours volant — ne change pas d'un niveau à l'autre).
+function spawnBotEntity(kind = 'owl') {
+  if (bot && bot.kind === kind) return;
+  if (bot) { // changement de type d'adversaire : on remplace le visuel (géométries/matériaux partagés, seule l'aura est propre au bot)
+    scene.remove(bot.obj);
+    bot.auraMat.dispose();
+    bot = null;
+  }
+  const visual = makeAdversaryVisual(kind);
   const aura = makeAuraSprite(auraColorHex('purple'));
   visual.obj.add(aura.sprite);
   scene.add(visual.obj);
   bot = {
+    kind, bobMesh: visual.bobMesh || null,
     obj: visual.obj, mixer: visual.mixer || null, auraMat: aura.mat,
     velocity: new THREE.Vector3(), angRate: new THREE.Vector3(),
     speed: 0, throttle: 0, stallMode: false, stallTimer: 0,
@@ -4127,6 +4592,7 @@ function updateBot(dt) {
   updateBotFire(dt);
   updateBotDamage(dt);
   if (bot.mixer) bot.mixer.update(dt);
+  else if (bot.bobMesh) bot.bobMesh.position.y = Math.sin(performance.now() / 180) * 0.08; // ours sans clips : léger tangage procédural
   bot.obj.visible = !(bot.invul > 0 && Math.floor(Date.now() / 80) % 2 !== 0);
 }
 
@@ -4176,16 +4642,135 @@ function enterSoloMultiplayerTest() {
   beginMultiplayerGame('brown');
 }
 
-// Mode CAMPAGNE (vs IA) : partie multijoueur locale contre un bot, sans serveur.
-// Choisi depuis l'écran S.CAMPAIGN_SELECT (voir drawCampaignSelect).
-function beginCampaignGame(level) {
+// ── Lancement d'un niveau de campagne (choisi sur la carte S.CAMPAIGN_SELECT).
+//    Monte le niveau selon son type, puis joue l'intro (une seule fois par
+//    niveau : mémorisée dans seenIntros) avant de rendre la main au joueur. ──
+function beginCampaignGame(levelId) {
   if (!assetsReady) return;
+  const idx = CAMPAIGN_LEVELS.findIndex(l => l.id === levelId);
+  if (idx < 0) return;
+  const level = CAMPAIGN_LEVELS[idx];
+  campaignCtx = {
+    level, idx, progress: 0,
+    playerLives: level.playerLives || 1,
+    elapsed: 0, outcome: null, loseReason: '', unlockedNew: false,
+  };
+  campaignLevelRecord(level.id).attempts++;
+  saveCampaignProgress();
+  triggerScreenFade();
+
+  if (level.type === 'dogfight') beginCampaignDogfight(level);
+  else beginCampaignGround(level);
+
+  if (level.intro && !campaignProgress.seenIntros.includes(level.id)) {
+    campaignProgress.seenIntros.push(level.id);
+    saveCampaignProgress();
+    startCutscene(level.intro, () => {
+      state = S.PLAY;
+      document.body.style.cursor = 'none';
+      requestFlightPointerLock();
+    });
+  }
+}
+
+// Niveau dogfight : partie multijoueur locale contre le bot (comme l'ancien
+// mode « Combat contre l'IA »), avec un ours volant comme adversaire.
+function beginCampaignDogfight(level) {
   beginMultiplayerGame('brown');
   vsBotMode = true;
-  botDifficulty = level;
+  botDifficulty = level.opponent.difficulty;
   campaignKills = 0; campaignDeaths = 0;
-  spawnBotEntity();
+  spawnBotEntity(level.opponent.kind || 'owl');
   botRespawn();
+}
+
+// Niveau au sol : mode survie solo paramétré — effectif d'ours fixe et
+// immobile (voir newBear/updateBears), événements aléatoires désactivés.
+function beginCampaignGround(level) {
+  beginGame(); // monte une partie solo complète (terrain régénéré, branches, vol)
+  // Ajustements campagne : on repart d'un monde sans événements aléatoires…
+  while (bears.length) removeBear(0);
+  moon  = { state: 'none', timer: 0, next: Infinity, fillProgress: 0 };
+  storm = { active: false, timer: 0, next: Infinity, windAngle: 0, windForce: 0, gustPhase: 0, rockSpawnTimer: 0 };
+  if (giftItem) removeGift();
+  giftCooldown = Infinity;
+  lives = campaignCtx.playerLives;
+  // …et les ours immobiles du niveau (campaignCtx est déjà posé : newBear les crée statiques)
+  for (let i = 0; i < level.bears.count; i++) bears.push(newBear());
+}
+
+// ── Fin de niveau : victoire/défaite → outro éventuelle → écran S.LEVEL_END ──
+function updateCampaignLogic(dt) {
+  if (!campaignCtx || campaignCtx.outcome || state !== S.PLAY) return;
+  campaignCtx.elapsed += dt;
+  const level = campaignCtx.level, objective = level.objective;
+  if (level.type === 'dogfight') {
+    if (campaignKills >= objective.count) campaignWin();
+  } else {
+    if (campaignCtx.progress >= objective.count) { campaignWin(); return; }
+    if (objective.timeLimit && campaignCtx.elapsed >= objective.timeLimit) campaignLose('⏱ TEMPS ÉCOULÉ !');
+  }
+}
+
+function campaignWin() {
+  campaignCtx.outcome = 'win';
+  const rec = campaignLevelRecord(campaignCtx.level.id);
+  rec.wins++;
+  const t = Math.round(campaignCtx.elapsed);
+  if (rec.bestTimeS === null || t < rec.bestTimeS) rec.bestTimeS = t;
+  if (campaignCtx.idx + 1 <= CAMPAIGN_LEVELS.length - 1 && campaignCtx.idx + 1 > campaignProgress.unlocked) {
+    campaignProgress.unlocked = campaignCtx.idx + 1;
+    campaignCtx.unlockedNew = true;
+  }
+  saveCampaignProgress();
+  spawnFX(owlGroup.position, 30, 'collect', '🏆 VICTOIRE !');
+  endCampaignLevel(campaignCtx.level.outroWin);
+}
+
+function campaignLose(reason) {
+  if (!campaignCtx || campaignCtx.outcome) return;
+  campaignCtx.outcome = 'lose';
+  campaignCtx.loseReason = reason;
+  endCampaignLevel(campaignCtx.level.outroLose);
+}
+
+function endCampaignLevel(outroSteps) {
+  const finish = () => {
+    state = S.LEVEL_END;
+    triggerScreenFade();
+    document.body.style.cursor = 'default';
+    if (document.pointerLockElement) document.exitPointerLock();
+  };
+  if (outroSteps) startCutscene(outroSteps, finish);
+  else finish();
+}
+
+// Démonte le niveau en cours (les deux types) sans toucher à campaignCtx.
+function teardownCampaignLevel() {
+  if (multiplayerMode) { // niveau dogfight : on quitte la « partie » locale
+    if (mp) mp.leaveRoom();
+    clearMultiplayerWorld();
+    multiplayerMode = false;
+  }
+  while (bears.length) removeBear(0); // niveau au sol : purge des ours immobiles
+  owlGroup.visible = false;
+}
+
+function campaignReturnToMap() {
+  const flyFrom = (campaignCtx && campaignCtx.outcome === 'win' && campaignCtx.unlockedNew) ? campaignCtx.idx : -1;
+  teardownCampaignLevel();
+  campaignCtx = null;
+  state = S.CAMPAIGN_SELECT;
+  triggerScreenFade();
+  document.body.style.cursor = 'default';
+  if (flyFrom >= 0) mapAnim = { fromIdx: flyFrom, toIdx: flyFrom + 1, t: 0 }; // le hibou vole vers le niveau débloqué
+}
+
+function campaignReplay() {
+  const id = campaignCtx.level.id;
+  teardownCampaignLevel();
+  campaignCtx = null;
+  beginCampaignGame(id);
 }
 
 // Partie rejointe (message 'joined' du serveur) : lance la manche multijoueur.
@@ -4239,7 +4824,13 @@ function leaveMultiplayerGame() {
   const wasCampaign = vsBotMode;
   if (mp) mp.leaveRoom();
   clearMultiplayerWorld();
-  state = wasCampaign ? S.START : S.MP_LOBBY;
+  if (wasCampaign) { // abandon d'un niveau de campagne : retour à la carte
+    multiplayerMode = false;
+    campaignCtx = null;
+    state = S.CAMPAIGN_SELECT;
+  } else {
+    state = S.MP_LOBBY;
+  }
   document.body.style.cursor = 'default';
   owlGroup.visible = false;
   if (document.pointerLockElement) document.exitPointerLock();
@@ -4332,9 +4923,10 @@ function drawHUD() {
     drawMPStatusBox();
     drawScoreboard();
     drawInventoryBar();
-    if (vsBotMode) drawCampaignScore();
+    if (vsBotMode) drawCampaignObjective();
     hctx.restore();
   } else {
+  if (campaignCtx) drawCampaignObjective(); // niveau de campagne au sol : bandeau d'objectif
   rrect(12, 12, 230, 100, 14, 'rgba(8,8,35,0.82)', 'rgba(100,90,220,0.4)');
   hctx.fillStyle = '#dde'; hctx.font = 'bold 16px system-ui';
   hctx.textAlign = 'left'; hctx.textBaseline = 'middle';
@@ -4440,7 +5032,7 @@ function drawHUD() {
     hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
     hctx.fillText('🌬️ TEMPÊTE : ' + Math.ceil(Math.max(0, storm.timer)) + 's', w / 2, 32);
     hctx.restore();
-  } else if (weather.mode === 'rain') {
+  } else if (weather.mode === 'rain' && !campaignCtx) { // en campagne, le bandeau d'objectif occupe déjà le haut-centre
     hctx.save();
     const w = hudCanvas.width;
     rrect(w / 2 - 100, 12, 200, 34, 14, 'rgba(30,38,52,0.75)', 'rgba(140,160,190,0.45)');
@@ -4541,19 +5133,29 @@ function drawScoreboard() {
   }
 }
 
-// Compteur kills/morts du mode CAMPAGNE (bac à sable, pas de fin de partie) —
-// affiché à la place du tableau des scores réseau (vide en campagne, mp.roster() === []).
-function drawCampaignScore() {
+// Bandeau d'objectif du niveau de campagne (haut-centre) : progression,
+// chrono restant et vies — pour les deux types de niveaux.
+function drawCampaignObjective() {
+  const c = campaignCtx;
+  if (!c) return;
   const W = hudCanvas.width;
-  const boxW = 170, boxH = 50;
+  const level = c.level, objective = level.objective;
+  const boxW = 250, boxH = 56;
   const x = W / 2 - boxW / 2, y = 10;
   rrect(x, y, boxW, boxH, 12, 'rgba(8,8,35,0.82)', 'rgba(180,90,255,0.4)');
+  hctx.save();
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
-  hctx.fillStyle = '#dde'; hctx.font = 'bold 12px system-ui';
-  hctx.fillText('🤖 CAMPAGNE (' + CAMPAIGN_DIFFICULTIES.find(d => d.level === botDifficulty).label + ')', W / 2, y + 16);
+  hctx.fillStyle = '#cbc3ff'; hctx.font = 'bold 12px system-ui';
+  hctx.fillText('🐻 NIVEAU ' + (c.idx + 1) + ' — ' + level.name, W / 2, y + 16);
+  const progress = level.type === 'dogfight' ? campaignKills : c.progress;
+  let line = (level.type === 'dogfight' ? '💥 Abattu : ' : '🌿 Branches : ') + progress + ' / ' + objective.count;
+  if (objective.timeLimit) line += '   ⏱ ' + Math.ceil(Math.max(0, objective.timeLimit - c.elapsed)) + 's';
+  const livesLeft = level.type === 'dogfight' ? c.playerLives : lives;
+  line += '   ❤️×' + Math.max(0, livesLeft);
   hctx.font = 'bold 13px system-ui';
-  hctx.fillStyle = '#8fe06a'; hctx.fillText('Vous : ' + campaignKills + ' 💀 IA', W / 2, y + 36);
-  hctx.textAlign = 'left';
+  hctx.fillStyle = '#8fe06a';
+  hctx.fillText(line, W / 2, y + 38);
+  hctx.restore();
 }
 
 // Étiquette de debug au-dessus du bot : visible en permanence en campagne (pas
@@ -4736,8 +5338,8 @@ function drawStart() {
   hctx.fillText('SOLO', startSoloBtnRect.x + btnW / 2, btnY + btnH / 2);
   hctx.fillText('MULTIJOUEUR', startMultiBtnRect.x + btnW / 2, btnY + btnH / 2);
   hctx.font = 'bold 11px system-ui';
-  hctx.fillText('COMBAT', startCampaignBtnRect.x + btnW / 2, btnY + btnH / 2 - 8);
-  hctx.fillText("CONTRE L'IA", startCampaignBtnRect.x + btnW / 2, btnY + btnH / 2 + 8);
+  hctx.fillText('CAMPAGNE', startCampaignBtnRect.x + btnW / 2, btnY + btnH / 2 - 8);
+  hctx.fillText('🐻 vs 🦉', startCampaignBtnRect.x + btnW / 2, btnY + btnH / 2 + 8);
   hctx.font = 'bold 13px system-ui';
   if (!isMobile) {
     hctx.fillStyle = '#9be0ff'; hctx.font = '11px system-ui';
@@ -4746,53 +5348,129 @@ function drawStart() {
   hctx.restore();
 }
 
-// ── Écran de sélection de difficulté du mode CAMPAGNE (vs IA) : mode de test,
-//    partie multijoueur locale (canon/munitions/vie/gouvernes) contre un bot. ──
-const CAMPAIGN_DIFFICULTIES = [
-  { level: 'easy',   label: 'FACILE' },
-  { level: 'medium', label: 'MOYEN' },
-  { level: 'hard',   label: 'DIFFICILE' },
-  { level: 'expert', label: 'EXPERT 🧬' },
-];
+// ══════════════════════════════════════════════════
+//  CARTE DE CAMPAGNE (S.CAMPAIGN_SELECT) — chemin reliant les niveaux, nœuds
+//  débloqués/verrouillés, hibou animé qui vole vers le niveau fraîchement
+//  débloqué (mapAnim posé par campaignReturnToMap).
+// ══════════════════════════════════════════════════
+let mapAnim = null; // { fromIdx, toIdx, t } — vol du hibou entre deux nœuds (t: 0..1)
+let campaignBackBtnRect = null;
+
+// Position écran (pixels) du nœud d'un niveau — la zone jouable évite les bords.
+function campaignNodePoint(i) {
+  const W = hudCanvas.width, H = hudCanvas.height;
+  const lvl = CAMPAIGN_LEVELS[i];
+  return { x: 40 + lvl.mapPos.x * (W - 80), y: 90 + lvl.mapPos.y * (H - 180) };
+}
+
 function drawCampaignSelect() {
   const W = hudCanvas.width, H = hudCanvas.height;
+  const now = Date.now();
   hctx.save();
-  hctx.fillStyle = 'rgba(4,4,18,0.8)'; hctx.fillRect(0, 0, W, H);
-  const cx = W / 2, cy = H / 2;
-  const pw = Math.min(480, W - 40), ph = 260;
-  const px = cx - pw / 2, py = cy - ph / 2;
-  rrect(px, py, pw, ph, 24, 'rgba(12,12,48,0.96)', 'rgba(180,90,255,0.5)');
-  hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
-  hctx.fillStyle = '#cbc3ff'; hctx.font = '900 22px system-ui';
-  hctx.fillText('🤖 CAMPAGNE — Choisis la difficulté', cx, py + 40);
-  hctx.fillStyle = '#9fb0d8'; hctx.font = '13px system-ui';
-  hctx.fillText('Mode de test : toi contre un hibou IA, mêmes specs de vol.', cx, py + 66);
+  // Voile nocturne au-dessus de la scène 3D du menu
+  const bgGrad = hctx.createLinearGradient(0, 0, 0, H);
+  bgGrad.addColorStop(0, 'rgba(4,4,24,0.88)'); bgGrad.addColorStop(1, 'rgba(10,4,30,0.82)');
+  hctx.fillStyle = bgGrad; hctx.fillRect(0, 0, W, H);
 
-  // btnW dérivé de la largeur dispo plutôt que fixé en dur, pour rester
-  // valable quel que soit le nombre de niveaux (voir CAMPAIGN_DIFFICULTIES).
-  const n = CAMPAIGN_DIFFICULTIES.length, btnGap = 12, btnH = 48;
-  const btnW = Math.min(110, Math.floor((pw - 40 - btnGap * (n - 1)) / n));
-  const totalW = btnW * n + btnGap * (n - 1), x0 = cx - totalW / 2, btnY = py + 110;
-  campaignDifficultyRects = [];
-  for (let i = 0; i < CAMPAIGN_DIFFICULTIES.length; i++) {
-    const d = CAMPAIGN_DIFFICULTIES[i];
-    const bx = x0 + i * (btnW + btnGap);
-    const rect = { x: bx, y: btnY, w: btnW, h: btnH, level: d.level };
-    campaignDifficultyRects.push(rect);
-    rrect(bx, btnY, btnW, btnH, 10, 'rgba(180,90,255,0.25)', 'rgba(220,140,255,0.8)');
-    hctx.font = 'bold 14px system-ui'; hctx.fillStyle = '#fff';
-    hctx.fillText(d.label, bx + btnW / 2, btnY + btnH / 2);
+  hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+  hctx.fillStyle = '#cbc3ff'; hctx.font = '900 26px system-ui';
+  hctx.fillText('🐻 CAMPAGNE', W / 2, 36);
+  hctx.fillStyle = '#9fb0d8'; hctx.font = '13px system-ui';
+  hctx.fillText('Choisis un niveau — ta progression est sauvegardée sur ce navigateur.', W / 2, 62);
+
+  // ── Chemin : segments entre nœuds, dorés jusqu'au front de progression ──
+  campaignNodeRects = [];
+  for (let i = 0; i < CAMPAIGN_LEVELS.length - 1; i++) {
+    const a = campaignNodePoint(i), b = campaignNodePoint(i + 1);
+    hctx.save();
+    hctx.setLineDash([7, 8]);
+    hctx.lineWidth = 3;
+    hctx.strokeStyle = i < campaignProgress.unlocked ? 'rgba(255,205,90,0.75)' : 'rgba(160,150,220,0.28)';
+    hctx.beginPath();
+    // Légère courbure : point de contrôle décalé perpendiculairement au segment
+    const mx = (a.x + b.x) / 2 + (b.y - a.y) * 0.18, my = (a.y + b.y) / 2 - (b.x - a.x) * 0.18;
+    hctx.moveTo(a.x, a.y);
+    hctx.quadraticCurveTo(mx, my, b.x, b.y);
+    hctx.stroke();
+    hctx.restore();
   }
 
-  hctx.fillStyle = '#cbc3dd'; hctx.font = '13px system-ui';
-  hctx.fillText('[Échap] Retour au menu', cx, py + ph - 24);
+  // ── Nœuds ──
+  const R = 27;
+  for (let i = 0; i < CAMPAIGN_LEVELS.length; i++) {
+    const lvl = CAMPAIGN_LEVELS[i];
+    const p = campaignNodePoint(i);
+    const rec = campaignProgress.levels[lvl.id];
+    const done = !!(rec && rec.wins > 0);
+    const unlocked = i <= campaignProgress.unlocked;
+    campaignNodeRects.push({ x: p.x - R, y: p.y - R, w: R * 2, h: R * 2, id: lvl.id, unlocked });
+
+    hctx.save();
+    hctx.beginPath(); hctx.arc(p.x, p.y, R, 0, Math.PI * 2);
+    hctx.fillStyle = done ? 'rgba(80,150,60,0.9)' : unlocked ? 'rgba(90,60,160,0.92)' : 'rgba(35,35,60,0.85)';
+    hctx.fill();
+    hctx.lineWidth = 3;
+    // Le niveau « courant » (dernier débloqué, pas encore gagné) pulse doucement
+    const isCurrent = unlocked && !done && i === campaignProgress.unlocked;
+    hctx.strokeStyle = done ? 'rgba(160,255,140,0.9)'
+      : isCurrent ? 'rgba(255,215,90,' + (0.6 + 0.4 * Math.sin(now / 260)) + ')'
+      : unlocked ? 'rgba(200,160,255,0.85)' : 'rgba(120,120,160,0.5)';
+    hctx.stroke();
+    hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+    hctx.font = '900 17px system-ui'; hctx.fillStyle = unlocked ? '#fff' : 'rgba(255,255,255,0.35)';
+    hctx.fillText(unlocked ? String(i + 1) : '🔒', p.x, p.y - 4);
+    hctx.font = '11px system-ui';
+    hctx.fillText(lvl.type === 'ground' ? '🐻' : '🐻⚔️', p.x, p.y + 12);
+    // Nom + état sous le nœud
+    hctx.font = 'bold 12px system-ui';
+    hctx.fillStyle = unlocked ? '#e8e5ff' : 'rgba(200,200,230,0.4)';
+    hctx.fillText(lvl.name, p.x, p.y + R + 14);
+    if (done) {
+      hctx.fillStyle = '#a8ffa0'; hctx.font = '11px system-ui';
+      hctx.fillText('✔ gagné' + (rec.bestTimeS != null ? ' — ' + rec.bestTimeS + 's' : ''), p.x, p.y + R + 30);
+    }
+    hctx.restore();
+  }
+
+  // ── Hibou : posé sur le front de progression, ou en vol vers le nœud débloqué ──
+  let owlX, owlY;
+  if (mapAnim) {
+    const a = campaignNodePoint(mapAnim.fromIdx), b = campaignNodePoint(mapAnim.toIdx);
+    const k = THREE.MathUtils.smoothstep(mapAnim.t, 0, 1);
+    const mx = (a.x + b.x) / 2 + (b.y - a.y) * 0.18, my = (a.y + b.y) / 2 - (b.x - a.x) * 0.18;
+    // Point sur la même courbe quadratique que le tracé du chemin
+    const u = 1 - k;
+    owlX = u * u * a.x + 2 * u * k * mx + k * k * b.x;
+    owlY = u * u * a.y + 2 * u * k * my + k * k * b.y;
+  } else {
+    const p = campaignNodePoint(campaignProgress.unlocked);
+    owlX = p.x; owlY = p.y;
+  }
+  hctx.font = '30px serif'; hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+  hctx.save();
+  hctx.shadowColor = 'rgba(255,220,120,0.8)'; hctx.shadowBlur = 14;
+  hctx.fillText('🦉', owlX, owlY - R - 16 + Math.sin(now / 300) * 4); // battement : oscillation douce
+  hctx.restore();
+
+  // Bouton retour (indispensable au tactile, Échap au clavier)
+  campaignBackBtnRect = { x: 16, y: 16, w: 96, h: 34 };
+  rrect(campaignBackBtnRect.x, campaignBackBtnRect.y, campaignBackBtnRect.w, campaignBackBtnRect.h, 10, 'rgba(110,90,255,0.25)', 'rgba(180,170,255,0.7)');
+  hctx.font = 'bold 12px system-ui'; hctx.fillStyle = '#fff'; hctx.textAlign = 'center';
+  hctx.fillText('← Menu', campaignBackBtnRect.x + campaignBackBtnRect.w / 2, campaignBackBtnRect.y + campaignBackBtnRect.h / 2);
+  if (!isMobile) {
+    hctx.fillStyle = '#cbc3dd'; hctx.font = '12px system-ui';
+    hctx.fillText('[Échap] Retour au menu', W / 2, H - 20);
+  }
   hctx.restore();
 }
 
 function handleCampaignSelectClick(x, y) {
-  for (const r of campaignDifficultyRects) {
+  const b = campaignBackBtnRect;
+  if (b && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { state = S.START; return; }
+  if (mapAnim) return; // on laisse finir le vol de déblocage
+  for (const r of campaignNodeRects) {
     if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
-      beginCampaignGame(r.level);
+      if (r.unlocked) beginCampaignGame(r.id);
       return;
     }
   }
@@ -4825,6 +5503,67 @@ function drawOver() {
   hctx.restore();
 }
 
+// ── Écran de fin de niveau de campagne (victoire ou défaite) ──
+function drawLevelEnd() {
+  const c = campaignCtx;
+  if (!c) return;
+  const W = hudCanvas.width, H = hudCanvas.height;
+  const won = c.outcome === 'win';
+  hctx.save();
+  hctx.fillStyle = won ? 'rgba(30,80,20,0.30)' : 'rgba(255,0,0,0.25)';
+  hctx.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2;
+  rrect(cx - 175, cy - 160, 350, 320, 28, 'rgba(12,12,40,0.97)', won ? 'rgba(140,255,120,0.8)' : 'rgba(255,70,70,0.8)');
+  hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+  hctx.fillStyle = won ? '#b6ffa8' : '#ffaaaa'; hctx.font = '900 30px system-ui';
+  hctx.fillText(won ? '🏆 VICTOIRE !' : '💀 DÉFAITE', cx, cy - 115);
+  hctx.fillStyle = '#e8e5ff'; hctx.font = 'bold 15px system-ui';
+  hctx.fillText('Niveau ' + (c.idx + 1) + ' — ' + c.level.name, cx, cy - 78);
+  hctx.fillStyle = '#cbc3dd'; hctx.font = '14px system-ui';
+  if (won) {
+    hctx.fillText('Temps : ' + Math.round(c.elapsed) + ' s', cx, cy - 46);
+    if (c.unlockedNew) {
+      hctx.fillStyle = '#ffe08a'; hctx.font = 'bold 14px system-ui';
+      hctx.fillText('🔓 Niveau suivant débloqué !', cx, cy - 20);
+    } else if (c.idx === CAMPAIGN_LEVELS.length - 1) {
+      hctx.fillStyle = '#ffe08a'; hctx.font = 'bold 14px system-ui';
+      hctx.fillText('👑 Campagne terminée !', cx, cy - 20);
+    }
+  } else {
+    hctx.fillText(c.loseReason, cx, cy - 46);
+    const objective = c.level.objective;
+    const progress = c.level.type === 'dogfight' ? campaignKills : c.progress;
+    hctx.fillText('Progression : ' + progress + ' / ' + objective.count, cx, cy - 20);
+  }
+
+  const btnW = 130, btnH = 46, gap = 14, btnY = cy + 40;
+  const x0 = cx - btnW - gap / 2;
+  levelEndBtnRects = [
+    { x: x0, y: btnY, w: btnW, h: btnH, action: 'replay' },
+    { x: cx + gap / 2, y: btnY, w: btnW, h: btnH, action: 'map' },
+  ];
+  rrect(levelEndBtnRects[0].x, btnY, btnW, btnH, 10, 'rgba(180,90,255,0.3)', 'rgba(220,140,255,0.85)');
+  rrect(levelEndBtnRects[1].x, btnY, btnW, btnH, 10, 'rgba(60,180,255,0.25)', 'rgba(120,220,255,0.8)');
+  hctx.font = 'bold 14px system-ui'; hctx.fillStyle = '#fff';
+  hctx.fillText('↻ REJOUER', levelEndBtnRects[0].x + btnW / 2, btnY + btnH / 2);
+  hctx.fillText('🗺 CARTE', levelEndBtnRects[1].x + btnW / 2, btnY + btnH / 2);
+  if (!isMobile) {
+    hctx.fillStyle = '#9fb0d8'; hctx.font = '12px system-ui';
+    hctx.fillText('[Entrée] Rejouer   [Échap] Carte', cx, cy + 120);
+  }
+  hctx.restore();
+}
+
+function handleLevelEndClick(x, y) {
+  for (const r of levelEndBtnRects) {
+    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
+      if (r.action === 'replay') campaignReplay();
+      else campaignReturnToMap();
+      return;
+    }
+  }
+}
+
 function drawPaused() {
   const W = hudCanvas.width, H = hudCanvas.height;
   hctx.save();
@@ -4838,7 +5577,7 @@ function drawPaused() {
   hctx.fillText('Clique ou appuie sur une touche', cx, cy + 10);
   hctx.fillText('pour reprendre le pilotage', cx, cy + 32);
   hctx.fillStyle = '#cbc3dd'; hctx.font = '13px system-ui';
-  hctx.fillText(multiplayerMode ? '[Retour arrière] = quitter la partie' : '(verrouillage souris relâché)', cx, cy + 58);
+  hctx.fillText((multiplayerMode || campaignCtx) ? '[Retour arrière] = quitter la partie' : '(verrouillage souris relâché)', cx, cy + 58);
   hctx.restore();
 }
 
@@ -4984,6 +5723,8 @@ function drawOverlay() {
 
   if (state === S.START) {
     drawStart();
+  } else if (state === S.CAMPAIGN_LOCK) {
+    drawStart(); // formulaire de code affiché par-dessus (DOM, voir #campaign-lock)
   } else if (state === S.MP_LOBBY) {
     if (mp) mp.drawLobby();
   } else if (state === S.CAMPAIGN_SELECT) {
@@ -5006,8 +5747,10 @@ function drawOverlay() {
       }
       hctx.restore();
     }
-    drawHUD();
+    if (state === S.CUTSCENE) drawCutscene(); // cinématique : letterbox à la place du HUD
+    else drawHUD();
     if (state === S.OVER) drawOver();
+    else if (state === S.LEVEL_END) drawLevelEnd();
     else if (state === S.MP_DEAD) drawMPDead();
     else if (state === S.PAUSED && !settingsOpen) drawPaused();
     else if (state === S.LOOT) drawLootbox();
@@ -5016,6 +5759,11 @@ function drawOverlay() {
 
   if (settingsOpen) drawSettings();
 
+  if (screenFade > 0) { // fondu au noir des transitions carte → cinématique → jeu → fin
+    hctx.save(); hctx.globalAlpha = Math.min(1, screenFade); hctx.fillStyle = '#000';
+    hctx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
+    hctx.restore();
+  }
   if (hitFlash > 0) {
     hctx.save(); hctx.globalAlpha = hitFlash; hctx.fillStyle = '#ff2222';
     hctx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
@@ -5108,6 +5856,7 @@ function update() {
 
   if (screenShake > 0) { screenShake *= 0.9; if (screenShake < 0.5) screenShake = 0; }
   if (hitFlash    > 0) { hitFlash    *= 0.85; if (hitFlash < 0.01) hitFlash = 0; }
+  if (screenFade  > 0) screenFade = Math.max(0, screenFade - rawDt / 0.7); // fondu au noir des transitions de campagne
 
   if (state === S.PLAY) {
     roundTime += dt;
@@ -5143,6 +5892,7 @@ function update() {
       updateBears(dt);
       updateGift(dt);
     }
+    if (campaignCtx) updateCampaignLogic(dt); // objectifs/chrono du niveau de campagne (les deux types)
     updateBoundaryGrid();
     updateCameraClip();
     // FOV dynamique : le champ s'élargit avec la vitesse — la sensation de vitesse est exagérée
@@ -5161,9 +5911,17 @@ function update() {
     updateBullets(dt); // les balles en vol finissent leur course pendant l'écran de mort
     mpRespawnTimer -= dt;
     if (mpRespawnTimer <= 0) doMPRespawn();
+  } else if (state === S.CUTSCENE) {
+    mouseDX = 0; mouseDY = 0;
+    boundaryGrid.visible = false;
+    updateCutscene(dt);
   } else {
     mouseDX = 0; mouseDY = 0;
     boundaryGrid.visible = false;
+    if (state === S.CAMPAIGN_SELECT && mapAnim) { // vol du hibou vers le niveau débloqué
+      mapAnim.t += dt / 1.6;
+      if (mapAnim.t >= 1) mapAnim = null;
+    }
   }
   // Réseau multijoueur : interpolation des hiboux distants + envoi de l'état
   // local — tourne aussi en salon, en pause et sur l'écran de mort.
@@ -5201,10 +5959,27 @@ function drawLoading() {
   hctx.fillRect(0, 0, hudCanvas.width, hudCanvas.height);
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
   hctx.font = '54px serif';
-  hctx.fillText('🦉', hudCanvas.width / 2, hudCanvas.height / 2 - 40);
+  hctx.fillText('🦉', hudCanvas.width / 2, hudCanvas.height / 2 - 50);
   hctx.fillStyle = '#cbc3ff'; hctx.font = 'bold 18px system-ui';
-  hctx.fillText('Chargement des modèles 3D…', hudCanvas.width / 2, hudCanvas.height / 2 + 20);
+  hctx.fillText('Chargement des modèles 3D…', hudCanvas.width / 2, hudCanvas.height / 2 - 6);
+  const barW = 220, barH = 10;
+  const barX = hudCanvas.width / 2 - barW / 2, barY = hudCanvas.height / 2 + 20;
+  hctx.strokeStyle = 'rgba(180,170,255,0.6)'; hctx.lineWidth = 2;
+  hctx.strokeRect(barX, barY, barW, barH);
+  hctx.fillStyle = 'rgba(180,170,255,0.9)';
+  hctx.fillRect(barX, barY, barW * Math.max(0.03, loadProgress), barH);
+  hctx.fillStyle = '#9b93cc'; hctx.font = '12px system-ui';
+  hctx.fillText(Math.round(loadProgress * 100) + ' %', hudCanvas.width / 2, barY + 26);
   hctx.restore();
+}
+
+// Boucle légère active pendant loadAssets() : sans elle, drawLoading() n'est
+// dessiné qu'une fois et l'écran semble figé pendant tout le téléchargement
+// (~12 Mo de modèles) alors que rien n'est cassé — juste aucun retour visuel.
+function bootLoop() {
+  if (assetsReady) return;
+  drawLoading();
+  requestAnimationFrame(bootLoop);
 }
 
 // Sonde de debug/test (lecture seule) : état du jeu inspectable depuis la console.
@@ -5245,7 +6020,7 @@ window.__hibouDebug = () => ({
 });
 
 resize();
-drawLoading();
+bootLoop();
 loadAssets().then(() => {
   makeSky();
   makeTerrain();
