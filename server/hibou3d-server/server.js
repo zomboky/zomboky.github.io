@@ -24,6 +24,14 @@ const FIRE_RATE_PER_SEC = 100; // 6000 coups/min
 const AMMO_PICKUP_GRANT = 60;  // munitions rendues par caisse ramassée
 const KILL_AMMO_GRANT = 80;    // munitions rendues au tireur pour un kill confirmé
 
+// Objets ramassables partagés : le serveur ne connaît PAS les positions (le client les
+// calcule de façon déterministe à partir de room.seed). Il ne garde qu'un compteur de
+// « génération » par emplacement, incrémenté à chaque ramassage confirmé, pour que tous les
+// clients repositionnent le même objet au même endroit (mpObjectPos(seed, kind, idx, gen)).
+// Ces comptes DOIVENT correspondre à MP_AMMO_CRATE_COUNT / MP_HEALKIT_COUNT côté client.
+const AMMO_CRATE_COUNT = 3;
+const HEALKIT_COUNT = 2;
+
 // Les 4 auras, assignées dans l'ordre à mesure que les joueurs rejoignent.
 const AURA_COLOR_ORDER = ['brown', 'purple', 'yellow', 'green'];
 
@@ -56,6 +64,12 @@ function makeRoom() {
     players: new Map(),
     colorsInUse: new Set(),
     lastActivity: Date.now(),
+    // Graine de la partie : distribuée à chaque client (message 'joined') pour un placement
+    // déterministe et IDENTIQUE des caisses/kits. Entier 32 bits non nul.
+    seed: (Math.floor(Math.random() * 0xffffffff) >>> 0) || 1,
+    // Génération courante de chaque emplacement d'objet (incrémentée à chaque ramassage).
+    crateGen: new Array(AMMO_CRATE_COUNT).fill(0),
+    healGen: new Array(HEALKIT_COUNT).fill(0),
   };
 }
 
@@ -147,7 +161,10 @@ function joinRoom(ws, room) {
   room.lastActivity = Date.now();
   ws.roomId = room.id;
 
-  send(ws, { type: 'joined', roomId: room.id, color, youId: player.id, players: roomRoster(room) });
+  send(ws, {
+    type: 'joined', roomId: room.id, color, youId: player.id, players: roomRoster(room),
+    seed: room.seed, crateGen: room.crateGen.slice(), healGen: room.healGen.slice(),
+  });
   broadcastRoom(room, { type: 'player-joined', id: player.id, pseudo: player.pseudo, color }, ws);
   broadcastLobby();
 }
@@ -380,11 +397,45 @@ function handleMessage(ws, msg) {
     }
 
     case 'pickup-ammo': {
+      // Ancien chemin (caisse non synchronisée) — conservé en repli ; les clients à jour
+      // utilisent 'pickup-crate' ci-dessous, qui synchronise aussi la disparition/réapparition.
       const { room, player } = currentPlayer(ws);
       if (!room || !player || !player.alive) return;
       player.ammo = Math.min(MAG_CAP, player.ammo + AMMO_PICKUP_GRANT);
       room.lastActivity = Date.now();
       send(ws, { type: 'ammo', ammo: player.ammo });
+      break;
+    }
+
+    case 'pickup-crate': {
+      const { room, player } = currentPlayer(ws);
+      if (!room || !player || !player.alive) return;
+      const idx = msg.idx | 0;
+      if (idx < 0 || idx >= room.crateGen.length) return;
+      // Compare-and-swap sur la génération : seul le PREMIER ramassage de cette instance
+      // précise est honoré (empêche le double-crédit si deux joueurs la touchent en même temps).
+      if ((msg.gen | 0) !== room.crateGen[idx]) return;
+      room.crateGen[idx] = (room.crateGen[idx] + 1) >>> 0;
+      player.ammo = Math.min(MAG_CAP, player.ammo + AMMO_PICKUP_GRANT);
+      room.lastActivity = Date.now();
+      send(ws, { type: 'ammo', ammo: player.ammo });
+      // Relayé à TOUS (y compris le ramasseur) : chacun repositionne la caisse idx à la
+      // nouvelle génération, donc à la même position déterministe.
+      broadcastRoom(room, { type: 'crate-taken', idx, gen: room.crateGen[idx], by: player.id });
+      break;
+    }
+
+    case 'pickup-heal': {
+      const { room, player } = currentPlayer(ws);
+      if (!room || !player || !player.alive) return;
+      const idx = msg.idx | 0;
+      if (idx < 0 || idx >= room.healGen.length) return;
+      if ((msg.gen | 0) !== room.healGen[idx]) return;
+      room.healGen[idx] = (room.healGen[idx] + 1) >>> 0;
+      room.lastActivity = Date.now();
+      // Pas de soin serveur (le hibou n'a pas de vie côté serveur) : le ramasseur applique
+      // repairOwl() localement ; le relais sert à faire disparaître/réapparaître le kit pour tous.
+      broadcastRoom(room, { type: 'heal-taken', idx, gen: room.healGen[idx], by: player.id });
       break;
     }
 
