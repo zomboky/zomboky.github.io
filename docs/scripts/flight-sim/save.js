@@ -1,5 +1,5 @@
 // Appels vers flight-server : sauvegarde d'un avion (reçoit un code) et
-// chargement par code. Même pattern que docs/scripts/orange-disease-lock.js
+// chargement par code. Même pattern que docs/scripts/hibou3d-lock.js
 // (fetch + .then, base URL en dur, détection localhost pour le dev local).
 
 var API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')

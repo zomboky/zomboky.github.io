@@ -13,7 +13,7 @@ data/designs/<CODE>.json   un fichier par avion sauvegardé (écriture atomique)
 ```
 
 Pas de base de données : chaque avion est un petit fichier JSON, comme le
-compteur de visiteurs d'`orange-server`. Pas d'authentification (API
+compteur de visiteurs de `zomboky-server`. Pas d'authentification (API
 publique, aucune donnée sensible), juste une limite de débit en écriture
 par IP pour dissuader l'abus.
 
@@ -36,7 +36,7 @@ curl localhost:8097/api/designs/AB12CD
 
 ## Déploiement
 
-Comme `chess-server`/`orange-server` : service systemd dédié
+Comme `chess-server`/`zomboky-server` : service systemd dédié
 (`deploy/flight-server.service`, utilisateur système `flightd`, écoute sur
 `127.0.0.1:8097`) + reverse-proxy Apache (`deploy/flight-api.conf`, chemin
 public `/flight-api/`). Voir `.github/workflows/deploy.yml`. Les fichiers

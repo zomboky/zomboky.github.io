@@ -54,7 +54,7 @@ jobs:
 
               echo "== writing ssl vhost for bear.servebeer.com =="
               # Inclut les mêmes fichiers conf.d que le vhost HTTP (chess-ws,
-              # orange-api) au lieu de dupliquer leurs directives ProxyPass :
+              # zomboky-api) au lieu de dupliquer leurs directives ProxyPass :
               # ils sont réinstallés à chaque déploiement (deploy.yml), donc
               # ce vhost HTTPS reste à jour automatiquement sans avoir à
               # relancer ce workflow.
@@ -71,7 +71,7 @@ jobs:
                 '    ProxyRequests Off' \
                 '    ProxyTimeout 3600' \
                 '    Include conf.d/chess-ws.conf' \
-                '    Include conf.d/orange-api.conf' \
+                '    Include conf.d/zomboky-api.conf' \
                 '    Include conf.d/hibou3d-ws.conf' \
                 '</VirtualHost>' \
                 | sudo tee "$SSL_CONF" > /dev/null

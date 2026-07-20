@@ -11,14 +11,17 @@ jobs:
       - name: Deploy to Oracle Cloud
         uses: appleboy/ssh-action@master
         env:
-          GEE_SERVICE_ACCOUNT_KEY: ${{ secrets.GEE_SERVICE_ACCOUNT_KEY }}
+          # Secret au nom historique (ex-orange-server) : conservé pour ne pas
+          # avoir à recréer le secret GitHub — il alimente désormais
+          # ZOMBOKY_DASHBOARD_PASSWORD côté service.
           ORANGE_DASHBOARD_PASSWORD: ${{ secrets.ORANGE_DASHBOARD_PASSWORD }}
           HIBOU3D_V6_PASSWORD: ${{ secrets.HIBOU3D_V6_PASSWORD }}
+          CAMPAGNE_SOLO_PWD: ${{ secrets.CAMPAGNE_SOLO_PWD }}
         with:
           host: ${{ secrets.REMOTE_HOST }}
           username: ${{ secrets.REMOTE_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GEE_SERVICE_ACCOUNT_KEY,ORANGE_DASHBOARD_PASSWORD,HIBOU3D_V6_PASSWORD
+          envs: ORANGE_DASHBOARD_PASSWORD,HIBOU3D_V6_PASSWORD,CAMPAGNE_SOLO_PWD
           script: |
             set -e
             sudo git config --global --add safe.directory /var/www/html
@@ -68,36 +71,32 @@ jobs:
             sudo chown -R hibou3dd:hibou3dd /opt/hibou3d-training
             cd /var/www/html
 
-            # --- Orange-disease API (seule source de données, protégée par
-            # mot de passe — voir server/orange-server/README.md) ---
-            id -u oranged >/dev/null 2>&1 || sudo useradd -r -s /sbin/nologin oranged
-            # gdal + son binding Python : requis par scripts/gosif_extract.py
-            # (ingestion SIF réelle, voir server/orange-server/README.md).
-            python3 -c "import osgeo.gdal" >/dev/null 2>&1 || sudo dnf install -y gdal python3-gdal
+            # --- API générale du site (zomboky-server : compteur de visiteurs,
+            # verrou Hibou 3D, login admin — voir server/zomboky-server/README.md) ---
+            id -u zombokyd >/dev/null 2>&1 || sudo useradd -r -s /sbin/nologin zombokyd
 
-            sudo rm -rf /opt/orange-server
-            sudo mkdir -p /opt/orange-server
-            sudo cp -R /var/www/html/server/orange-server/. /opt/orange-server/
-            cd /opt/orange-server
+            sudo rm -rf /opt/zomboky-server
+            sudo mkdir -p /opt/zomboky-server
+            sudo cp -R /var/www/html/server/zomboky-server/. /opt/zomboky-server/
+            cd /opt/zomboky-server
             sudo npm install --omit=dev
-            if [ -n "$GEE_SERVICE_ACCOUNT_KEY" ]; then
-              echo "$GEE_SERVICE_ACCOUNT_KEY" | sudo tee gee-key.json > /dev/null
-              sudo chmod 600 gee-key.json
-            else
-              echo "GEE_SERVICE_ACCOUNT_KEY absent : orange-server démarrera sans accès Earth Engine (/api/timeseries répondra 502)."
-            fi
-            if [ -n "$ORANGE_DASHBOARD_PASSWORD" ] || [ -n "$HIBOU3D_V6_PASSWORD" ]; then
+            if [ -n "$ORANGE_DASHBOARD_PASSWORD" ] || [ -n "$HIBOU3D_V6_PASSWORD" ] || [ -n "$CAMPAGNE_SOLO_PWD" ]; then
               {
-                [ -n "$ORANGE_DASHBOARD_PASSWORD" ] && printf 'ORANGE_DASHBOARD_PASSWORD=%s\n' "$ORANGE_DASHBOARD_PASSWORD"
+                [ -n "$ORANGE_DASHBOARD_PASSWORD" ] && printf 'ZOMBOKY_DASHBOARD_PASSWORD=%s\n' "$ORANGE_DASHBOARD_PASSWORD"
                 [ -n "$HIBOU3D_V6_PASSWORD" ] && printf 'HIBOU3D_V6_PASSWORD=%s\n' "$HIBOU3D_V6_PASSWORD"
-              } | sudo tee orange-dashboard-password.env > /dev/null
-              sudo chmod 600 orange-dashboard-password.env
+                [ -n "$CAMPAGNE_SOLO_PWD" ] && printf 'CAMPAGNE_SOLO_PWD=%s\n' "$CAMPAGNE_SOLO_PWD"
+              } | sudo tee zomboky-passwords.env > /dev/null
+              sudo chmod 600 zomboky-passwords.env
             else
-              echo "ORANGE_DASHBOARD_PASSWORD et HIBOU3D_V6_PASSWORD absents : les API de login refuseront toute connexion."
+              echo "ORANGE_DASHBOARD_PASSWORD, HIBOU3D_V6_PASSWORD et CAMPAGNE_SOLO_PWD absents : les API de login refuseront toute connexion."
             fi
-            sudo chown -R oranged:oranged /opt/orange-server
-            sudo mkdir -p /var/lib/orange-server
-            sudo chown oranged:oranged /var/lib/orange-server
+            sudo chown -R zombokyd:zombokyd /opt/zomboky-server
+            sudo mkdir -p /var/lib/zomboky-server
+            # Migration du compteur de visiteurs historique de l'ancien orange-server
+            if [ -f /var/lib/orange-server/visitor-count.json ] && [ ! -f /var/lib/zomboky-server/visitor-count.json ]; then
+              sudo cp /var/lib/orange-server/visitor-count.json /var/lib/zomboky-server/visitor-count.json
+            fi
+            sudo chown -R zombokyd:zombokyd /var/lib/zomboky-server
             cd /var/www/html
 
             # --- Flight-sim design storage API (sauvegarde/partage d'avions
@@ -115,30 +114,40 @@ jobs:
             cd /var/www/html
 
             sudo cp -R docs/* .
+            # La page oranges est supprimée du site : on retire aussi les copies
+            # laissées dans le docroot par les déploiements précédents.
+            sudo rm -f orange-disease.html scripts/orange-disease.js scripts/orange-disease-lock.js styles/orange-disease.css
 
             sudo rm -rf server
             sudo chown -R apache:apache /var/www/html
             sudo restorecon -Rv /var/www/html
 
+            # Démantèlement de l'ancien orange-server (renommé zomboky-server) :
+            # services/timers désactivés et fichiers systemd/Apache retirés.
+            sudo systemctl disable --now orange-server orange-ingest.timer orange-gosif.timer 2>/dev/null || true
+            sudo systemctl stop orange-ingest.service orange-gosif.service 2>/dev/null || true
+            sudo rm -f /etc/systemd/system/orange-server.service /etc/systemd/system/orange-ingest.service /etc/systemd/system/orange-ingest.timer /etc/systemd/system/orange-gosif.service /etc/systemd/system/orange-gosif.timer
+            sudo rm -f /etc/httpd/conf.d/orange-api.conf
+            sudo rm -rf /opt/orange-server
+
             sudo cp /opt/chess-server/deploy/chess-server.service /etc/systemd/system/chess-server.service
             sudo cp /opt/hibou3d-server/deploy/hibou3d-server.service /etc/systemd/system/hibou3d-server.service
-            sudo cp /opt/orange-server/deploy/orange-server.service /etc/systemd/system/orange-server.service
-            sudo cp /opt/orange-server/deploy/orange-ingest.service /etc/systemd/system/orange-ingest.service
-            sudo cp /opt/orange-server/deploy/orange-ingest.timer /etc/systemd/system/orange-ingest.timer
-            sudo cp /opt/orange-server/deploy/orange-gosif.service /etc/systemd/system/orange-gosif.service
-            sudo cp /opt/orange-server/deploy/orange-gosif.timer /etc/systemd/system/orange-gosif.timer
+            sudo cp /opt/zomboky-server/deploy/zomboky-server.service /etc/systemd/system/zomboky-server.service
             sudo cp /opt/flight-server/deploy/flight-server.service /etc/systemd/system/flight-server.service
             sudo systemctl daemon-reload
-            sudo systemctl enable chess-server hibou3d-server orange-server orange-ingest.timer orange-gosif.timer flight-server
-            sudo systemctl restart chess-server hibou3d-server orange-server flight-server
-            sudo systemctl restart orange-ingest.timer
-            sudo systemctl restart orange-gosif.timer
-            sudo systemctl start --no-block orange-gosif.service || true
+            sudo systemctl enable chess-server hibou3d-server zomboky-server flight-server
+            sudo systemctl restart chess-server hibou3d-server zomboky-server flight-server
 
             sudo cp /opt/chess-server/deploy/chess-ws.conf /etc/httpd/conf.d/chess-ws.conf
             sudo cp /opt/hibou3d-server/deploy/hibou3d-ws.conf /etc/httpd/conf.d/hibou3d-ws.conf
-            sudo cp /opt/orange-server/deploy/orange-api.conf /etc/httpd/conf.d/orange-api.conf
+            sudo cp /opt/zomboky-server/deploy/zomboky-api.conf /etc/httpd/conf.d/zomboky-api.conf
             sudo cp /opt/flight-server/deploy/flight-api.conf /etc/httpd/conf.d/flight-api.conf
+            # Le vhost SSL (écrit par chess-diagnose.yml) inclut les conf.d par
+            # nom : on y remplace l'ancienne référence orange-api sinon le
+            # configtest échoue sur un Include manquant.
+            if [ -f /etc/httpd/conf.d/bear-servebeer-ssl.conf ]; then
+              sudo sed -i 's/orange-api\.conf/zomboky-api.conf/' /etc/httpd/conf.d/bear-servebeer-ssl.conf
+            fi
             sudo setsebool -P httpd_can_network_connect 1 || true
             sudo apachectl configtest
             sudo systemctl reload httpd

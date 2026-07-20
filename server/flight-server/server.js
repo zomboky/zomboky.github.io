@@ -51,7 +51,7 @@ function normalizeCode(raw) {
 
 // Écriture atomique (fichier .tmp puis renommage) pour éviter qu'une lecture
 // concurrente ne tombe sur un fichier à moitié écrit — même pattern que
-// writeVisitorCount() dans orange-server/server.js.
+// writeVisitorCount() dans zomboky-server/server.js.
 function writeDesignFile(code, payload) {
   const target = codePath(code);
   const tmp = `${target}.tmp`;
