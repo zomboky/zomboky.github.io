@@ -5329,7 +5329,7 @@ function drawStart() {
   hctx.save();
   hctx.fillStyle = 'rgba(4,4,18,0.75)'; hctx.fillRect(0, 0, W, H);
   const cx = W / 2, cy = H / 2;
-  rrect(cx - 190, cy - 220, 380, 480, 28, 'rgba(12,12,48,0.96)', 'rgba(110,90,255,0.45)');
+  rrect(cx - 190, cy - 220, 380, 420, 28, 'rgba(12,12,48,0.96)', 'rgba(110,90,255,0.45)');
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
   hctx.font = '60px serif'; hctx.fillText('🦉', cx, cy - 160);
   hctx.fillStyle = '#cbc3ff'; hctx.font = '900 28px system-ui';
@@ -5357,30 +5357,33 @@ function drawStart() {
   hctx.fillStyle = '#fff'; hctx.font = 'bold 15px system-ui';
   hctx.fillText('Choisis un mode', cx, cy + 102);
 
-  // Grille 2×2 : ligne 1 = SOLO/MULTIJOUEUR, ligne 2 = CAMPAGNE/COMBAT VS IA
-  const btnW = 175, btnH = 44, btnGap = 10, rowGap = 8;
-  const row1Y = cy + 120, row2Y = row1Y + btnH + rowGap;
-  const btnTotalW = btnW * 2 + btnGap, btnX0 = cx - btnTotalW / 2;
-  startSoloBtnRect     = { x: btnX0,             y: row1Y, w: btnW, h: btnH };
-  startMultiBtnRect    = { x: btnX0 + btnW + btnGap, y: row1Y, w: btnW, h: btnH };
-  startCampaignBtnRect = { x: btnX0,             y: row2Y, w: btnW, h: btnH };
-  startQuickIaBtnRect  = { x: btnX0 + btnW + btnGap, y: row2Y, w: btnW, h: btnH };
-  rrect(startSoloBtnRect.x, row1Y, btnW, btnH, 10, 'rgba(120,110,255,0.3)', 'rgba(180,170,255,0.8)');
-  rrect(startMultiBtnRect.x, row1Y, btnW, btnH, 10, 'rgba(60,180,255,0.25)', 'rgba(120,220,255,0.8)');
-  rrect(startCampaignBtnRect.x, row2Y, btnW, btnH, 10, 'rgba(180,90,255,0.25)', 'rgba(220,140,255,0.8)');
-  rrect(startQuickIaBtnRect.x, row2Y, btnW, btnH, 10, 'rgba(255,120,90,0.25)', 'rgba(255,160,120,0.8)');
-  hctx.font = 'bold 13px system-ui'; hctx.fillStyle = '#fff';
-  hctx.fillText('SOLO', startSoloBtnRect.x + btnW / 2, row1Y + btnH / 2);
-  hctx.fillText('MULTIJOUEUR', startMultiBtnRect.x + btnW / 2, row1Y + btnH / 2);
-  hctx.font = 'bold 11px system-ui';
-  hctx.fillText('CAMPAGNE', startCampaignBtnRect.x + btnW / 2, row2Y + btnH / 2 - 8);
-  hctx.fillText('🐻 vs 🦉', startCampaignBtnRect.x + btnW / 2, row2Y + btnH / 2 + 8);
-  hctx.fillText('COMBAT VS IA', startQuickIaBtnRect.x + btnW / 2, row2Y + btnH / 2 - 8);
-  hctx.fillText('⚔️ duel libre', startQuickIaBtnRect.x + btnW / 2, row2Y + btnH / 2 + 8);
+  // Une seule rangée de 4 boutons (garde la même hauteur de panneau que l'ancien
+  // écran à 3 boutons — un 2ᵉ rang pousserait CAMPAGNE/COMBAT VS IA hors de
+  // l'écran sur mobile en paysage, où la hauteur de fenêtre dépasse à peine
+  // celle du panneau).
+  const btnW = 84, btnH = 44, btnGap = 8, btnY = cy + 120;
+  const btnTotalW = btnW * 4 + btnGap * 3, btnX0 = cx - btnTotalW / 2;
+  startSoloBtnRect     = { x: btnX0,                     y: btnY, w: btnW, h: btnH };
+  startMultiBtnRect    = { x: btnX0 + (btnW + btnGap),     y: btnY, w: btnW, h: btnH };
+  startCampaignBtnRect = { x: btnX0 + 2 * (btnW + btnGap), y: btnY, w: btnW, h: btnH };
+  startQuickIaBtnRect  = { x: btnX0 + 3 * (btnW + btnGap), y: btnY, w: btnW, h: btnH };
+  rrect(startSoloBtnRect.x, btnY, btnW, btnH, 10, 'rgba(120,110,255,0.3)', 'rgba(180,170,255,0.8)');
+  rrect(startMultiBtnRect.x, btnY, btnW, btnH, 10, 'rgba(60,180,255,0.25)', 'rgba(120,220,255,0.8)');
+  rrect(startCampaignBtnRect.x, btnY, btnW, btnH, 10, 'rgba(180,90,255,0.25)', 'rgba(220,140,255,0.8)');
+  rrect(startQuickIaBtnRect.x, btnY, btnW, btnH, 10, 'rgba(255,120,90,0.25)', 'rgba(255,160,120,0.8)');
+  hctx.font = 'bold 12px system-ui'; hctx.fillStyle = '#fff';
+  hctx.fillText('SOLO', startSoloBtnRect.x + btnW / 2, btnY + btnH / 2);
+  hctx.font = 'bold 10px system-ui';
+  hctx.fillText('MULTI', startMultiBtnRect.x + btnW / 2, btnY + btnH / 2 - 7);
+  hctx.fillText('JOUEUR', startMultiBtnRect.x + btnW / 2, btnY + btnH / 2 + 7);
+  hctx.fillText('CAMPAGNE', startCampaignBtnRect.x + btnW / 2, btnY + btnH / 2 - 8);
+  hctx.fillText('🐻 vs 🦉', startCampaignBtnRect.x + btnW / 2, btnY + btnH / 2 + 8);
+  hctx.fillText('COMBAT', startQuickIaBtnRect.x + btnW / 2, btnY + btnH / 2 - 8);
+  hctx.fillText('VS IA ⚔️', startQuickIaBtnRect.x + btnW / 2, btnY + btnH / 2 + 8);
   hctx.font = 'bold 13px system-ui';
   if (!isMobile) {
     hctx.fillStyle = '#9be0ff'; hctx.font = '11px system-ui';
-    hctx.fillText('([M] = raccourci multijoueur)', cx, row2Y + btnH + 20);
+    hctx.fillText('([M] = raccourci multijoueur)', cx, btnY + btnH + 20);
   }
   hctx.restore();
 }
