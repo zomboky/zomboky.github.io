@@ -2358,18 +2358,25 @@ window.addEventListener('blur', () => { lookBack = false; });
 function requestFlightPointerLock() {
   if (!isMobile && glCanvas.requestPointerLock) glCanvas.requestPointerLock();
 }
+// NB : on ignore le pointerType 'touch' (déjà géré par touchstart/move/end natifs
+// ci-dessus), plutôt que le flag `isMobile` — `isMobile` reflète la capacité tactile
+// de l'appareil (ontouchstart / maxTouchPoints), pas l'entrée réellement utilisée.
+// Beaucoup de PC Windows (écran tactile présent mais inutilisé, ou pavé tactile
+// "precision" qui rapporte maxTouchPoints > 0) sont donc classés `isMobile = true`
+// alors que le joueur pilote à la souris : avec un `if (isMobile) return`, ces
+// souris étaient totalement ignorées et aucun bouton de menu n'était cliquable.
 window.addEventListener('pointermove', e => {
-  if (isMobile) return; // tactile géré par touchstart/touchmove/touchend natifs
+  if (e.pointerType === 'touch') return;
   if (document.pointerLockElement === glCanvas) {
     mouseDX += e.movementX;
     mouseDY += e.movementY;
   }
   if (sliderDrag) handleSliderDrag(e.clientX);
 });
-window.addEventListener('pointerup',     e => { if (e.button === 0) mouseFireHeld = false; if (isMobile) return; sliderDrag = false; if (e.button === 2) lookBack = false; });
-window.addEventListener('pointercancel', e => { mouseFireHeld = false; if (isMobile) return; sliderDrag = false; lookBack = false; });
+window.addEventListener('pointerup',     e => { if (e.button === 0) mouseFireHeld = false; if (e.pointerType === 'touch') return; sliderDrag = false; if (e.button === 2) lookBack = false; });
+window.addEventListener('pointercancel', e => { mouseFireHeld = false; if (e.pointerType === 'touch') return; sliderDrag = false; lookBack = false; });
 window.addEventListener('pointerdown', e => {
-  if (isMobile) return; // tactile géré par touchstart/touchmove/touchend natifs
+  if (e.pointerType === 'touch') return; // tactile géré par touchstart/touchmove/touchend natifs
   if (e.button === 2) { lookBack = true; return; } // clic droit = vue arrière (maintenu)
   if (settingsOpen) {
     const hit = getSliderHitArea();
