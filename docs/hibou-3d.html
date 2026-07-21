@@ -802,21 +802,34 @@ function ridged(x, z, octaves = 3) {
 }
 
 // Pics montagneux : bosses gaussiennes semées à l'intérieur de l'arène (jamais au centre).
-// Nombre, position, hauteur et rayon tirés au hasard à chaque run — désormais répartis
-// sur TOUTE l'arène élargie (l'ancien semis 90..270 laissait 90 % de la carte plate).
+// Semis via un PRNG DÉDIÉ seedé fixe (PEAK_SEED), comme les rivières — et NON plus via
+// Math.random() : ces pics font partie de terrainHeight() donc de la COLLISION, ils doivent
+// être identiques sur TOUS les clients multijoueur. Avant ce correctif, fillMountainPeaks()
+// tirait via Math.random() : même le snapshot « canonique » était pris après un tirage
+// aléatoire → chaque client avait un relief différent (hiboux distants enterrés/flottants).
+// En solo, peakSeed est re-tiré à chaque partie (regenerateTerrainSeed) pour varier la carte ;
+// le multijoueur restaure PEAK_SEED (restoreCanonicalTerrain).
 // L'array garde la MÊME référence à travers les régénérations : terrainHeight ferme dessus.
+const PEAK_SEED = 73939133;
+let peakSeed = PEAK_SEED;
+let peakRng = mulberry32(peakSeed);
+const peakRnd = (a, b) => a + peakRng() * (b - a);
 const mountainPeaks = [];
 function fillMountainPeaks() {
+  peakRng = mulberry32(peakSeed >>> 0); // reseed → tirage reproductible pour un peakSeed donné
   mountainPeaks.length = 0;
-  const peakCount = Math.floor(rnd(10, 15));
+  const peakCount = Math.floor(peakRnd(10, 15));
   for (let i = 0; i < peakCount; i++) {
-    const angle = (i / peakCount) * Math.PI * 2 + rnd(-0.5, 0.5);
-    const dist = rnd(140, ARENA_RADIUS_XZ * 0.72);
+    const angle = (i / peakCount) * Math.PI * 2 + peakRnd(-0.5, 0.5);
+    const dist = peakRnd(140, ARENA_RADIUS_XZ * 0.72);
     mountainPeaks.push({
       x: Math.cos(angle) * dist,
       z: Math.sin(angle) * dist,
-      h: rnd(35, 105),
-      r: rnd(55, 165)
+      // Pics ADOUCIS (moins hauts, plus larges) → pentes moins abruptes. terrainHeight() sert
+      // aussi de collision : des pics trop raides = « hitbox » de relief trop agressives, on
+      // crashe sur des pentes qu'on croyait franchissables. Anciennes bornes : h 35..105, r 55..165.
+      h: peakRnd(22, 70),
+      r: peakRnd(80, 200)
     });
   }
 }
@@ -883,6 +896,7 @@ function riverCarve(x, z) {
 // terrain différent d'un client à l'autre : voir restoreCanonicalTerrain().
 function regenerateTerrainSeed() {
   terrainSeed = Math.random() * 1000;
+  peakSeed = Math.floor(Math.random() * 1e9); // solo : nouveaux pics (le multi restaure PEAK_SEED)
   fillMountainPeaks();
   riverRng = mulberry32(Math.floor(Math.random() * 1e9));
   fillRiverPaths();
@@ -895,6 +909,7 @@ function regenerateTerrainSeed() {
 // avant une manche multijoueur, que le client ait joué une ou plusieurs parties solo entre-temps ou non.
 function restoreCanonicalTerrain() {
   terrainSeed = CANONICAL_TERRAIN_SEED;
+  peakSeed = PEAK_SEED; // pics canoniques (le snapshot ci-dessous est désormais déterministe)
   mountainPeaks.length = 0;
   for (const p of CANONICAL_MOUNTAIN_PEAKS) mountainPeaks.push({ ...p });
   riverRng = mulberry32(RIVER_SEED);
@@ -1078,19 +1093,25 @@ function updateWater(dt) {
 // Chaînes de montagnes GLB plantées SUR la muraille procédurale : elles ajoutent
 // des silhouettes déchiquetées crédibles par-dessus l'anneau de terrain, tout
 // autour de l'arène (purement décoratives — la collision, c'est le terrain).
+// Muraille de montagnes GLB décoratives placée via un PRNG seedé fixe (SCENERY_SEED) et NON
+// Math.random() : purement visuel (la collision, c'est le terrain), mais « pas la même carte »
+// d'un client à l'autre casse l'immersion multijoueur — on la rend identique partout.
+const SCENERY_SEED = 51413379;
 function makeMountainScenery() {
   const protos = [models.mountains, models.mountainGroup].filter(Boolean);
   if (!protos.length) return; // le terrain a déjà sa muraille, pas de repli nécessaire
+  const sceneryRng = mulberry32(SCENERY_SEED);
+  const srnd = (a, b) => a + sceneryRng() * (b - a);
   const matrices = [[], []];
   const dummy = new THREE.Object3D();
   const ringCount = 22;
   for (let i = 0; i < ringCount; i++) {
-    const angle = (i / ringCount) * Math.PI * 2 + rnd(-0.14, 0.14);
-    const dist = rnd(ARENA_RADIUS_XZ * 0.98, ARENA_RADIUS_XZ * 1.3); // à cheval sur la crête
+    const angle = (i / ringCount) * Math.PI * 2 + srnd(-0.14, 0.14);
+    const dist = srnd(ARENA_RADIUS_XZ * 0.98, ARENA_RADIUS_XZ * 1.3); // à cheval sur la crête
     const x = Math.cos(angle) * dist, z = Math.sin(angle) * dist;
     dummy.position.set(x, terrainHeight(x, z) - 18, z); // enraciné dans la pente
-    dummy.rotation.set(0, rnd(0, Math.PI * 2), 0);
-    dummy.scale.setScalar(rnd(1.3, 2.6));
+    dummy.rotation.set(0, srnd(0, Math.PI * 2), 0);
+    dummy.scale.setScalar(srnd(1.3, 2.6));
     dummy.updateMatrix();
     matrices[i % protos.length].push(dummy.matrix.clone());
   }
@@ -3909,25 +3930,55 @@ function onMPRemoteFire(pos, dir) {
   spawnBullet(_tracerPos, dir, 'tracer');
 }
 
-// ── Caisses de munitions : réutilisent la mécanique des branches (placement
-//    via collectibleSpawnPos, recyclage à distance, ramassage par proximité)
-//    mais en pool bien plus petit — elles REMPLACENT les branches en multijoueur ──
-let ammoCrates = [];
-function newAmmoCrate() {
-  const mat = new THREE.SpriteMaterial({ map: ammoCrateTexture, transparent: true });
+// ── Caisses de munitions & kits de soin (multijoueur) — objets PARTAGÉS ────────────
+//  Positions déterministes dérivées de la graine de la partie (mp.matchSeed()) + de l'index
+//  d'emplacement + du numéro de « génération » (incrémenté à chaque ramassage). Le terrain
+//  étant lui aussi déterministe (voir PEAK_SEED), chaque client calcule EXACTEMENT les mêmes
+//  positions → les objets apparaissent au même endroit pour tout le monde. Le ramassage passe
+//  par le serveur (mp.sendPickupCrate/Heal) qui relaie 'crate-taken'/'heal-taken' à tous :
+//  l'objet disparaît puis réapparaît au même endroit chez chacun. Plus de placement relatif au
+//  hibou local ni de recyclage à distance (qui désynchronisaient tout).
+const _mpTmp = new THREE.Vector3();
+const MP_OBJ_SALT = { ammo: 1, heal: 2 };
+function hash32(a, b, c, d) {
+  let h = (a >>> 0) ^ Math.imul((b + 1) | 0, 0x9e3779b1) ^ Math.imul((c + 1) | 0, 0x85ebca77) ^ Math.imul((d + 1) | 0, 0xc2b2ae3d);
+  h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
+  h = Math.imul(h ^ (h >>> 13), 0x297a2d39);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+function mpObjectPos(kind, idx, gen, out) {
+  const seed = ((mp && mp.matchSeed()) || 1) >>> 0;
+  const rng = mulberry32(hash32(seed, MP_OBJ_SALT[kind] || 0, idx, gen));
+  const rr = (a, b) => a + rng() * (b - a);
+  const angle = rr(0, Math.PI * 2);
+  const dist = rr(60, ARENA_RADIUS_XZ * 0.7); // réparti dans l'arène, à l'écart de la muraille
+  const x = ARENA_CENTER.x + Math.cos(angle) * dist;
+  const z = ARENA_CENTER.z + Math.sin(angle) * dist;
+  const y = Math.min(effectiveGroundY(x, z) + rr(6, 40), COLLECTIBLE_MAX_Y);
+  return (out || new THREE.Vector3()).set(x, y, z);
+}
+function makeCollectibleSprite(texture, glowColor, glowScale) {
+  const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(2.2, 2.2, 1);
-  const pos = collectibleSpawnPos(60, 260);
-  sprite.position.copy(pos);
   scene.add(sprite);
   const glowMat = new THREE.SpriteMaterial({
-    map: glowTexture, color: 0xffa030, transparent: true, opacity: 0.5,
+    map: glowTexture, color: glowColor, transparent: true, opacity: 0.5,
     blending: THREE.AdditiveBlending, depthWrite: false
   });
   const glow = new THREE.Sprite(glowMat);
-  glow.scale.setScalar(2.4);
+  glow.scale.setScalar(glowScale);
   sprite.add(glow);
-  return { sprite, glowMat, w: rnd(0, Math.PI * 2), ws: rnd(0.03, 0.07), baseY: pos.y };
+  return { sprite, glowMat };
+}
+
+let ammoCrates = [];
+function newAmmoCrate(idx) {
+  const { sprite, glowMat } = makeCollectibleSprite(ammoCrateTexture, 0xffa030, 2.4);
+  const gen = mp ? mp.crateGen(idx) : 0;
+  const pos = mpObjectPos('ammo', idx, gen);
+  sprite.position.copy(pos);
+  return { sprite, glowMat, w: rnd(0, Math.PI * 2), ws: rnd(0.03, 0.07), baseY: pos.y, idx, gen, pending: false };
 }
 function removeAmmoCrate(i) {
   scene.remove(ammoCrates[i].sprite);
@@ -3938,49 +3989,45 @@ function removeAmmoCrate(i) {
 function clearAmmoCrates() { while (ammoCrates.length) removeAmmoCrate(0); }
 function resetAmmoCrates() {
   clearAmmoCrates();
-  ammoCrates = Array.from({ length: MP_AMMO_CRATE_COUNT }, newAmmoCrate);
+  ammoCrates = Array.from({ length: MP_AMMO_CRATE_COUNT }, (_, i) => newAmmoCrate(i));
 }
 function updateAmmoCrates() {
-  for (let i = ammoCrates.length - 1; i >= 0; i--) {
-    const c = ammoCrates[i];
+  for (const c of ammoCrates) {
     c.w += c.ws;
     c.sprite.position.y = c.baseY + Math.sin(c.w) * 0.4;
     c.glowMat.opacity = 0.5 + Math.sin(c.w * 2) * 0.14;
-    if (c.sprite.position.distanceTo(owlGroup.position) > BRANCH_RECYCLE_DIST) {
-      const p = collectibleSpawnPos(80, 260);
-      c.sprite.position.copy(p);
-      c.baseY = p.y;
-    }
-    if (owlGroup.position.distanceTo(c.sprite.position) < COLLECT_RADIUS) {
-      mpAmmo = Math.min(MP_MAG_CAP, mpAmmo + MP_AMMO_GRANT); // optimiste — le serveur confirme via 'ammo'
-      mp.sendPickupAmmo();
-      spawnFX(c.sprite.position, 12, 'collect', '+' + MP_AMMO_GRANT + ' 📦');
-      screenShake = Math.max(screenShake, 4);
-      removeAmmoCrate(i);
-      ammoCrates.push(newAmmoCrate());
+    // Ramassage : on signale au serveur (index + génération) et on ATTEND 'crate-taken' pour
+    // repositionner — pas de disparition locale immédiate, pour rester synchro avec tous.
+    if (!c.pending && owlGroup.position.distanceTo(c.sprite.position) < COLLECT_RADIUS) {
+      c.pending = true;
+      mp.sendPickupCrate(c.idx, c.gen);
     }
   }
 }
+// 'crate-taken' relayé par le serveur : la caisse idx passe à la génération gen (nouvelle
+// position déterministe). Si c'est NOUS qui l'avons prise (mine), on montre le gain.
+function onCrateTaken(idx, gen, mine) {
+  const c = ammoCrates.find((x) => x.idx === idx);
+  if (!c) return;
+  if (mine) {
+    spawnFX(c.sprite.position, 12, 'collect', '+' + MP_AMMO_GRANT + ' 📦');
+    screenShake = Math.max(screenShake, 4);
+  }
+  c.gen = gen; c.pending = false;
+  const pos = mpObjectPos('ammo', idx, gen, _mpTmp);
+  c.sprite.position.copy(pos); c.baseY = pos.y;
+}
 
-// ── Kits de soin : collectible plus rare que les caisses de munitions, PAS
-//    indiqué par l'ESP (contrairement à ammoCrates), qui répare intégralement
-//    (vie + gouvernes) un hibou endommagé qui le ramasse. ──
+// ── Kits de soin : même mécanique synchronisée, mais réparent (vie + gouvernes) au lieu de
+//    donner des munitions. On ne déclenche le ramassage QUE si le hibou est endommagé (sinon on
+//    passe au travers sans gaspiller le kit). ──
 let healKits = [];
-function newHealKit() {
-  const mat = new THREE.SpriteMaterial({ map: healKitTexture, transparent: true });
-  const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(2.2, 2.2, 1);
-  const pos = collectibleSpawnPos(80, 280);
+function newHealKit(idx) {
+  const { sprite, glowMat } = makeCollectibleSprite(healKitTexture, 0x4caf50, 2.6);
+  const gen = mp ? mp.healGen(idx) : 0;
+  const pos = mpObjectPos('heal', idx, gen);
   sprite.position.copy(pos);
-  scene.add(sprite);
-  const glowMat = new THREE.SpriteMaterial({
-    map: glowTexture, color: 0x4caf50, transparent: true, opacity: 0.5,
-    blending: THREE.AdditiveBlending, depthWrite: false
-  });
-  const glow = new THREE.Sprite(glowMat);
-  glow.scale.setScalar(2.6);
-  sprite.add(glow);
-  return { sprite, glowMat, w: rnd(0, Math.PI * 2), ws: rnd(0.03, 0.07), baseY: pos.y };
+  return { sprite, glowMat, w: rnd(0, Math.PI * 2), ws: rnd(0.03, 0.07), baseY: pos.y, idx, gen, pending: false };
 }
 function removeHealKit(i) {
   scene.remove(healKits[i].sprite);
@@ -3991,27 +4038,28 @@ function removeHealKit(i) {
 function clearHealKits() { while (healKits.length) removeHealKit(0); }
 function resetHealKits() {
   clearHealKits();
-  healKits = Array.from({ length: MP_HEALKIT_COUNT }, newHealKit);
+  healKits = Array.from({ length: MP_HEALKIT_COUNT }, (_, i) => newHealKit(i));
 }
 function updateHealKits() {
-  for (let i = healKits.length - 1; i >= 0; i--) {
-    const k = healKits[i];
+  for (const k of healKits) {
     k.w += k.ws;
     k.sprite.position.y = k.baseY + Math.sin(k.w) * 0.4;
     k.glowMat.opacity = 0.5 + Math.sin(k.w * 2) * 0.14;
-    if (k.sprite.position.distanceTo(owlGroup.position) > BRANCH_RECYCLE_DIST) {
-      const p = collectibleSpawnPos(100, 280);
-      k.sprite.position.copy(p);
-      k.baseY = p.y;
-    }
-    if (owlGroup.position.distanceTo(k.sprite.position) < COLLECT_RADIUS) {
+    if (!k.pending && owlGroup.position.distanceTo(k.sprite.position) < COLLECT_RADIUS) {
       const damaged = life < LIFE_MAX || governEff.leftWing > 0 || governEff.rightWing > 0 || governEff.tail > 0;
-      if (damaged) repairOwl();
-      screenShake = Math.max(screenShake, 4);
-      removeHealKit(i);
-      healKits.push(newHealKit());
+      if (!damaged) continue; // hibou intact : on laisse le kit pour plus tard
+      k.pending = true;
+      mp.sendPickupHeal(k.idx, k.gen);
     }
   }
+}
+function onHealTaken(idx, gen, mine) {
+  const k = healKits.find((x) => x.idx === idx);
+  if (!k) return;
+  if (mine) { repairOwl(); screenShake = Math.max(screenShake, 4); }
+  k.gen = gen; k.pending = false;
+  const pos = mpObjectPos('heal', idx, gen, _mpTmp);
+  k.sprite.position.copy(pos); k.baseY = pos.y;
 }
 
 // ── Mort / respawn multijoueur : touche à la tête (ou vie à 0) → écran de
@@ -6168,6 +6216,8 @@ loadAssets().then(() => {
     onAmmo: (n) => { mpAmmo = n; },
     onKill: (killerId) => { if (mp && killerId === mp.myId()) onLocalKillConfirmed(); },
     onRemoteFire: onMPRemoteFire,
+    onCrateTaken: (idx, gen, mine) => onCrateTaken(idx, gen, mine),
+    onHealTaken: (idx, gen, mine) => onHealTaken(idx, gen, mine),
     spawnFX,
   });
 
