@@ -268,6 +268,30 @@ resize(); initStars(); initTrees();
 const keys  = {};
 const mouse = { x: -999, y: -999, on: false };
 
+// ── Contrôle souris : pointer lock + curseur virtuel qui s'enroule ───────────────
+// Sans pointer lock, la position souris est bornée au bord de la fenêtre : quand le hibou
+// s'enroule d'un bord à l'autre (façon Snake), le curseur coincé au bord le faisait « foncer »
+// pour revenir. On capture donc la souris (pointer lock) et on maintient un curseur VIRTUEL
+// qui s'enroule EXACTEMENT comme le hibou → le suivi reste continu au passage des bords.
+// Repli automatique sur clientX/clientY si le pointer lock est indisponible/refusé (et pour le
+// slider réglages + le tactile mobile, qui n'utilisent jamais le pointer lock).
+const wrapCoord = (v, size) => ((v % size) + size) % size;          // ramène dans [0, size)
+function wrapDelta(d, size) {                                        // plus court chemin torique
+  d %= size;
+  if (d >  size / 2) d -= size;
+  else if (d < -size / 2) d += size;
+  return d;
+}
+function pointerLocked() { return document.pointerLockElement === canvas; }
+function tryLockPointer() {
+  if (isMobile || pointerLocked() || !canvas.requestPointerLock) return;
+  try { canvas.requestPointerLock(); } catch { /* geste non éligible : repli clientX */ }
+}
+document.addEventListener('pointerlockchange', () => {
+  // À la prise du verrou, on cale le curseur virtuel sur le hibou pour éviter tout saut.
+  if (pointerLocked()) { mouse.x = owl.x; mouse.y = owl.y; mouse.on = true; }
+});
+
 // ── Slider settings (drag) ───────────────────────
 let sliderDrag = false;
 
@@ -277,7 +301,11 @@ document.addEventListener('keydown', e => {
 
   // Touche O : ouvre/ferme le menu sensibilité (desktop uniquement)
   if (e.key === 'o' || e.key === 'O') {
-    if (!isMobile) settingsOpen = !settingsOpen;
+    if (!isMobile) {
+      settingsOpen = !settingsOpen;
+      // Le slider a besoin du vrai curseur : on relâche le pointer lock quand le menu s'ouvre.
+      if (settingsOpen && pointerLocked()) document.exitPointerLock();
+    }
     return;
   }
 
@@ -288,8 +316,15 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('keyup', e => { keys[e.key] = false; });
 document.addEventListener('mousemove', e => {
-  mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true;
-  if (sliderDrag) handleSliderDrag(e.clientX);
+  if (pointerLocked()) {
+    // Curseur virtuel : on intègre le déplacement relatif et on l'enroule comme le hibou.
+    mouse.x = wrapCoord(mouse.x + e.movementX, canvas.width);
+    mouse.y = wrapCoord(mouse.y + e.movementY, canvas.height);
+    mouse.on = true;
+  } else {
+    mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true;
+    if (sliderDrag) handleSliderDrag(e.clientX);
+  }
 });
 document.addEventListener('mouseup', () => { sliderDrag = false; });
 
@@ -315,9 +350,12 @@ canvas.addEventListener('pointerdown', e => {
     return;
   }
 
-  if (state === S.START || state === S.OVER) beginGame();
+  if (state === S.START || state === S.OVER) { beginGame(); return; }
+  // En jeu : (re)prendre le pointer lock s'il a été relâché (ex. après Échap), pour l'enroulement.
+  if (state === S.PLAY && !settingsOpen) tryLockPointer();
 });
 canvas.addEventListener('pointermove', e => {
+  if (pointerLocked()) return; // sous pointer lock, c'est 'mousemove' (movementX) qui pilote
   if (mouse.on) { mouse.x = e.clientX; mouse.y = e.clientY; }
   if (sliderDrag) handleSliderDrag(e.clientX);
 });
@@ -374,21 +412,17 @@ function newBear() {
   else                             spdBase = (1.8 + Math.min(score * 0.05, 4.5)) * (1 + df * 0.3);
   spdBase = Math.min(spdBase, 9); // cap global, garde le jeu jouable en fin de run
 
-  const updateDelay = moon.state === 'blood' ? rnd(15, 40) : rnd(20, 80);
-  const driftAngle  = rnd(0, Math.PI * 2);
-  const driftMag    = rnd(0.4, 1.2);
+  const updateDelay = moon.state === 'blood' ? rnd(20, 45) : rnd(30, 70); // rafraîchit la dérive
 
   return {
     x, y,
     size:    28,
     spdBase,
     life,
-    targetX: owl.x,
-    targetY: owl.y,
+    heading:  Math.atan2(owl.y - y, owl.x - x) || 0, // cap courant (poursuite à braquage limité)
+    driftAng: 0,                                     // biais d'orientation, rafraîchi périodiquement
     updateDelay,
     updateTimer: Math.floor(rnd(0, updateDelay)),
-    driftX: Math.cos(driftAngle) * driftMag,
-    driftY: Math.sin(driftAngle) * driftMag,
     bob: rnd(0, Math.PI * 2),
     spawnPulse: 1 // 1→0, anim d'apparition (scale-in + glow)
   };
@@ -454,8 +488,9 @@ function spawnWrapFX(x, y) {
 function beginGame() {
   settingsOpen = false;
   state = S.PLAY; canvas.style.cursor = 'none';
+  tryLockPointer(); // capture la souris → curseur virtuel enroulé (voir contrôle souris ci-dessus)
   owl.x = canvas.width / 2; owl.y = canvas.height / 2; owl.invul = 60;
-  owl.px = owl.x; owl.py = owl.y; owl.vx = 0; owl.angle = 0; owl.flap = 0; owl.rockInvul = 0;
+  owl.px = owl.x; owl.py = owl.y; owl.vx = 0; owl.vy = 0; owl.angle = 0; owl.flap = 0; owl.rockInvul = 0;
   score = 0; nest = 0; combo = 1; comboTimer = 0; screenShake = 0; lives = 1; gameTime = 0;
   moon  = { state: 'none', timer: 0, next: 900, fillProgress: 0 };
   storm = { active: false, timer: 0, next: rnd(1800, 3600), windAngle: 0, windForce: 0, gustPhase: 0 };
@@ -501,12 +536,15 @@ function update() {
   owl.px = owl.x; owl.py = owl.y;
   if (mouse.on) {
     const lerpF = getMouseLerp(buffs.speed > 0);
-    let dx = (mouse.x - owl.x) * lerpF;
-    let dy = (mouse.y - owl.y) * lerpF;
-    // Après un wrap-around, la souris reste au même endroit à l'écran alors que le hibou
-    // vient d'être téléporté à l'opposé : la distance explose et lerpF*distance donne un
-    // bond de vitesse énorme. On plafonne la vitesse du suivi souris pour l'empêcher.
-    const maxStep = owl.speed * 8;
+    // Écart TORIQUE (plus court chemin en tenant compte de l'enroulement écran) : quand le
+    // hibou et le curseur virtuel s'enroulent chacun de leur côté, on vise toujours le chemin
+    // court → plus de « bond » pour revenir vers un curseur resté à l'autre bord.
+    let dx = wrapDelta(mouse.x - owl.x, canvas.width)  * lerpF;
+    let dy = wrapDelta(mouse.y - owl.y, canvas.height) * lerpF;
+    // Plafond de vitesse LIÉ à owl.speed (6 normal → 11 avec Speed Boost) : fouetter la souris
+    // ne suffit plus à atteindre la vitesse max, c'est le buff qui relève ce plafond → Speed
+    // Boost devient réellement utile.
+    const maxStep = owl.speed * 2.2;
     const stepMag = Math.hypot(dx, dy);
     if (stepMag > maxStep) { const k = maxStep / stepMag; dx *= k; dy *= k; }
     owl.x += dx;
@@ -541,6 +579,7 @@ function update() {
   const mvx = owl.x - owl.px, mvy = owl.y - owl.py;
   const mvMag = Math.hypot(mvx, mvy);
   owl.vx = mvx;
+  owl.vy = mvy; // vecteur vitesse complet → anticipation de l'IA des ours (Fix pourchasse)
   owl.moveMag = mvMag;
   if (mvMag > 0.2) owl.angle = lerpAngle(owl.angle, Math.atan2(mvy, mvx), 0.2);
   owl.flap += 0.22 + (buffs.speed > 0 ? 0.12 : 0) + Math.min(mvMag * 0.015, 0.15);
@@ -551,8 +590,13 @@ function update() {
   for (const s of stars) { s.a += s.da; if (s.a > 1 || s.a < 0.05) s.da *= -1; }
 
   // ── Cadeau spécial ──
-  if (!specialItem && moon.state === 'none' && !storm.active && Math.random() < 0.0005) {
-    specialItem = { x: rnd(60, canvas.width - 60), y: rnd(60, canvas.height - 60), bob: 0 };
+  // Cadeau spécial : plus fréquent qu'avant (0.0005 → 0.0012) ET désormais AUTORISÉ pendant les
+  // tempêtes (l'utilisateur veut des objets plus souvent, tempêtes comprises). On l'évite juste
+  // pendant les lunes, où le champ est déjà saturé d'ours. Les tempêtes ont lieu quand
+  // moon.state === 'none', donc cette condition les couvre.
+  if (!specialItem && moon.state === 'none' && Math.random() < 0.0012) {
+    const m = storm.active ? 100 : 60; // en tempête, on l'éloigne un peu des bords balayés
+    specialItem = { x: rnd(m, canvas.width - m), y: rnd(m, canvas.height - m), bob: 0 };
   }
   if (specialItem) {
     specialItem.bob += 0.05;
@@ -649,6 +693,9 @@ function updateMoon() {
       moon.fillProgress = 0;
       moon.next         = rnd(1200, 1800);
       bears             = [];
+      // On repeuple TOUT DE SUITE au niveau normal : avant, le champ restait vide après une lune
+      // tant qu'aucune branche n'était ramassée → « aucun ours » pendant de longues secondes.
+      while (bears.length < bearTarget()) bears.push(newBear());
       screenShake       = 10;
     }
   }
@@ -711,19 +758,23 @@ function updateStorm() {
 
 function newRock() {
   return {
-    x: rnd(20, canvas.width - 20),
-    y: -40,
+    x: rnd(30, canvas.width - 30),
+    y: -50,
     vy: rnd(3, 4.2),
     vx: rnd(-1.4, 1.4),
-    size: 26,
+    size: 30,           // un peu plus gros qu'avant (26) pour mieux se voir
     rot: rnd(0, Math.PI * 2),
-    rotSpeed: rnd(-0.06, 0.06)
+    rotSpeed: rnd(-0.06, 0.06),
+    warn: 42            // ~0.7 s d'ALERTE (télégraphe en haut) avant que le caillou ne tombe
   };
 }
 
 function updateRocks(owlRadius) {
   for (let i = rocks.length - 1; i >= 0; i--) {
     const rk = rocks[i];
+    // Phase d'alerte : le caillou ne tombe pas encore et ne blesse pas — le joueur est prévenu
+    // (avant, un caillou gris tombait sans prévenir sur un ciel d'orage gris → dégâts « mystère »).
+    if (rk.warn > 0) { rk.warn--; continue; }
     rk.x += rk.vx; rk.y += rk.vy; rk.rot += rk.rotSpeed;
 
     if (rk.y > canvas.height + 50) { rocks.splice(i, 1); continue; }
@@ -760,22 +811,31 @@ function updateBears(owlRadius) {
     }
     b.bob += 0.12;
     if (b.spawnPulse > 0) b.spawnPulse = Math.max(0, b.spawnPulse - 0.05);
+
+    // ── Poursuite ANTICIPÉE à braquage limité ─────────────────────────────────────
+    // On vise là où le hibou VA être (position + vitesse × avance), pas seulement où il est, et
+    // l'ours tourne PROGRESSIVEMENT vers cette cible (turnRate borné) au lieu de se réorienter
+    // d'un coup. Résultat : orbiter à la souris ne suffit plus à le semer, l'ours coupe la
+    // trajectoire au lieu de suivre un point périmé.
     b.updateTimer--;
     if (b.updateTimer <= 0) {
       b.updateTimer = b.updateDelay;
-      const newDriftAngle = rnd(0, Math.PI * 2);
-      const newDriftMag   = rnd(0.3, 1.4);
-      b.driftX = Math.cos(newDriftAngle) * newDriftMag;
-      b.driftY = Math.sin(newDriftAngle) * newDriftMag;
-      b.targetX = owl.x;
-      b.targetY = owl.y;
+      b.driftAng = rnd(-0.5, 0.5); // léger biais organique (bien plus faible que l'ancienne dérive)
     }
-    const dx  = (b.targetX - b.x) + b.driftX * 30;
-    const dy  = (b.targetY - b.y) + b.driftY * 30;
-    const d   = Math.hypot(dx, dy) || 1;
+    const lead = moon.state === 'blood' ? 14 : 10;          // frames d'anticipation
+    let lvx = owl.vx * lead, lvy = owl.vy * lead;
+    const lmag = Math.hypot(lvx, lvy), lcap = 200;          // borne l'avance si le hibou fonce
+    if (lmag > lcap) { lvx *= lcap / lmag; lvy *= lcap / lmag; }
+    const ddx = (owl.x + lvx) - b.x;
+    const ddy = (owl.y + lvy) - b.y;
+    const desAng = Math.atan2(ddy, ddx) + b.driftAng * 0.4;
+    let da = desAng - b.heading;
+    da = Math.atan2(Math.sin(da), Math.cos(da));            // écart d'angle ramené dans [-π, π]
+    const turnRate = moon.state === 'blood' ? 0.12 : 0.09;  // rad/frame (braquage maximal)
+    b.heading += Math.max(-turnRate, Math.min(turnRate, da));
     const spd = b.spdBase * (buffs.slow > 0 ? 0.3 : 1);
-    b.x += (dx / d) * spd;
-    b.y += (dy / d) * spd;
+    b.x += Math.cos(b.heading) * spd;
+    b.y += Math.sin(b.heading) * spd;
 
     if (owl.invul <= 0 && buffs.invincible <= 0 && dist(owl, b) < owlRadius * 0.8 + b.size * 0.3) {
       lives--;
@@ -787,6 +847,7 @@ function updateBears(owlRadius) {
         state = S.OVER;
         spawnFX(owl.x, owl.y, 50, 'death');
         canvas.style.cursor = 'default';
+        if (document.pointerLockElement) document.exitPointerLock(); // rendre le curseur
       } else {
         owl.invul = 120;
         spawnFX(owl.x, owl.y, 30, 'death', '-1 Vie !');
@@ -794,6 +855,11 @@ function updateBears(owlRadius) {
     }
   }
   if (moon.state !== 'none' && bears.length < bearTarget() && Math.random() < 0.15) {
+    bears.push(newBear());
+  }
+  // Recharge continue en jeu NORMAL aussi (avant, les ours ne réapparaissaient qu'au ramassage
+  // d'une branche ou à la mort d'un ours → le champ pouvait rester vide). Le champ n'est plus vide.
+  if (moon.state === 'none' && bears.length < bearTarget() && Math.random() < 0.04) {
     bears.push(newBear());
   }
 }
@@ -1105,12 +1171,40 @@ function drawWindLines() {
 }
 
 function drawRock(rk) {
+  // ── Phase d'alerte : télégraphe clignotant en haut de la colonne de chute ──
+  if (rk.warn > 0) {
+    const pulse = 0.5 + 0.5 * Math.sin(rk.warn * 0.5);
+    ctx.save();
+    ctx.globalAlpha = 0.5 + pulse * 0.5;
+    ctx.strokeStyle = '#ff5a3c';
+    ctx.lineWidth   = 3;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath(); ctx.moveTo(rk.x, 12); ctx.lineTo(rk.x, 48); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle    = '#ff5a3c';
+    ctx.font         = 'bold 22px system-ui';
+    ctx.textAlign    = 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowColor  = '#000'; ctx.shadowBlur = 6;
+    ctx.fillText('⚠', rk.x, 30);
+    ctx.restore();
+    return;
+  }
+  // ── Caillou : traînée de chute + halo vif + anneau de contour → bien lisible sur l'orage ──
   ctx.save();
   ctx.translate(rk.x, rk.y);
+  ctx.globalAlpha = 0.32;
+  for (let t = 1; t <= 3; t++) {
+    drawEmoji('🪨', -rk.vx * t * 1.6, -rk.vy * t * 1.6, rk.size * (1 - t * 0.12)); // traînée derrière
+  }
+  ctx.globalAlpha = 1;
   ctx.rotate(rk.rot);
-  ctx.shadowColor = 'rgba(120,120,130,0.6)';
-  ctx.shadowBlur  = 8;
+  ctx.shadowColor = '#ffd24a';   // halo jaune/orangé : fort contraste sur le ciel gris d'orage
+  ctx.shadowBlur  = 18;
   drawEmoji('🪨', 0, 0, rk.size);
+  ctx.shadowBlur  = 0;
+  ctx.strokeStyle = 'rgba(255,210,74,0.9)';
+  ctx.lineWidth   = 2.5;
+  ctx.beginPath(); ctx.arc(0, 0, rk.size * 0.5, 0, Math.PI * 2); ctx.stroke(); // anneau de contour
   ctx.restore();
 }
 
