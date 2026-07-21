@@ -104,100 +104,119 @@
   }
 
   // ── Génération procédurale de la grotte ──────────────────────────
-  // Grille fixe 24x16 (auto-échelle à la taille du canvas). Corridor garanti
-  // de 2 cellules de large du centre vers chaque bord (traversée garantie),
-  // puis bruit d'automate cellulaire sur le reste pour un aspect organique,
-  // puis flood-fill depuis le centre pour éliminer toute poche isolée.
+  // Grille fixe 24x16 (auto-échelle à la taille du canvas). Au lieu d'un bruit CA (qui, avec
+  // le hors-grille compté comme mur, favorise systématiquement la survie des murs près des
+  // BORDS et l'érosion vers du vide à l'intérieur — donnant un simple contour creux), on fait
+  // CROÎTRE une seule caverne connexe depuis le centre par agrégation aléatoire (« Eden
+  // growth ») : chaque cellule ouverte est forcément adjacente à une cellule déjà ouverte, donc
+  // la connexité est garantie par construction, et la forme obtenue est organique et arrondie
+  // (lobes), comme une vraie caverne — pas un simple cadre.
   function generateCave(seed, W, H) {
     const rng  = mulberry32(seed);
     const cols = 24, rows = 16;
     const cellW = W / cols, cellH = H / rows;
 
-    const wall   = [];
-    const locked = []; // cellules de corridor : jamais réécrites par l'automate cellulaire
-    for (let r = 0; r < rows; r++) {
-      wall.push(new Array(cols).fill(true));
-      locked.push(new Array(cols).fill(false));
-    }
+    const wall = [];
+    for (let r = 0; r < rows; r++) wall.push(new Array(cols).fill(true));
 
     const midR = rows >> 1, midC = cols >> 1;
-    function carve(r0, c0, r1, c1) {
-      for (let r = Math.max(0, r0); r <= Math.min(rows - 1, r1); r++) {
-        for (let c = Math.max(0, c0); c <= Math.min(cols - 1, c1); c++) {
-          wall[r][c] = false; locked[r][c] = true;
-        }
-      }
-    }
-    carve(0, midC - 1, rows - 1, midC);   // bande verticale (bras Nord + Sud)
-    carve(midR - 1, 0, midR, cols - 1);   // bande horizontale (bras Ouest + Est)
+    const inGrid = (r, c) => r >= 0 && r < rows && c >= 0 && c < cols;
+    function openCell(r, c) { if (inGrid(r, c)) wall[r][c] = false; }
+    function isOpen(r, c) { return inGrid(r, c) && !wall[r][c]; }
 
-    // Bruit initial 55% mur / 45% ouvert, hors corridors
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        if (locked[r][c]) continue;
-        wall[r][c] = rng() < 0.55;
-      }
+    // 1) Amorce 2x2 au centre (garantit que le hibou, téléporté au centre exact à chaque
+    //    transition, apparaît toujours en zone ouverte) puis croissance par agrégation
+    //    aléatoire : à chaque étape, une cellule-frontière (mur adjacent à de l'ouvert) est
+    //    choisie au hasard et ouverte, jusqu'à couvrir ~56% de la grille.
+    const seedCells = [[midR, midC], [midR, midC - 1], [midR - 1, midC], [midR - 1, midC - 1]];
+    seedCells.forEach(([r, c]) => openCell(r, c));
+
+    const inFrontier = new Set();
+    const frontier = [];
+    function pushFrontier(r, c) {
+      if (!inGrid(r, c) || !wall[r][c]) return;
+      const key = r * cols + c;
+      if (inFrontier.has(key)) return;
+      inFrontier.add(key); frontier.push([r, c]);
+    }
+    seedCells.forEach(([r, c]) => {
+      [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]].forEach(([rr, cc]) => pushFrontier(rr, cc));
+    });
+
+    const totalCells = cols * rows;
+    const targetOpen = Math.floor(totalCells * 0.56);
+    let openCount = seedCells.length;
+    while (openCount < targetOpen && frontier.length) {
+      const idx = Math.floor(rng() * frontier.length);
+      const [r, c] = frontier[idx];
+      frontier[idx] = frontier[frontier.length - 1]; frontier.pop();
+      inFrontier.delete(r * cols + c);
+      if (!wall[r][c]) continue; // déjà ouverte entre-temps (ajoutée 2x à la frontière)
+      openCell(r, c); openCount++;
+      [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]].forEach(([rr, cc]) => pushFrontier(rr, cc));
     }
 
-    function wallNeighbors(r, c) {
-      let n = 0;
-      for (let dr = -1; dr <= 1; dr++) {
-        for (let dc = -1; dc <= 1; dc++) {
-          if (dr === 0 && dc === 0) continue;
-          const rr = r + dr, cc = c + dc;
-          if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) { n++; continue; } // hors-grille = mur
-          if (wall[rr][cc]) n++;
-        }
-      }
-      return n;
-    }
-    // 4 itérations de la règle "4-5" (lissage cellular automata classique)
-    for (let iter = 0; iter < 4; iter++) {
-      const next = wall.map(row => row.slice());
+    // 2) Garantit une sortie vers chacun des 4 bords (le hibou doit toujours pouvoir quitter la
+    //    carte dans les 4 directions) : si la croissance organique n'a pas déjà atteint un bord,
+    //    on tire une « tentacule » légèrement tortueuse depuis le point ouvert le plus proche.
+    function nearestOpenTo(targetR, targetC) {
+      let bestR = midR, bestC = midC, bestD = Infinity;
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          if (locked[r][c]) continue;
-          next[r][c] = wallNeighbors(r, c) >= 5;
+          if (wall[r][c]) continue;
+          const d = Math.abs(r - targetR) + Math.abs(c - targetC);
+          if (d < bestD) { bestD = d; bestR = r; bestC = c; }
         }
       }
-      for (let r = 0; r < rows; r++) wall[r] = next[r];
+      return [bestR, bestC];
     }
+    function carveTendril(targetR, targetC) {
+      let [r, c] = nearestOpenTo(targetR, targetC);
+      let guard = 0;
+      while ((r !== targetR || c !== targetC) && guard++ < 200) {
+        if (r !== targetR && (c === targetC || rng() < 0.5)) r += r < targetR ? 1 : -1;
+        else if (c !== targetC) c += c < targetC ? 1 : -1;
+        if (rng() < 0.25) { r += rng() < 0.5 ? 1 : -1; } // légère déviation organique
+        r = Math.max(0, Math.min(rows - 1, r)); c = Math.max(0, Math.min(cols - 1, c));
+        openCell(r, c); openCell(r, c + 1); openCell(r + 1, c); // ~2 cellules de large
+      }
+    }
+    let touchesN = false, touchesS = false, touchesW = false, touchesE = false;
+    for (let c = 0; c < cols; c++) { if (isOpen(0, c)) touchesN = true; if (isOpen(rows - 1, c)) touchesS = true; }
+    for (let r = 0; r < rows; r++) { if (isOpen(r, 0)) touchesW = true; if (isOpen(r, cols - 1)) touchesE = true; }
+    if (!touchesN) carveTendril(0, midC);
+    if (!touchesS) carveTendril(rows - 1, midC);
+    if (!touchesW) carveTendril(midR, 0);
+    if (!touchesE) carveTendril(midR, cols - 1);
 
-    // Flood-fill (BFS) depuis le centre : toute cellule ouverte non atteinte redevient mur
+    // 3) Filet de sécurité : la construction garantit déjà la connexité, mais on revérifie par
+    //    flood-fill au cas où (coût négligeable, exécuté une seule fois par génération de carte).
     const reachable = wall.map(row => row.map(() => false));
     reachable[midR][midC] = true;
     const stackR = [midR], stackC = [midC];
     let qi = 0;
     while (qi < stackR.length) {
       const r = stackR[qi], c = stackC[qi]; qi++;
-      const nb = [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]];
-      for (const [rr, cc] of nb) {
-        if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) continue;
-        if (wall[rr][cc] || reachable[rr][cc]) continue;
+      [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]].forEach(([rr, cc]) => {
+        if (!inGrid(rr, cc) || wall[rr][cc] || reachable[rr][cc]) return;
         reachable[rr][cc] = true;
         stackR.push(rr); stackC.push(cc);
-      }
+      });
     }
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        if (!wall[r][c] && !reachable[r][c]) wall[r][c] = true; // poche isolée -> scellée
+        if (!wall[r][c] && !reachable[r][c]) wall[r][c] = true; // poche isolée (ne devrait pas arriver) -> scellée
       }
     }
 
-    // Rects solides : seulement les cellules mur adjacentes à >=1 cellule ouverte
-    // (la masse intérieure ne reçoit aucun rect, rien ne peut jamais l'atteindre).
-    const solids    = [];
-    const cellTone  = wall.map(row => row.map(() => 0));
+    // Rects solides : seulement les cellules mur adjacentes à >=1 cellule ouverte (bordure
+    // visible façon référence) — la masse hors-caverne reste du vide, rien ne peut l'atteindre.
+    const solids   = [];
+    const cellTone = wall.map(row => row.map(() => 0)); // teinte du SABLE (cellules ouvertes)
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        if (!wall[r][c]) continue;
-        cellTone[r][c] = Math.floor(rng() * 4);
-        const nb = [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]];
-        let adjacentOpen = false;
-        for (const [rr, cc] of nb) {
-          if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) continue;
-          if (!wall[rr][cc]) { adjacentOpen = true; break; }
-        }
+        if (!wall[r][c]) { cellTone[r][c] = Math.floor(rng() * 4); continue; }
+        const adjacentOpen = isOpen(r - 1, c) || isOpen(r + 1, c) || isOpen(r, c - 1) || isOpen(r, c + 1);
         if (adjacentOpen) {
           solids.push({ x: c * cellW + cellW / 2, y: r * cellH + cellH / 2, hw: cellW / 2, hh: cellH / 2 });
         }

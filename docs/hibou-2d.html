@@ -206,7 +206,7 @@ const BIOME_MONSTER_KIND = { foret: 'bear', champ: 'bear', grotte: 'bat', lac: '
 const MONSTER_STATS = {
   bear:  { size: 28, spdMul: 1.00, turnMul: 1.00 },
   bat:   { size: 20, spdMul: 0.90, turnMul: 1.60 },
-  shark: { size: 32, spdMul: 1.55, turnMul: 0.85 }
+  shark: { size: 32, spdMul: 1.24, turnMul: 0.85 } // 1.55 * 0.8 : -20% suite retour utilisateur (trop rapides)
 };
 
 // ── Helpers ─────────────────────────────────────
@@ -226,6 +226,20 @@ function drawEmoji(e, x, y, size) {
   ctx.font = size + 'px serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText(e, x, y);
+}
+// Retour à la ligne mot-par-mot (ctx.measureText avec la police déjà en place côté appelant) —
+// utilisé par les panneaux texte (popup patch notes) pour ne jamais déborder du cadre.
+function wrapText(text, maxWidth) {
+  const words = text.split(' ');
+  const lines = [];
+  let cur = '';
+  for (const w of words) {
+    const test = cur ? cur + ' ' + w : w;
+    if (cur && ctx.measureText(test).width > maxWidth) { lines.push(cur); cur = w; }
+    else cur = test;
+  }
+  if (cur) lines.push(cur);
+  return lines;
 }
 
 // ══════════════════════════════════════════════════
@@ -333,6 +347,9 @@ let rooms         = new Map();
 let currentRoomId = null;
 let roomCooldown  = 0;
 let nextRoomId    = 0;
+let transitionFreeze = 0; // frames restantes : jeu en pause juste après un changement de carte
+const TRANSITION_FREEZE_FRAMES = 30; // 0.5s à 60fps — le temps de s'habituer à la nouvelle carte
+const BIOME_LABEL = { foret: '🌲 FORÊT', champ: '🌾 CHAMP', grotte: '🦇 GROTTE', lac: '🐟 LAC' };
 // Debug uniquement (tests automatisés) : ?fastcooldown=1 raccourcit le délai de 10s à ~0.5s.
 const ROOM_COOLDOWN = new URLSearchParams(location.search).get('fastcooldown') ? 30 : 600;
 
@@ -350,7 +367,14 @@ window.__hibouDebugState = () => {
     collectiblesPos: collectibles.map(c => ({ x: c.x, y: c.y, size: c.size, value: c.value })),
     solidsRects: solids.map(s => ({ x: s.x, y: s.y, hw: s.hw, hh: s.hh })),
     owl: { x: owl.x, y: owl.y },
-    gameState: state
+    gameState: state,
+    freeze: transitionFreeze,
+    wheatPos: wheat.map(w => w.x),
+    caveOpenRatio: room && room.cave ? (() => {
+      let open = 0; const g = room.cave;
+      for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) if (!g.wall[r][c]) open++;
+      return open / (g.rows * g.cols);
+    })() : null
   };
 };
 window.__hibouDebugForceTransition = (dir) => { roomCooldown = 0; attemptTransition(dir); return window.__hibouDebugState(); };
@@ -420,6 +444,7 @@ function resetWorld() {
   ensureRoomGenerated(room);
   loadRoomState(room);
   roomCooldown = ROOM_COOLDOWN;
+  transitionFreeze = 0;
 }
 
 // Franchir un bord (délai écoulé) : carte voisine réutilisée si déjà générée dans cette
@@ -447,6 +472,11 @@ function attemptTransition(dir) {
   mouse.x = owl.x; mouse.y = owl.y;    // resynchro anti-à-coup du curseur virtuel
   particles = [];
   roomCooldown = ROOM_COOLDOWN;
+  // Freeze + animation : le jeu se met en pause une demi-seconde pour laisser le temps de
+  // s'habituer à la nouvelle carte (voir le garde-fou dans update()).
+  transitionFreeze = TRANSITION_FREEZE_FRAMES;
+  screenShake = Math.max(screenShake, 12);
+  spawnFX(canvas.width / 2, canvas.height / 2 - 46, 0, 'collect', BIOME_LABEL[to.biome] || '');
   spawnWrapFX(owl.x, owl.y);
 }
 
@@ -459,12 +489,14 @@ function populateForestDecor(room, rng) {
   const far = [], near = [], roomSolids = [];
   for (let i = 0; i < farCount; i++) {
     const made = makeTreeSprite(i % 3, Math.floor(rng() * 1e6));
-    far.push({ sprite: made.canvas, x: rng() * W, scale: srnd(2.2, 3.0), alpha: 0.34 });
+    // Espacement régulier + gigue (comme l'ancien carrelage infini) plutôt qu'un x purement
+    // aléatoire : sinon la variance du hasard laisse de vrais trous dans la ligne d'arbres.
+    far.push({ sprite: made.canvas, x: i * 70 + srnd(-15, 15), scale: srnd(2.2, 3.0), alpha: 0.34 });
   }
   for (let i = 0; i < nearCount; i++) {
     const made  = makeTreeSprite((i + 1) % 3, Math.floor(rng() * 1e6));
     const scale = srnd(3.6, 4.6);
-    const x     = rng() * W;
+    const x     = i * 110 + srnd(-20, 20);
     near.push({ sprite: made.canvas, x, scale, alpha: 0.62 });
     const sw = 12 * PX * scale, sh = 20 * PX * scale;
     const trunkPxW = sw / 6, trunkPxH = made.trunkH * sh / 20;
@@ -476,11 +508,13 @@ function populateForestDecor(room, rng) {
 function populateFieldDecor(room, rng) {
   const srnd = (a, b) => a + rng() * (b - a);
   const W = canvas.width;
-  const count = Math.ceil(W / 40) + 6;
+  const count = Math.ceil(W / 28) + 8;
   const stalks = [];
   for (let i = 0; i < count; i++) {
     const made = makeWheatSprite(Math.floor(rng() * 1e6));
-    stalks.push({ sprite: made.canvas, x: rng() * W, scale: srnd(3.2, 4.4), alpha: 0.7 });
+    // Espacement régulier + gigue (voir populateForestDecor) : un blé « à perte de vue » doit
+    // rester continu, un placement purement aléatoire laissait des trous visibles.
+    stalks.push({ sprite: made.canvas, x: i * 28 + srnd(-9, 9), scale: srnd(3.4, 4.6), alpha: 0.75 });
   }
   room.wheat = stalks; room.solids = []; // le blé n'est pas solide
 }
@@ -541,6 +575,10 @@ resize(); initStars();
 // ── Input ───────────────────────────────────────
 const keys  = {};
 const mouse = { x: -999, y: -999, on: false };
+// Dernière position RÉELLE connue du curseur en mode repli (pas de pointer lock) : sert à
+// calculer un delta relatif (voir 'mousemove' plus bas) au lieu d'un « snap » absolu, qui
+// écraserait la resynchro faite à chaque changement de carte.
+let lastPtrX = 0, lastPtrY = 0;
 
 // ── Contrôle souris : pointer lock + curseur virtuel ─────────────────────────────
 // Sans pointer lock, la position souris est bornée au bord de la fenêtre : le hibou fonçait
@@ -594,14 +632,22 @@ document.addEventListener('mousemove', e => {
     mouse.y += e.movementY;
     mouse.on = true;
   } else {
-    mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true;
+    // Delta RELATIF (comme le pointer lock), pas un « snap » à la position absolue : sinon,
+    // juste après un changement de carte (curseur resynchronisé sur le hibou recentré), le
+    // tout prochain mousemove écraserait mouse.x avec la position réelle du curseur — restée
+    // près du bord qu'on vient de franchir — et le hibou foncerait dessus à vitesse plafonnée.
+    mouse.x += e.clientX - lastPtrX;
+    mouse.y += e.clientY - lastPtrY;
+    mouse.on = true;
     if (sliderDrag) handleSliderDrag(e.clientX);
   }
+  lastPtrX = e.clientX; lastPtrY = e.clientY;
 });
 document.addEventListener('mouseup', () => { sliderDrag = false; });
 
 canvas.addEventListener('pointerdown', e => {
   mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true;
+  lastPtrX = e.clientX; lastPtrY = e.clientY; // resynchro : évite un saut au tout prochain mousemove
 
   if (state === S.NOTES) { markNotesSeen(); state = S.START; return; }
 
@@ -797,6 +843,10 @@ function update() {
   if (state === S.LOOT) { updateLootbox(); updateParticles(); return; }
   if (state !== S.PLAY) { updateParticles(); return; }
 
+  // ── Pause de transition (0.5s) : le monde entier attend, seuls le shake/flash/particules
+  // continuent d'animer, le temps que le joueur repère la nouvelle carte.
+  if (transitionFreeze > 0) { transitionFreeze--; updateParticles(); return; }
+
   // ── Difficulté temporelle ──
   gameTime++;
 
@@ -820,6 +870,7 @@ function update() {
 
   // ── Mouvements du hibou ──
   owl.px = owl.x; owl.py = owl.y;
+  const r = owl.size * 0.4;
   if (mouse.on) {
     const lerpF = getMouseLerp(buffs.speed > 0);
     let dx = (mouse.x - owl.x) * lerpF;
@@ -830,22 +881,27 @@ function update() {
     const maxStep = owl.speed * 2.2;
     const stepMag = Math.hypot(dx, dy);
     if (stepMag > maxStep) { const k = maxStep / stepMag; dx *= k; dy *= k; }
-    owl.x += dx;
-    owl.y += dy;
+    // Sous-pas de ~8px max : au-delà, un tronc fin pouvait être totalement traversé en un seul
+    // mouvement sans jamais être détecté (tunneling) — on avance donc par petites étapes en
+    // résolvant les collisions à chacune, jamais seulement à la position finale.
+    const steps = Math.max(1, Math.ceil(stepMag / 8));
+    for (let s = 0; s < steps; s++) {
+      owl.x += dx / steps; owl.y += dy / steps;
+      HibouWorld.resolveSolids(owl, r, solids);
+    }
   } else {
     if (keys['ArrowLeft']  || keys['a']) owl.x -= owl.speed;
     if (keys['ArrowRight'] || keys['d']) owl.x += owl.speed;
     if (keys['ArrowUp']    || keys['w']) owl.y -= owl.speed;
     if (keys['ArrowDown']  || keys['s']) owl.y += owl.speed;
+    HibouWorld.resolveSolids(owl, r, solids);
   }
   // ── Vent de tempête : pousse le hibou dans windAngle, force pulsée par rafales ──
   if (storm.active) {
     owl.x += Math.cos(storm.windAngle) * storm.windForce;
     owl.y += Math.sin(storm.windAngle) * storm.windForce;
+    HibouWorld.resolveSolids(owl, r, solids);
   }
-
-  const r = owl.size * 0.4;
-  HibouWorld.resolveSolids(owl, r, solids); // arbres/parois de grotte : plus de traversée
 
   // ── Changement de carte : sortir d'un bord change de carte, au lieu de s'enrouler ──
   // Un délai de 10s (roomCooldown) doit être écoulé depuis l'arrivée ; sinon le bord agit
@@ -1139,10 +1195,14 @@ function updateMonsters(owlRadius) {
     const turnRate = (moon.state === 'blood' ? 0.12 : 0.09) * (b.turnMul || 1); // rad/frame (braquage maximal)
     b.heading += Math.max(-turnRate, Math.min(turnRate, da));
     const spd = b.spdBase * (buffs.slow > 0 ? 0.3 : 1);
-    b.x += Math.cos(b.heading) * spd;
-    b.y += Math.sin(b.heading) * spd;
-
-    HibouWorld.resolveSolids(b, b.size * 0.4, solids); // arbres/parois de grotte : plus de traversée
+    // Sous-pas (voir le hibou plus haut) : un requin/ours rapide pouvait traverser un tronc fin
+    // sans jamais être détecté à la position finale seule.
+    const mvSteps = Math.max(1, Math.ceil(spd / 8));
+    for (let s = 0; s < mvSteps; s++) {
+      b.x += Math.cos(b.heading) * spd / mvSteps;
+      b.y += Math.sin(b.heading) * spd / mvSteps;
+      HibouWorld.resolveSolids(b, b.size * 0.4, solids);
+    }
 
     if (owl.invul <= 0 && buffs.invincible <= 0 && dist(owl, b) < owlRadius * 0.8 + b.size * 0.3) {
       lives--;
@@ -1401,6 +1461,15 @@ function draw() {
     ctx.restore();
   }
 
+  // ── Vignette de transition : s'estompe pendant la pause de 0.5s après un changement de carte ──
+  if (transitionFreeze > 0) {
+    ctx.save();
+    ctx.globalAlpha = (transitionFreeze / TRANSITION_FREEZE_FRAMES) * 0.45;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
+
   // ── Barre de pulse musical (bas d'écran, esthétique arcade) ──
   if (state === S.PLAY || state === S.LOOT) {
     ctx.save();
@@ -1445,16 +1514,24 @@ function drawSky(W, H) {
 //  DRAW — GROTTE (fond rocheux + cellules teintées)
 // ══════════════════════════════════════════════════
 function drawCaveBackground(W, H) {
-  ctx.fillStyle = '#151210';
+  // Style façon référence : vide noir hors de la caverne, sol de sable clair dans la zone
+  // ouverte, fine bordure marron juste sur son contour (pas de texture rocheuse partout).
+  ctx.fillStyle = '#0a0806';
   ctx.fillRect(0, 0, W, H);
   if (!caveGrid) return;
-  const palette = ['#3a3630', '#453f37', '#33302b', '#2b2823'];
+  const sandPalette = ['#c9a06a', '#bd9660', '#d4ac76', '#b28c58'];
+  const borderColor = '#5a3d26';
   const { cols, rows, cellW, cellH, wall, cellTone } = caveGrid;
+  const isOpen = (r, c) => r >= 0 && r < rows && c >= 0 && c < cols && !wall[r][c];
   for (let rr = 0; rr < rows; rr++) {
     for (let cc = 0; cc < cols; cc++) {
-      if (!wall[rr][cc]) continue;
-      ctx.fillStyle = palette[cellTone[rr][cc]] || palette[0];
-      ctx.fillRect(cc * cellW, rr * cellH, cellW + 1, cellH + 1); // +1 : évite un liseré entre cellules
+      if (!wall[rr][cc]) {
+        ctx.fillStyle = sandPalette[cellTone[rr][cc]] || sandPalette[0];
+        ctx.fillRect(cc * cellW - 1, rr * cellH - 1, cellW + 2, cellH + 2); // +/-1 : pas de liseré entre cellules
+      } else if (isOpen(rr - 1, cc) || isOpen(rr + 1, cc) || isOpen(rr, cc - 1) || isOpen(rr, cc + 1)) {
+        ctx.fillStyle = borderColor;
+        ctx.fillRect(cc * cellW - 1, rr * cellH - 1, cellW + 2, cellH + 2);
+      } // sinon : mur profond, jamais atteignable -> on laisse le vide déjà posé
     }
   }
 }
@@ -1821,31 +1898,48 @@ function drawPatchNotes(W, H) {
   ctx.fillStyle = 'rgba(4,4,18,0.82)'; ctx.fillRect(0, 0, W, H);
   const cx = W / 2, cy = H / 2;
   const pw    = Math.min(560, W - 40);
-  const lineH = 22;
-  const ph    = Math.min(H - 40, 150 + PATCH_NOTES.length * lineH);
+  const lineH = 19;
+
+  // Les puces sont retournées à la ligne AVANT de calculer la hauteur du panneau : sinon le
+  // texte (plus long que le cadre) débordait par le bas ET sur les côtés (fillText ne
+  // retourne jamais seul à la ligne).
+  ctx.font = '12.5px system-ui';
+  const textW = pw - 52;
+  const wrapped = [];
+  for (const line of PATCH_NOTES) wrapped.push(...wrapText(line, textW));
+
+  const headerH = 78, footerH = 84;
+  const ph = Math.min(H - 40, headerH + wrapped.length * lineH + footerH);
   const px = cx - pw / 2, py = cy - ph / 2;
 
   rrect(px, py, pw, ph, 24, 'rgba(12,12,48,0.97)', 'rgba(110,90,255,0.55)', 2);
 
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  drawEmoji('🦉', cx, py + 32, 38);
-  ctx.fillStyle = '#cbc3ff'; ctx.font = '900 22px system-ui';
-  ctx.fillText('QUOI DE NEUF — v' + GAME_VERSION, cx, py + 62);
+  drawEmoji('🦉', cx, py + 28, 34);
+  ctx.fillStyle = '#cbc3ff'; ctx.font = '900 19px system-ui';
+  ctx.fillText('QUOI DE NEUF — v' + GAME_VERSION, cx, py + 54);
 
-  ctx.textAlign = 'left'; ctx.font = '13px system-ui'; ctx.fillStyle = '#e8e5ff';
-  let ty = py + 90;
-  for (const line of PATCH_NOTES) { ctx.fillText(line, px + 24, ty); ty += lineH; }
+  ctx.textAlign = 'left'; ctx.font = '12.5px system-ui'; ctx.fillStyle = '#e8e5ff';
+  let ty = py + headerH;
+  const textBottom = py + ph - footerH;
+  for (const line of wrapped) {
+    if (ty > textBottom) break; // garde-fou : jamais par-dessus le bouton sur un tout petit écran
+    ctx.fillText(line, px + 26, ty);
+    ty += lineH;
+  }
 
-  const bw = 200, bh = 46;
-  const bx = cx - bw / 2, by = py + ph - bh - 30;
+  const bw = 200, bh = 42;
+  const bx = cx - bw / 2, by = py + ph - bh - 28;
   const g = ctx.createLinearGradient(bx, by, bx + bw, by + bh);
   g.addColorStop(0, '#5544dd'); g.addColorStop(1, '#9944ee');
-  rrect(bx, by, bw, bh, 23, g);
-  ctx.textAlign = 'center'; ctx.font = 'bold 18px system-ui'; ctx.fillStyle = '#fff';
+  rrect(bx, by, bw, bh, 21, g);
+  ctx.textAlign = 'center'; ctx.font = 'bold 17px system-ui'; ctx.fillStyle = '#fff';
   ctx.fillText('Compris →', cx, by + bh / 2);
 
   ctx.fillStyle = 'rgba(150,140,220,0.55)'; ctx.font = '10px system-ui';
-  ctx.fillText("Sprites chauve-souris (bagzie, OGA-BY 3.0) & requin (Sevarihk, CC-BY 4.0) — OpenGameArt.org", cx, py + ph - 10);
+  const credit = wrapText('Sprites chauve-souris (bagzie, OGA-BY 3.0) & requin (Sevarihk, CC-BY 4.0) — OpenGameArt.org', pw - 32);
+  let cty = py + ph - 10 - (credit.length - 1) * 12;
+  for (const line of credit) { ctx.fillText(line, cx, cty); cty += 12; }
   ctx.restore();
 }
 
