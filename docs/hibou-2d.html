@@ -11,13 +11,31 @@ canvas { display: block; }
 </head>
 <body>
 <canvas id="c"></canvas>
+<script src="scripts/hibou2d-world.js"></script>
 <script>
 const canvas = document.getElementById('c');
 const ctx    = canvas.getContext('2d');
 
 // États du jeu
-const S = { START: 0, PLAY: 1, OVER: 2, LOOT: 3 };
-let state = S.START;
+const S = { START: 0, PLAY: 1, OVER: 2, LOOT: 3, NOTES: 4 };
+
+// ── Version / popup "quoi de neuf" ────────────────
+const GAME_VERSION     = '4.0';
+const PATCH_NOTES_KEY  = 'hibou2d-notes-seen';
+const PATCH_NOTES = [
+  "🗺️ Le monde s'agrandit : sortir de l'écran fait changer de carte au lieu de s'enrouler.",
+  "🧭 10s d'exploration avant de pouvoir changer de carte à nouveau — les cartes déjà visitées sont mémorisées.",
+  "🌲 Vraies collisions : arbres, parois de grotte... le hibou ET les monstres sont arrêtés par les obstacles.",
+  "🦇 Nouvelle carte Grotte : galeries creusées dans la roche, chauves-souris, cailloux (+30 pts).",
+  "🌾 Nouvelle carte Champ : blé à perte de vue, ours, branches et bottes de foin.",
+  "🐟 Nouvelle carte Lac : hibou immergé, requins (les plus rapides), pépites d'or (+50 pts).",
+  "⛈️ Les tempêtes peuvent désormais éclater sur n'importe quelle carte.",
+  "🎯 Les objets ramassables n'apparaissent plus jamais à l'intérieur d'un obstacle."
+];
+function notesSeen()    { try { return localStorage.getItem(PATCH_NOTES_KEY) === GAME_VERSION; } catch { return true; } }
+function markNotesSeen(){ try { localStorage.setItem(PATCH_NOTES_KEY, GAME_VERSION); } catch {} }
+
+let state = notesSeen() ? S.START : S.NOTES;
 
 // ── Détection mobile ──────────────────────────────
 const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
@@ -122,22 +140,74 @@ function drawOwlSprite(x, y, size, faceLeft, moving) {
   ctx.restore();
 }
 
+// ── Sprites des monstres (chauve-souris / requin / ours) ─────────
+// Fichiers externes (docs/hibou2d-sprites/, voir CREDITS.md pour les licences) plutôt que
+// du base64 : ce sont de vraies feuilles de sprites, plus volumineuses que les 4 poses du
+// hibou. Repli gracieux sur l'emoji tant que l'image charge/échoue (même garde que ci-dessus).
+function loadSpriteURL(src) { const img = new Image(); img.src = src; return img; }
+const batSprite   = loadSpriteURL('hibou2d-sprites/bat.png');   // 128x128 = grille 4x4 de frames 32x32
+const sharkSprite = loadSpriteURL('hibou2d-sprites/shark.png'); // 592x564 = 4 lignes x 4 colonnes (148x141/frame)
+const bearSprite  = loadSpriteURL('hibou2d-sprites/bear.png');  // 490x490, pose fixe (pas de cycle de marche)
+const MONSTER_EMOJI_FALLBACK = { bear: '🐻', bat: '🦇', shark: '🦈' };
+
+function drawMonster(m) {
+  const size = m.size * 1.35;
+  if (m.kind === 'bat' && batSprite.complete && batSprite.naturalWidth > 0) {
+    const frame = Math.floor(m.flap || 0) % 16; // grille 4x4, cycle continu de vol
+    const col = frame % 4, row = Math.floor(frame / 4);
+    ctx.save();
+    ctx.scale(Math.cos(m.heading) < 0 ? -1 : 1, 1);
+    ctx.drawImage(batSprite, col * 32, row * 32, 32, 32, -size / 2, -size / 2, size, size);
+    ctx.restore();
+  } else if (m.kind === 'shark' && sharkSprite.complete && sharkSprite.naturalWidth > 0) {
+    const sw = sharkSprite.naturalWidth / 4, sh = sharkSprite.naturalHeight / 4;
+    const vertical = Math.abs(Math.sin(m.heading)) > Math.abs(Math.cos(m.heading));
+    const row = vertical ? 0 : 1; // ligne 0 = nez en haut, ligne 1 = orientation gauche
+    ctx.save();
+    if (vertical) ctx.scale(1, Math.sin(m.heading) < 0 ? 1 : -1);
+    else          ctx.scale(Math.cos(m.heading) < 0 ? -1 : 1, 1);
+    ctx.drawImage(sharkSprite, 0, row * sh, sw, sh, -size / 2, -size / 2, size, size);
+    ctx.restore();
+  } else if (m.kind === 'bear' && bearSprite.complete && bearSprite.naturalWidth > 0) {
+    ctx.drawImage(bearSprite, -size / 2, -size / 2, size, size);
+  } else {
+    drawEmoji(MONSTER_EMOJI_FALLBACK[m.kind] || '🐻', 0, 0, m.size);
+  }
+}
+
 // ── Entités ─────────────────────────────────────
 const owl = { x: 0, y: 0, size: 34, speed: 6, bob: 0, invul: 0, px: 0, py: 0, vx: 0, angle: 0, flap: 0, rockInvul: 0, moveMag: 0 };
-let branches  = [];
-let bears     = [];
-let particles = [];
-let hitFlash  = 0; // flash blanc plein écran (impact rocher / dégât)
+let collectibles = []; // objets ramassables de la carte active (branches/foin/cailloux/pépites)
+let monsters     = []; // monstres de la carte active (ours/chauves-souris/requins)
+let particles    = [];
+let solids       = []; // rects de collision de la carte active — {x,y,hw,hh}, x/y = CENTRE (voir HibouWorld)
+let pendingRespawns = []; // lac : délais (frames) avant réapparition d'une pépite ramassée
+let hitFlash     = 0;  // flash blanc plein écran (impact rocher / dégât)
 
-// ── Arbres pixel art (fond, parallaxe) ────────────
-let treesFar  = []; // couche lointaine, très pixelisée, lente
-let treesNear = []; // couche proche, plus grosse, un peu plus rapide
-let treeOffsetFar  = 0;
-let treeOffsetNear = 0;
+// ── Décor par biome (rempli/sauvegardé par carte, voir section MONDE) ──
+let treesFar  = []; // forêt : couche lointaine
+let treesNear = []; // forêt : couche proche (troncs = solids)
+let wheat     = []; // champ : blé (décor, non solide)
+let seabed    = []; // lac : algues/plantes lumineuses (décor, non solide)
+let caveGrid  = null; // grotte : { cols, rows, cellW, cellH, wall, cellTone }
+let decorSwayPhase = 0; // léger balancement du décor sous le vent de tempête (borné, cosmétique)
 
-const BRANCH_E = ['🪵', '🌿', '🍃', '🍂'];
 const ROTTEN_LIFE   = 600;  // 10s à 60fps
 const ROTTEN_CHANCE = 0.08;
+// Pool de collectibles par biome — emoji volontairement distincts des cailloux météo
+// (rocks[], aléa dangereux qui tombe pendant les tempêtes) pour ne jamais confondre les deux.
+const COLLECTIBLE_POOL = {
+  foret:  [{ e: '🪵', value: 1,  rottenOk: true }, { e: '🌿', value: 1, rottenOk: true }, { e: '🍃', value: 1, rottenOk: true }, { e: '🍂', value: 1, rottenOk: true }],
+  champ:  [{ e: '🪵', value: 1,  rottenOk: true }, { e: '🌾', value: 1, rottenOk: true }], // branche + botte de foin, mêmes points que la forêt
+  grotte: [{ e: '💎', value: 30, rottenOk: false }],
+  lac:    [{ e: '🪙', value: 50, rottenOk: false }]
+};
+const BIOME_MONSTER_KIND = { foret: 'bear', champ: 'bear', grotte: 'bat', lac: 'shark' };
+const MONSTER_STATS = {
+  bear:  { size: 28, spdMul: 1.00, turnMul: 1.00 },
+  bat:   { size: 20, spdMul: 0.90, turnMul: 1.60 },
+  shark: { size: 32, spdMul: 1.55, turnMul: 0.85 }
+};
 
 // ── Helpers ─────────────────────────────────────
 const rnd  = (a, b) => a + Math.random() * (b - a);
@@ -210,44 +280,235 @@ function makeTreeSprite(paletteIdx, seed) {
       octx.fillRect(Math.floor(gw / 2) + x, y, 1, 1);
     }
   }
-  return off;
+  return { canvas: off, trunkH };
 }
 
-function initTrees() {
-  treesFar = []; treesNear = [];
-  const farCount  = Math.ceil(canvas.width / 70) + 4;
-  const nearCount = Math.ceil(canvas.width / 110) + 4;
-
-  for (let i = 0; i < farCount; i++) {
-    treesFar.push({
-      sprite: makeTreeSprite(i % 3, i * 17 + 3),
-      x: i * 70 + rnd(-15, 15),
-      scale: rnd(2.2, 3.0),
-      alpha: 0.34
-    });
+// ══════════════════════════════════════════════════
+//  BLÉ PIXEL ART (champ) — même esprit que les arbres, non solide
+// ══════════════════════════════════════════════════
+function makeWheatSprite(seed) {
+  const gw = 6, gh = 20;
+  const off = document.createElement('canvas');
+  off.width = gw; off.height = gh;
+  const octx = off.getContext('2d');
+  octx.imageSmoothingEnabled = false;
+  const stalk = '#8a6a22', stalkD = '#6b4f16', head = ['#e8c94a', '#d4b436', '#c2a02a'];
+  let s = seed;
+  const rand = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+  const stalkH = 12 + Math.floor(rand() * 5);
+  const cx = Math.floor(gw / 2);
+  for (let y = gh - stalkH; y < gh; y++) { octx.fillStyle = (y % 3 === 0) ? stalkD : stalk; octx.fillRect(cx, y, 1, 1); }
+  for (let y = 0; y < gh - stalkH + 3; y++) {
+    const shade = rand();
+    octx.fillStyle = shade < 0.5 ? head[0] : shade < 0.8 ? head[1] : head[2];
+    octx.fillRect(cx - (rand() < 0.5 ? 1 : 0), y, 1, 1);
   }
-  for (let i = 0; i < nearCount; i++) {
-    treesNear.push({
-      sprite: makeTreeSprite((i + 1) % 3, i * 31 + 11),
-      x: i * 110 + rnd(-20, 20),
-      scale: rnd(3.6, 4.6),
-      alpha: 0.62
-    });
-  }
+  return { canvas: off };
 }
 
-function drawTreeLayer(trees, groundY, offsetX) {
+function drawTreeLayer(trees, groundY, sway) {
   ctx.save();
   ctx.imageSmoothingEnabled = false;
-  const wrapW = canvas.width + 300;
   for (const tr of trees) {
-    let sx = ((tr.x + offsetX) % wrapW + wrapW) % wrapW - 150;
-    const sw = 12 * PX * tr.scale;
-    const sh = 20 * PX * tr.scale;
+    const sx = tr.x + (sway || 0);
+    // Dimensions tirées du sprite lui-même (12x20 arbre, 6x20 blé) : un facteur figé sur la
+    // largeur de l'arbre étirerait le blé (grille plus étroite) au lieu de le garder fin.
+    const sw = tr.sprite.width  * PX * tr.scale;
+    const sh = tr.sprite.height * PX * tr.scale;
     ctx.globalAlpha = tr.alpha;
     ctx.drawImage(tr.sprite, sx - sw / 2, groundY - sh, sw, sh);
   }
   ctx.restore();
+}
+
+// ══════════════════════════════════════════════════
+//  MONDE — graphe de cartes, biomes, transitions
+// ══════════════════════════════════════════════════
+// Chaque « room » a jusqu'à 4 voisins (N/E/S/W), créés paresseusement au premier
+// franchissement puis mémorisés (liaison réciproque) — voir plan. Répartition de
+// l'état : global (score/vies/lune/tempête/particules...) reste inchangé quelle
+// que soit la carte active ; par-carte (monstres/collectibles/solids/décor) est
+// sauvegardé en sortant, restauré en entrant, gelé tant que la carte n'est pas active.
+let rooms         = new Map();
+let currentRoomId = null;
+let roomCooldown  = 0;
+let nextRoomId    = 0;
+// Debug uniquement (tests automatisés) : ?fastcooldown=1 raccourcit le délai de 10s à ~0.5s.
+const ROOM_COOLDOWN = new URLSearchParams(location.search).get('fastcooldown') ? 30 : 600;
+
+// Introspection / hooks debug (tests automatisés uniquement — aucun impact sur le jeu normal).
+window.__hibouDebugState = () => {
+  const room = currentRoom();
+  return {
+    roomId: currentRoomId,
+    biome: currentBiome(),
+    neighbors: room ? { ...room.neighbors } : null,
+    roomCount: rooms.size,
+    cooldown: roomCooldown,
+    solidsCount: solids.length,
+    monsterKinds: monsters.map(m => m.kind),
+    collectiblesPos: collectibles.map(c => ({ x: c.x, y: c.y, size: c.size, value: c.value })),
+    solidsRects: solids.map(s => ({ x: s.x, y: s.y, hw: s.hw, hh: s.hh })),
+    owl: { x: owl.x, y: owl.y },
+    gameState: state
+  };
+};
+window.__hibouDebugForceTransition = (dir) => { roomCooldown = 0; attemptTransition(dir); return window.__hibouDebugState(); };
+window.__hibouDebugSetOwl = (x, y) => { owl.x = x; owl.y = y; owl.px = x; owl.py = y; mouse.x = x; mouse.y = y; };
+
+function currentRoom()  { return rooms.get(currentRoomId) || null; }
+function currentBiome() { const r = currentRoom(); return r ? r.biome : 'foret'; }
+
+function createRoom(biome, seed) {
+  const id = 'r' + (nextRoomId++);
+  const room = {
+    id, biome, seed,
+    neighbors: { N: null, E: null, S: null, W: null },
+    generated: false, genW: 0, genH: 0,
+    monsters: [], collectibles: [], solids: [],
+    treesFar: [], treesNear: [], wheat: [], seabed: [], cave: null,
+    pendingRespawns: [] // lac : délais de réapparition des pépites
+  };
+  rooms.set(id, room);
+  return room;
+}
+
+function saveRoomState(room) {
+  if (!room) return;
+  room.monsters = monsters; room.collectibles = collectibles; room.solids = solids;
+  room.treesFar = treesFar; room.treesNear = treesNear; room.wheat = wheat; room.seabed = seabed;
+  room.cave = caveGrid; room.pendingRespawns = pendingRespawns;
+}
+function loadRoomState(room) {
+  monsters = room.monsters; collectibles = room.collectibles; solids = room.solids;
+  treesFar = room.treesFar; treesNear = room.treesNear; wheat = room.wheat; seabed = room.seabed;
+  caveGrid = room.cave; pendingRespawns = room.pendingRespawns;
+  currentRoomId = room.id;
+}
+
+// Décor+solides seulement (idempotent, resize-safe : même seed ⇒ même disposition relative).
+function generateRoomDecor(room) {
+  room.genW = canvas.width; room.genH = canvas.height;
+  const rng = HibouWorld.mulberry32(room.seed);
+  if      (room.biome === 'foret')  populateForestDecor(room, rng);
+  else if (room.biome === 'champ')  populateFieldDecor(room, rng);
+  else if (room.biome === 'grotte') populateCaveDecor(room, rng);
+  else if (room.biome === 'lac')    populateLakeDecor(room, rng);
+}
+// Peuplement initial (monstres + collectibles) : une seule fois, à la toute première visite.
+function populateRoomInitial(room) {
+  const kind  = BIOME_MONSTER_KIND[room.biome];
+  const count = room.biome === 'grotte' ? 3 : 2;
+  room.monsters = Array.from({ length: count }, () => newMonster(kind));
+  const ccount = room.biome === 'lac' ? 3 : 5; // lac : taux de drop réduit → moins de pépites en jeu
+  room.collectibles = Array.from({ length: ccount }, () => newCollectible(room.biome, room.solids));
+}
+function ensureRoomGenerated(room) {
+  if (!room.generated) {
+    generateRoomDecor(room);
+    populateRoomInitial(room);
+    room.generated = true;
+  } else if (room.genW !== canvas.width || room.genH !== canvas.height) {
+    generateRoomDecor(room); // réajuste juste décor+solides à la nouvelle taille, garde monstres/collectibles
+  }
+}
+
+function resetWorld() {
+  rooms = new Map(); nextRoomId = 0;
+  const seed = Math.floor(Math.random() * 0xffffffff) >>> 0;
+  const room = createRoom('foret', seed);
+  ensureRoomGenerated(room);
+  loadRoomState(room);
+  roomCooldown = ROOM_COOLDOWN;
+}
+
+// Franchir un bord (délai écoulé) : carte voisine réutilisée si déjà générée dans cette
+// direction, sinon tirée au sort et mémorisée (liaison réciproque) — voir plan.
+function attemptTransition(dir) {
+  const from = currentRoom();
+  saveRoomState(from);
+
+  let neighborId = from.neighbors[dir];
+  if (!neighborId) {
+    const seed   = Math.floor(Math.random() * 0xffffffff) >>> 0;
+    const biome  = HibouWorld.rollBiome();
+    const neighbor = createRoom(biome, seed);
+    const opp = HibouWorld.oppositeDir(dir);
+    from.neighbors[dir]    = neighbor.id;
+    neighbor.neighbors[opp] = from.id;
+    neighborId = neighbor.id;
+  }
+  const to = rooms.get(neighborId);
+  ensureRoomGenerated(to);
+  loadRoomState(to);
+
+  owl.x = canvas.width / 2; owl.y = canvas.height / 2;
+  owl.px = owl.x; owl.py = owl.y;      // mvx/mvy retombent à 0 → pas de pic d'angle/battement
+  mouse.x = owl.x; mouse.y = owl.y;    // resynchro anti-à-coup du curseur virtuel
+  particles = [];
+  roomCooldown = ROOM_COOLDOWN;
+  spawnWrapFX(owl.x, owl.y);
+}
+
+// ── Génération du décor par biome (chacune pose room.solids) ─────
+function populateForestDecor(room, rng) {
+  const srnd = (a, b) => a + rng() * (b - a);
+  const W = canvas.width, H = canvas.height, groundY = H + 40;
+  const farCount  = Math.ceil(W / 70) + 4;
+  const nearCount = Math.ceil(W / 110) + 4;
+  const far = [], near = [], roomSolids = [];
+  for (let i = 0; i < farCount; i++) {
+    const made = makeTreeSprite(i % 3, Math.floor(rng() * 1e6));
+    far.push({ sprite: made.canvas, x: rng() * W, scale: srnd(2.2, 3.0), alpha: 0.34 });
+  }
+  for (let i = 0; i < nearCount; i++) {
+    const made  = makeTreeSprite((i + 1) % 3, Math.floor(rng() * 1e6));
+    const scale = srnd(3.6, 4.6);
+    const x     = rng() * W;
+    near.push({ sprite: made.canvas, x, scale, alpha: 0.62 });
+    const sw = 12 * PX * scale, sh = 20 * PX * scale;
+    const trunkPxW = sw / 6, trunkPxH = made.trunkH * sh / 20;
+    roomSolids.push({ x, y: groundY - trunkPxH / 2, hw: trunkPxW / 2, hh: trunkPxH / 2 });
+  }
+  room.treesFar = far; room.treesNear = near; room.solids = roomSolids;
+}
+
+function populateFieldDecor(room, rng) {
+  const srnd = (a, b) => a + rng() * (b - a);
+  const W = canvas.width;
+  const count = Math.ceil(W / 40) + 6;
+  const stalks = [];
+  for (let i = 0; i < count; i++) {
+    const made = makeWheatSprite(Math.floor(rng() * 1e6));
+    stalks.push({ sprite: made.canvas, x: rng() * W, scale: srnd(3.2, 4.4), alpha: 0.7 });
+  }
+  room.wheat = stalks; room.solids = []; // le blé n'est pas solide
+}
+
+function populateCaveDecor(room, rng) {
+  const seed = Math.floor(rng() * 0xffffffff) >>> 0;
+  const cave = HibouWorld.generateCave(seed, canvas.width, canvas.height);
+  room.cave = cave; room.solids = cave.solids;
+}
+
+function populateLakeDecor(room, rng) {
+  const srnd = (a, b) => a + rng() * (b - a);
+  const W = canvas.width, H = canvas.height;
+  const bandH = H * 0.18;
+  const count = Math.ceil(W / 90) + 4;
+  const deco = [];
+  for (let i = 0; i < count; i++) {
+    const glow = rng() < 0.3;
+    deco.push({
+      x: rng() * W,
+      h: srnd(40, 90),
+      glow,
+      hue: glow ? (rng() < 0.5 ? '#40e0d0' : '#e040c0') : '#1f6b4a',
+      seed: rng() * Math.PI * 2
+    });
+  }
+  room.seabed = deco; room.solids = []; // décor du lac non solide
+  room.bandH = bandH;
 }
 
 
@@ -261,27 +522,35 @@ function initStars() {
     da: rnd(0.005, 0.02) * (Math.random() < 0.5 ? 1 : -1)
   }));
 }
-window.addEventListener('resize', () => { resize(); initStars(); initTrees(); });
-resize(); initStars(); initTrees();
+window.addEventListener('resize', () => {
+  resize(); initStars();
+  const room = currentRoom();
+  if (room && (room.genW !== canvas.width || room.genH !== canvas.height)) {
+    ensureRoomGenerated(room);      // réajuste décor+solides à la nouvelle taille (même seed)
+    loadRoomState(room);
+    HibouWorld.resolveSolids(owl, owl.size * 0.4, solids); // auto-corrige un éventuel « coincé dans un mur »
+    for (const m of monsters) HibouWorld.resolveSolids(m, m.size * 0.4, solids);
+  }
+});
+resize(); initStars();
+// NB : resetWorld() n'est PAS appelé ici — il référence (via newMonster/newCollectible)
+// des const déclarées plus bas dans le fichier (DIFF_RAMP_TAU, MONSTER_STATS...), qui sont
+// encore en zone morte temporelle à ce stade de l'évaluation du script. Voir l'appel en
+// toute fin de fichier, juste avant le démarrage de la boucle de jeu.
 
 // ── Input ───────────────────────────────────────
 const keys  = {};
 const mouse = { x: -999, y: -999, on: false };
 
-// ── Contrôle souris : pointer lock + curseur virtuel qui s'enroule ───────────────
-// Sans pointer lock, la position souris est bornée au bord de la fenêtre : quand le hibou
-// s'enroule d'un bord à l'autre (façon Snake), le curseur coincé au bord le faisait « foncer »
-// pour revenir. On capture donc la souris (pointer lock) et on maintient un curseur VIRTUEL
-// qui s'enroule EXACTEMENT comme le hibou → le suivi reste continu au passage des bords.
-// Repli automatique sur clientX/clientY si le pointer lock est indisponible/refusé (et pour le
-// slider réglages + le tactile mobile, qui n'utilisent jamais le pointer lock).
-const wrapCoord = (v, size) => ((v % size) + size) % size;          // ramène dans [0, size)
-function wrapDelta(d, size) {                                        // plus court chemin torique
-  d %= size;
-  if (d >  size / 2) d -= size;
-  else if (d < -size / 2) d += size;
-  return d;
-}
+// ── Contrôle souris : pointer lock + curseur virtuel ─────────────────────────────
+// Sans pointer lock, la position souris est bornée au bord de la fenêtre : le hibou fonçait
+// vers le curseur coincé. On capture donc la souris (pointer lock) et on maintient un
+// curseur VIRTUEL en accumulation libre (mouse.x/y ne sont plus bornés — le hibou, lui,
+// est soit clampé à un mur/bord soit téléporté au centre d'une nouvelle carte, jamais
+// « enroulé » sur lui-même ; resynchroniser mouse.x/y=owl.x/y à chaque pointerlockchange et
+// à chaque changement de carte suffit à empêcher toute dérive). Repli automatique sur
+// clientX/clientY si le pointer lock est indisponible/refusé (et pour le slider réglages +
+// le tactile mobile, qui n'utilisent jamais le pointer lock).
 function pointerLocked() { return document.pointerLockElement === canvas; }
 function tryLockPointer() {
   if (isMobile || pointerLocked() || !canvas.requestPointerLock) return;
@@ -298,6 +567,8 @@ let sliderDrag = false;
 document.addEventListener('keydown', e => {
   keys[e.key] = true; mouse.on = false;
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+
+  if (state === S.NOTES) { markNotesSeen(); state = S.START; return; }
 
   // Touche O : ouvre/ferme le menu sensibilité (desktop uniquement)
   if (e.key === 'o' || e.key === 'O') {
@@ -317,9 +588,10 @@ document.addEventListener('keydown', e => {
 document.addEventListener('keyup', e => { keys[e.key] = false; });
 document.addEventListener('mousemove', e => {
   if (pointerLocked()) {
-    // Curseur virtuel : on intègre le déplacement relatif et on l'enroule comme le hibou.
-    mouse.x = wrapCoord(mouse.x + e.movementX, canvas.width);
-    mouse.y = wrapCoord(mouse.y + e.movementY, canvas.height);
+    // Curseur virtuel : accumulation libre (resynchronisé à owl.x/y à chaque prise de
+    // verrou et à chaque changement de carte — jamais de dérive à long terme).
+    mouse.x += e.movementX;
+    mouse.y += e.movementY;
     mouse.on = true;
   } else {
     mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true;
@@ -330,6 +602,8 @@ document.addEventListener('mouseup', () => { sliderDrag = false; });
 
 canvas.addEventListener('pointerdown', e => {
   mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = true;
+
+  if (state === S.NOTES) { markNotesSeen(); state = S.START; return; }
 
   // Vérifie si on clique sur le slider du menu settings
   if (settingsOpen && !isMobile) {
@@ -395,7 +669,8 @@ function difficultyFactor() {
   return 1 - Math.exp(-gameTime / DIFF_RAMP_TAU);
 }
 
-function newBear() {
+function newMonster(kind) {
+  const stats = MONSTER_STATS[kind] || MONSTER_STATS.bear;
   const side = Math.floor(Math.random() * 4);
   const x    = side === 0 ? -50 : side === 1 ? canvas.width  + 50 : rnd(0, canvas.width);
   const y    = side === 2 ? -50 : side === 3 ? canvas.height + 50 : rnd(0, canvas.height);
@@ -410,13 +685,14 @@ function newBear() {
   if      (moon.state === 'blood') spdBase = rnd(3.8, 7.0) * (1 + df * 0.3);
   else if (moon.state === 'full')  spdBase = rnd(2.2, 3.8) * (1 + df * 0.3);
   else                             spdBase = (1.8 + Math.min(score * 0.05, 4.5)) * (1 + df * 0.3);
-  spdBase = Math.min(spdBase, 9); // cap global, garde le jeu jouable en fin de run
+  spdBase = Math.min(spdBase, 9) * stats.spdMul; // cap global puis multiplicateur du kind (requin > ours > chauve-souris)
 
   const updateDelay = moon.state === 'blood' ? rnd(20, 45) : rnd(30, 70); // rafraîchit la dérive
 
   return {
-    x, y,
-    size:    28,
+    kind, x, y,
+    size:    stats.size,
+    turnMul: stats.turnMul,
     spdBase,
     life,
     heading:  Math.atan2(owl.y - y, owl.x - x) || 0, // cap courant (poursuite à braquage limité)
@@ -424,26 +700,31 @@ function newBear() {
     updateDelay,
     updateTimer: Math.floor(rnd(0, updateDelay)),
     bob: rnd(0, Math.PI * 2),
+    flap: rnd(0, Math.PI * 2), // phase de battement (chauve-souris)
     spawnPulse: 1 // 1→0, anim d'apparition (scale-in + glow)
   };
 }
 
-function bearTarget() {
+function monsterTarget(biome) {
   if (moon.state === 'blood') return 18;
   if (moon.state === 'full')  return 12;
+  if (biome === 'lac') return Math.min(1 + Math.floor(score / 25), 5); // requins : plus rares, plus dangereux
   return Math.min(2 + Math.floor(score / 15), 10);
 }
 
 // ══════════════════════════════════════════════════
 //  BRANCHES & CADEAUX
 // ══════════════════════════════════════════════════
-function newBranch() {
-  const m = 40;
-  const rotten = Math.random() < ROTTEN_CHANCE;
+function newCollectible(biome, solidsForRoom) {
+  const m    = 40;
+  const pool = COLLECTIBLE_POOL[biome] || COLLECTIBLE_POOL.foret;
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  // Ne spawn jamais à l'intérieur d'un obstacle (arbre, paroi de grotte...).
+  const pos    = HibouWorld.findSpawnPoint(Math.random, canvas.width, canvas.height, m, solidsForRoom, 30);
+  const rotten = pick.rottenOk && Math.random() < ROTTEN_CHANCE;
   return {
-    x:  rnd(m, canvas.width  - m),
-    y:  rnd(m, canvas.height - m),
-    e:  BRANCH_E[Math.floor(Math.random() * 4)],
+    x: pos.x, y: pos.y,
+    e: pick.e, value: pick.value,
     size: 24,
     w:  rnd(0, Math.PI * 2),
     ws: rotten ? rnd(0.06, 0.11) : rnd(0.03, 0.07),
@@ -488,9 +769,7 @@ function spawnWrapFX(x, y) {
 function beginGame() {
   settingsOpen = false;
   state = S.PLAY; canvas.style.cursor = 'none';
-  tryLockPointer(); // capture la souris → curseur virtuel enroulé (voir contrôle souris ci-dessus)
-  owl.x = canvas.width / 2; owl.y = canvas.height / 2; owl.invul = 60;
-  owl.px = owl.x; owl.py = owl.y; owl.vx = 0; owl.vy = 0; owl.angle = 0; owl.flap = 0; owl.rockInvul = 0;
+  tryLockPointer(); // capture la souris → curseur virtuel (voir contrôle souris ci-dessus)
   score = 0; nest = 0; combo = 1; comboTimer = 0; screenShake = 0; lives = 1; gameTime = 0;
   moon  = { state: 'none', timer: 0, next: 900, fillProgress: 0 };
   storm = { active: false, timer: 0, next: rnd(1800, 3600), windAngle: 0, windForce: 0, gustPhase: 0 };
@@ -500,9 +779,11 @@ function beginGame() {
   buffs = { speed: 0, multi: 0, slow: 0, invincible: 0 };
   lootbox = { items: [], scroll: 0, speed: 0, phase: 'scroll', result: null };
   specialItem = null;
-  branches  = Array.from({ length: 5 }, newBranch);
-  bears     = [newBear(), newBear()];
   particles = [];
+  resetWorld(); // nouvelle partie = nouveau monde : graphe de cartes entièrement recréé (carte r0 = forêt)
+  owl.x = canvas.width / 2; owl.y = canvas.height / 2; owl.invul = 60;
+  owl.px = owl.x; owl.py = owl.y; owl.vx = 0; owl.vy = 0; owl.angle = 0; owl.flap = 0; owl.rockInvul = 0;
+  mouse.x = owl.x; mouse.y = owl.y;
 }
 
 // ══════════════════════════════════════════════════
@@ -532,15 +813,17 @@ function update() {
   updateMoon();
   updateStorm();
 
+  // ── Bulles (lac) : le hibou est entièrement immergé ──
+  if (currentBiome() === 'lac' && Math.random() < 0.08) {
+    particles.push({ type: 'bubble', x: rnd(0, canvas.width), y: canvas.height - rnd(0, 40), vx: rnd(-0.2, 0.2), vy: rnd(-1.5, -0.6), life: 1 });
+  }
+
   // ── Mouvements du hibou ──
   owl.px = owl.x; owl.py = owl.y;
   if (mouse.on) {
     const lerpF = getMouseLerp(buffs.speed > 0);
-    // Écart TORIQUE (plus court chemin en tenant compte de l'enroulement écran) : quand le
-    // hibou et le curseur virtuel s'enroulent chacun de leur côté, on vise toujours le chemin
-    // court → plus de « bond » pour revenir vers un curseur resté à l'autre bord.
-    let dx = wrapDelta(mouse.x - owl.x, canvas.width)  * lerpF;
-    let dy = wrapDelta(mouse.y - owl.y, canvas.height) * lerpF;
+    let dx = (mouse.x - owl.x) * lerpF;
+    let dy = (mouse.y - owl.y) * lerpF;
     // Plafond de vitesse LIÉ à owl.speed (6 normal → 11 avec Speed Boost) : fouetter la souris
     // ne suffit plus à atteindre la vitesse max, c'est le buff qui relève ce plafond → Speed
     // Boost devient réellement utile.
@@ -560,19 +843,22 @@ function update() {
     owl.x += Math.cos(storm.windAngle) * storm.windForce;
     owl.y += Math.sin(storm.windAngle) * storm.windForce;
   }
-  // ── Wrap-around façon Snake : sortir d'un bord fait réapparaître de l'autre côté ──
+
   const r = owl.size * 0.4;
+  HibouWorld.resolveSolids(owl, r, solids); // arbres/parois de grotte : plus de traversée
+
+  // ── Changement de carte : sortir d'un bord change de carte, au lieu de s'enrouler ──
+  // Un délai de 10s (roomCooldown) doit être écoulé depuis l'arrivée ; sinon le bord agit
+  // comme un mur mou (clamp) — voir aussi le repère « Xs » au HUD.
+  if (roomCooldown > 0) roomCooldown--;
+  let justTransitioned = false;
   if (owl.x < r || owl.x > canvas.width - r) {
-    const nx = owl.x < r ? canvas.width - r : r;
-    owl.px += nx - owl.x;   // décale px du même delta pour ne pas fausser mvx (angle/flap/traînée juste après)
-    owl.x = nx;
-    spawnWrapFX(owl.x, owl.y);
+    if (roomCooldown <= 0) { attemptTransition(owl.x < r ? 'W' : 'E'); justTransitioned = true; }
+    else owl.x = Math.max(r, Math.min(canvas.width - r, owl.x));
   }
-  if (owl.y < r || owl.y > canvas.height - r) {
-    const ny = owl.y < r ? canvas.height - r : r;
-    owl.py += ny - owl.y;
-    owl.y = ny;
-    spawnWrapFX(owl.x, owl.y);
+  if (!justTransitioned && (owl.y < r || owl.y > canvas.height - r)) {
+    if (roomCooldown <= 0) { attemptTransition(owl.y < r ? 'N' : 'S'); justTransitioned = true; }
+    else owl.y = Math.max(r, Math.min(canvas.height - r, owl.y));
   }
 
   // ── Cap & battement d'ailes ──
@@ -609,15 +895,16 @@ function update() {
     }
   }
 
-  // ── Collecte des branches ──
+  // ── Collecte des objets ──
+  const biome = currentBiome();
   if (moon.state === 'none') {
-    for (let i = branches.length - 1; i >= 0; i--) {
-      const br = branches[i];
+    for (let i = collectibles.length - 1; i >= 0; i--) {
+      const br = collectibles[i];
       br.w += br.ws;
 
       if (br.rotten) {
         br.age++;
-        if (br.age >= ROTTEN_LIFE) { branches.splice(i, 1); branches.push(newBranch()); continue; }
+        if (br.age >= ROTTEN_LIFE) { collectibles.splice(i, 1); collectibles.push(newCollectible(biome, solids)); continue; }
       }
 
       if (dist(owl, br) < r + br.size * 0.4) {
@@ -626,12 +913,12 @@ function update() {
           screenShake = Math.max(screenShake, 9);
           hitFlash = Math.max(hitFlash, 0.35);
           spawnFX(br.x, br.y, 14, 'death', 'COMBO RESET 🤢');
-          branches.splice(i, 1); branches.push(newBranch());
+          collectibles.splice(i, 1); collectibles.push(newCollectible(biome, solids));
           continue;
         }
 
         const multi = buffs.multi > 0 ? 5 : 1;
-        const gain  = Math.max(1, combo) * multi;
+        const gain  = br.value * Math.max(1, combo) * multi;
         score += gain;
         nest += 1;
 
@@ -645,11 +932,23 @@ function update() {
         screenShake = Math.min(4 + combo * 0.5, 15);
         spawnFX(br.x, br.y, 12, 'collect', `+${gain}`);
         combo = Math.max(1, combo) + 1; comboTimer = MAX_COMBO_TIME;
-        branches.splice(i, 1); branches.push(newBranch());
-        while (bears.length < bearTarget()) bears.push(newBear());
+        collectibles.splice(i, 1);
+        // Lac : taux de drop réduit → délai avant réapparition plutôt qu'instantanée.
+        if (biome === 'lac') pendingRespawns.push(rnd(300, 600));
+        else                 collectibles.push(newCollectible(biome, solids));
+        const mk = BIOME_MONSTER_KIND[biome];
+        while (monsters.length < monsterTarget(biome)) monsters.push(newMonster(mk));
       }
     }
     if (comboTimer > 0) comboTimer--; else combo = 1;
+
+    // Réapparitions différées (lac) : chaque délai écoulé fait apparaître une nouvelle pépite.
+    for (let i = pendingRespawns.length - 1; i >= 0; i--) {
+      if (--pendingRespawns[i] <= 0) {
+        pendingRespawns.splice(i, 1);
+        collectibles.push(newCollectible('lac', solids));
+      }
+    }
   }
 
   // ── Pulse musical visuel : intensité selon contexte de danger/hype ──
@@ -661,7 +960,7 @@ function update() {
     (buffs.invincible > 0 ? 0.3 : 0)
   );
 
-  updateBears(r);
+  updateMonsters(r);
   updateRocks(r);
   updateParticles();
 }
@@ -684,7 +983,8 @@ function updateMoon() {
       screenShake = isBlood ? 30 : 20;
       const msg = isBlood ? '🩸 LUNE DE SANG !' : '🌕 PLEINE LUNE !';
       spawnFX(canvas.width / 2, 60, 0, isBlood ? 'death' : 'collect', msg);
-      while (bears.length < bearTarget()) bears.push(newBear());
+      { const biome = currentBiome(), mk = BIOME_MONSTER_KIND[biome];
+        while (monsters.length < monsterTarget(biome)) monsters.push(newMonster(mk)); }
     }
   } else {
     moon.timer--;
@@ -692,10 +992,11 @@ function updateMoon() {
       moon.state        = 'none';
       moon.fillProgress = 0;
       moon.next         = rnd(1200, 1800);
-      bears             = [];
+      monsters          = [];
       // On repeuple TOUT DE SUITE au niveau normal : avant, le champ restait vide après une lune
-      // tant qu'aucune branche n'était ramassée → « aucun ours » pendant de longues secondes.
-      while (bears.length < bearTarget()) bears.push(newBear());
+      // tant qu'aucune branche n'était ramassée → « aucun monstre » pendant de longues secondes.
+      { const biome = currentBiome(), mk = BIOME_MONSTER_KIND[biome];
+        while (monsters.length < monsterTarget(biome)) monsters.push(newMonster(mk)); }
       screenShake       = 10;
     }
   }
@@ -743,9 +1044,10 @@ function updateStorm() {
     if (wl.x > canvas.width + 60) { wl.x = -60; wl.y = rnd(0, canvas.height); }
   }
 
-  // Parallaxe bg poussée par le vent
-  treeOffsetFar  -= Math.cos(storm.windAngle) * storm.windForce * 0.15;
-  treeOffsetNear -= Math.cos(storm.windAngle) * storm.windForce * 0.35;
+  // Léger balancement du décor (borné, cosmétique — le décor est en position FIXE par carte
+  // pour que les rects de collision restent synchronisés ; on n'ajoute donc plus qu'un sway
+  // borné au dessin, jamais injecté dans les rects solides).
+  decorSwayPhase += storm.windForce * 0.05;
 
   if (storm.timer <= 0) {
     storm.active    = false;
@@ -799,17 +1101,20 @@ function initWindLines() {
 // ══════════════════════════════════════════════════
 //  UPDATE OURS
 // ══════════════════════════════════════════════════
-function updateBears(owlRadius) {
-  for (let i = bears.length - 1; i >= 0; i--) {
-    const b = bears[i];
+function updateMonsters(owlRadius) {
+  const biome = currentBiome();
+  const mk    = BIOME_MONSTER_KIND[biome];
+  for (let i = monsters.length - 1; i >= 0; i--) {
+    const b = monsters[i];
     b.life--;
     if (b.life <= 0) {
       spawnFX(b.x, b.y, 6, 'death');
-      bears.splice(i, 1);
-      if (moon.state === 'none' && bears.length < bearTarget()) bears.push(newBear());
+      monsters.splice(i, 1);
+      if (moon.state === 'none' && monsters.length < monsterTarget(biome)) monsters.push(newMonster(mk));
       continue;
     }
     b.bob += 0.12;
+    b.flap = (b.flap || 0) + 0.3; // phase de battement (chauve-souris) — inoffensif pour les autres kinds
     if (b.spawnPulse > 0) b.spawnPulse = Math.max(0, b.spawnPulse - 0.05);
 
     // ── Poursuite ANTICIPÉE à braquage limité ─────────────────────────────────────
@@ -831,11 +1136,13 @@ function updateBears(owlRadius) {
     const desAng = Math.atan2(ddy, ddx) + b.driftAng * 0.4;
     let da = desAng - b.heading;
     da = Math.atan2(Math.sin(da), Math.cos(da));            // écart d'angle ramené dans [-π, π]
-    const turnRate = moon.state === 'blood' ? 0.12 : 0.09;  // rad/frame (braquage maximal)
+    const turnRate = (moon.state === 'blood' ? 0.12 : 0.09) * (b.turnMul || 1); // rad/frame (braquage maximal)
     b.heading += Math.max(-turnRate, Math.min(turnRate, da));
     const spd = b.spdBase * (buffs.slow > 0 ? 0.3 : 1);
     b.x += Math.cos(b.heading) * spd;
     b.y += Math.sin(b.heading) * spd;
+
+    HibouWorld.resolveSolids(b, b.size * 0.4, solids); // arbres/parois de grotte : plus de traversée
 
     if (owl.invul <= 0 && buffs.invincible <= 0 && dist(owl, b) < owlRadius * 0.8 + b.size * 0.3) {
       lives--;
@@ -854,13 +1161,13 @@ function updateBears(owlRadius) {
       }
     }
   }
-  if (moon.state !== 'none' && bears.length < bearTarget() && Math.random() < 0.15) {
-    bears.push(newBear());
+  if (moon.state !== 'none' && monsters.length < monsterTarget(biome) && Math.random() < 0.15) {
+    monsters.push(newMonster(mk));
   }
   // Recharge continue en jeu NORMAL aussi (avant, les ours ne réapparaissaient qu'au ramassage
   // d'une branche ou à la mort d'un ours → le champ pouvait rester vide). Le champ n'est plus vide.
-  if (moon.state === 'none' && bears.length < bearTarget() && Math.random() < 0.04) {
-    bears.push(newBear());
+  if (moon.state === 'none' && monsters.length < monsterTarget(biome) && Math.random() < 0.04) {
+    monsters.push(newMonster(mk));
   }
 }
 
@@ -934,6 +1241,10 @@ function applyLoot(id) {
 function updateParticles() {
   for (const p of particles) {
     p.x  += p.vx; p.y += p.vy;
+    if (p.type === 'bubble') {
+      p.life -= 0.008; // remontée lente et régulière (~2s), pas d'amortissement de vitesse
+      continue;
+    }
     if (p.vx) p.vx *= 0.92;
     p.vy  *= (p.type === 'txt' ? 0.95 : 0.92);
     p.life -= (p.type === 'txt' ? 0.02 : 0.03);
@@ -949,27 +1260,39 @@ function draw() {
   ctx.save();
   if (screenShake > 0) ctx.translate(rnd(-screenShake, screenShake), rnd(-screenShake, screenShake));
 
-  drawSky(W, H);
+  const biome = currentBiome();
 
-  const t = moon.fillProgress;
-  for (const s of stars) {
-    ctx.save(); ctx.globalAlpha = s.a * (storm.active ? 0.15 : 1);
-    if (moon.state === 'blood' && t > 0.5)      ctx.fillStyle = `rgba(255,${Math.round(200 - t*160)},${Math.round(180 - t*160)},1)`;
-    else if (moon.state === 'full' && t > 0.5)  ctx.fillStyle = '#fffaee';
-    else                                          ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+  if (biome === 'grotte') {
+    drawCaveBackground(W, H);
+  } else {
+    drawSky(W, H);
+    const t = moon.fillProgress;
+    for (const s of stars) {
+      ctx.save(); ctx.globalAlpha = s.a * (storm.active ? 0.15 : 1);
+      if (moon.state === 'blood' && t > 0.5)      ctx.fillStyle = `rgba(255,${Math.round(200 - t*160)},${Math.round(180 - t*160)},1)`;
+      else if (moon.state === 'full' && t > 0.5)  ctx.fillStyle = '#fffaee';
+      else                                          ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    ctx.save(); if (storm.active) ctx.globalAlpha = 0.25;
+    drawMoon(W, H);
     ctx.restore();
   }
 
-  ctx.save(); if (storm.active) ctx.globalAlpha = 0.25;
-  drawMoon(W, H);
-  ctx.restore();
+  // ── Décor de fond, spécifique au biome (derrière le gameplay) ──
+  const groundY = H + 40; // base du décor légèrement sous l'écran
+  const sway = storm.active ? Math.sin(decorSwayPhase) * 4 : 0;
+  if (biome === 'foret') {
+    drawTreeLayer(treesFar,  groundY, sway * 0.4);
+    drawTreeLayer(treesNear, groundY, sway);
+  } else if (biome === 'champ') {
+    drawTreeLayer(wheat, groundY, sway);
+  } else if (biome === 'lac') {
+    drawLakeSeabed(W, H);
+  } // grotte : le fond rocheux a déjà été dessiné par drawCaveBackground ci-dessus
 
-  // ── Arbres pixel art (parallaxe, derrière le gameplay) ──
-  const groundY = H + 40; // base des arbres légèrement sous l'écran
-  drawTreeLayer(treesFar,  groundY, treeOffsetFar);
-  drawTreeLayer(treesNear, groundY, treeOffsetNear);
-
+  if (state === S.NOTES) { drawPatchNotes(W, H); ctx.restore(); return; }
   if (state === S.START) { drawStart(W, H); ctx.restore(); return; }
 
   if (storm.active) drawWindLines();
@@ -983,7 +1306,7 @@ function draw() {
   }
 
   if (moon.state === 'none') {
-    for (const b of branches) {
+    for (const b of collectibles) {
       if (b.rotten) {
         const fadeStart = ROTTEN_LIFE - 60;
         const alpha = b.age > fadeStart ? Math.max(0, 1 - (b.age - fadeStart) / 60) : 1;
@@ -1001,7 +1324,7 @@ function draw() {
     }
   }
 
-  for (const b of bears) {
+  for (const b of monsters) {
     if (b.life < 60 && Math.floor(Date.now() / 100) % 2 === 0) continue;
     const scaleIn = 1 - b.spawnPulse * 0.6; // pop-in : 0.4 → 1.0
     const proximity = Math.max(0, 1 - dist(owl, b) / 260); // 0 loin, 1 collé
@@ -1010,7 +1333,7 @@ function draw() {
     ctx.shadowBlur  = b.spawnPulse > 0 ? 22 * b.spawnPulse : 6 + proximity * 18;
     ctx.translate(b.x, b.y + Math.sin(b.bob) * 3);
     ctx.scale(scaleIn, scaleIn);
-    drawEmoji('🐻', 0, 0, b.size);
+    drawMonster(b);
     ctx.restore();
   }
 
@@ -1047,11 +1370,19 @@ function draw() {
       ctx.textAlign    = 'center'; ctx.textBaseline = 'middle';
       ctx.shadowColor  = '#000'; ctx.shadowBlur = 8;
       ctx.fillText(p.txt, p.x, p.y);
+    } else if (p.type === 'bubble') {
+      ctx.strokeStyle = 'rgba(200,240,255,0.55)'; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 2.5 + Math.sin(p.life * 12) * 1, 0, Math.PI * 2); ctx.stroke();
     } else {
       ctx.fillStyle = p.c;
       ctx.beginPath(); ctx.arc(p.x, p.y, rnd(2, 6), 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
+  }
+
+  // ── Hibou entièrement immergé (lac) : teinte bleue permanente par-dessus le gameplay ──
+  if (biome === 'lac') {
+    ctx.save(); ctx.fillStyle = 'rgba(25,90,150,0.25)'; ctx.fillRect(0, 0, W, H); ctx.restore();
   }
 
   drawHUD();
@@ -1100,11 +1431,71 @@ function drawSky(W, H) {
   } else if (moon.state === 'full') {
     sky.addColorStop(0, `rgb(6,8,${Math.round(14 + t*18)})`);
     sky.addColorStop(1, `rgb(10,14,${Math.round(30 + t*22)})`);
+  } else if (currentBiome() === 'lac') {
+    sky.addColorStop(0, '#0a2a40');
+    sky.addColorStop(1, '#0f3d5c');
   } else {
     sky.addColorStop(0, '#04040e');
     sky.addColorStop(1, '#0c1030');
   }
   ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
+}
+
+// ══════════════════════════════════════════════════
+//  DRAW — GROTTE (fond rocheux + cellules teintées)
+// ══════════════════════════════════════════════════
+function drawCaveBackground(W, H) {
+  ctx.fillStyle = '#151210';
+  ctx.fillRect(0, 0, W, H);
+  if (!caveGrid) return;
+  const palette = ['#3a3630', '#453f37', '#33302b', '#2b2823'];
+  const { cols, rows, cellW, cellH, wall, cellTone } = caveGrid;
+  for (let rr = 0; rr < rows; rr++) {
+    for (let cc = 0; cc < cols; cc++) {
+      if (!wall[rr][cc]) continue;
+      ctx.fillStyle = palette[cellTone[rr][cc]] || palette[0];
+      ctx.fillRect(cc * cellW, rr * cellH, cellW + 1, cellH + 1); // +1 : évite un liseré entre cellules
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  DRAW — FOND MARIN (lac) : bande basse, centre de l'écran vide
+// ══════════════════════════════════════════════════
+function drawLakeSeabed(W, H) {
+  const room  = currentRoom();
+  const bandH = (room && room.bandH) || H * 0.18;
+  const bandY = H - bandH;
+  ctx.save();
+  const grad = ctx.createLinearGradient(0, bandY, 0, H);
+  grad.addColorStop(0, 'rgba(10,40,35,0)');
+  grad.addColorStop(1, 'rgba(8,28,26,0.92)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, bandY, W, bandH);
+
+  const t = Date.now() / 600;
+  for (const d of seabed) {
+    if (d.glow) {
+      ctx.save();
+      ctx.shadowColor  = d.hue;
+      ctx.shadowBlur   = 14 + Math.sin(t + d.seed) * 6;
+      ctx.fillStyle    = d.hue;
+      ctx.globalAlpha  = 0.75;
+      ctx.beginPath(); ctx.arc(d.x, H - 6, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    } else {
+      ctx.save();
+      ctx.strokeStyle = d.hue; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.globalAlpha = 0.65;
+      const sway = Math.sin(t + d.seed) * 8;
+      ctx.beginPath();
+      ctx.moveTo(d.x, H);
+      ctx.quadraticCurveTo(d.x + sway, H - d.h * 0.6, d.x + sway * 1.5, H - d.h);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+  ctx.restore();
 }
 
 // ══════════════════════════════════════════════════
@@ -1273,6 +1664,20 @@ function drawHUD() {
     ctx.fillText('[O] Sensibilité', canvas.width - 14, canvas.height - 14);
   }
 
+  // ── Repère de biome + délai avant de pouvoir changer de carte (haut-droite) ──
+  if (state === S.PLAY || state === S.LOOT) {
+    const biomeInfo = {
+      foret: ['🌲', 'Forêt'], champ: ['🌾', 'Champ'], grotte: ['🦇', 'Grotte'], lac: ['🐟', 'Lac']
+    }[currentBiome()] || ['🌲', 'Forêt'];
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(220,220,255,0.85)'; ctx.font = 'bold 13px system-ui';
+    ctx.fillText(biomeInfo[0] + ' ' + biomeInfo[1], canvas.width - 14, 26);
+    if (roomCooldown > 0) {
+      ctx.fillStyle = 'rgba(255,210,120,0.85)'; ctx.font = '11px system-ui';
+      ctx.fillText('🔒 ' + Math.ceil(roomCooldown / 60) + 's', canvas.width - 14, 46);
+    }
+  }
+
   ctx.restore();
 }
 
@@ -1409,6 +1814,42 @@ function drawLootbox(W, H) {
 }
 
 // ══════════════════════════════════════════════════
+//  DRAW — POPUP "QUOI DE NEUF" (patch notes, 1x par version)
+// ══════════════════════════════════════════════════
+function drawPatchNotes(W, H) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(4,4,18,0.82)'; ctx.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = H / 2;
+  const pw    = Math.min(560, W - 40);
+  const lineH = 22;
+  const ph    = Math.min(H - 40, 150 + PATCH_NOTES.length * lineH);
+  const px = cx - pw / 2, py = cy - ph / 2;
+
+  rrect(px, py, pw, ph, 24, 'rgba(12,12,48,0.97)', 'rgba(110,90,255,0.55)', 2);
+
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  drawEmoji('🦉', cx, py + 32, 38);
+  ctx.fillStyle = '#cbc3ff'; ctx.font = '900 22px system-ui';
+  ctx.fillText('QUOI DE NEUF — v' + GAME_VERSION, cx, py + 62);
+
+  ctx.textAlign = 'left'; ctx.font = '13px system-ui'; ctx.fillStyle = '#e8e5ff';
+  let ty = py + 90;
+  for (const line of PATCH_NOTES) { ctx.fillText(line, px + 24, ty); ty += lineH; }
+
+  const bw = 200, bh = 46;
+  const bx = cx - bw / 2, by = py + ph - bh - 30;
+  const g = ctx.createLinearGradient(bx, by, bx + bw, by + bh);
+  g.addColorStop(0, '#5544dd'); g.addColorStop(1, '#9944ee');
+  rrect(bx, by, bw, bh, 23, g);
+  ctx.textAlign = 'center'; ctx.font = 'bold 18px system-ui'; ctx.fillStyle = '#fff';
+  ctx.fillText('Compris →', cx, by + bh / 2);
+
+  ctx.fillStyle = 'rgba(150,140,220,0.55)'; ctx.font = '10px system-ui';
+  ctx.fillText("Sprites chauve-souris (bagzie, OGA-BY 3.0) & requin (Sevarihk, CC-BY 4.0) — OpenGameArt.org", cx, py + ph - 10);
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════════
 //  DRAW — ÉCRAN TITRE
 // ══════════════════════════════════════════════════
 function drawStart(W, H) {
@@ -1465,6 +1906,7 @@ function drawOver(W, H) {
 // ══════════════════════════════════════════════════
 //  BOUCLE PRINCIPALE
 // ══════════════════════════════════════════════════
+resetWorld(); // ici : tout le script est évalué, plus de risque de zone morte temporelle
 (function loop() { update(); draw(); requestAnimationFrame(loop); })();
 </script>
 </body>
