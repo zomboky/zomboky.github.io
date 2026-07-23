@@ -34,7 +34,7 @@ export function auraColorHex(name) {
 }
 
 export function initMultiplayer(hooks) {
-  const { THREE, scene, hudCanvas, hctx, rrect, drawTargetIndicator } = hooks;
+  const { THREE, scene, hudCanvas, hctx, rrect, retroBtn, drawTargetIndicator } = hooks;
 
   let ws = null;
   let wantConnection = false; // vrai tant que le joueur est dans l'UI multijoueur
@@ -48,6 +48,12 @@ export function initMultiplayer(hooks) {
   let roomId = null;
   let myColor = null;
   let roster = []; // [{id, pseudo, color, alive}] — tous les joueurs de ma partie
+
+  // Objets ramassables partagés (voir server.js) : graine de la partie + génération courante
+  // de chaque emplacement. Le jeu calcule les positions de façon déterministe à partir de là.
+  let matchSeed = 0;
+  let crateGen = [];
+  let healGen = [];
 
   let presenceUsers = []; // [{id, pseudo, away, you}]
   let lobbyRooms = [];    // [{id, count, max, players:[{pseudo,color}]}]
@@ -156,6 +162,9 @@ export function initMultiplayer(hooks) {
         myColor = msg.color;
         myId = msg.youId;
         roster = (msg.players || []).map((p) => ({ kills: 0, ...p }));
+        matchSeed = (msg.seed >>> 0) || 1;
+        crateGen = Array.isArray(msg.crateGen) ? msg.crateGen.slice() : [];
+        healGen = Array.isArray(msg.healGen) ? msg.healGen.slice() : [];
         lobbyError = '';
         for (const p of roster) {
           if (p.id !== myId) addRemote(p);
@@ -250,6 +259,21 @@ export function initMultiplayer(hooks) {
         break;
       }
 
+      case 'crate-taken': {
+        const idx = msg.idx | 0;
+        if (idx >= 0 && idx < crateGen.length) crateGen[idx] = msg.gen >>> 0;
+        // Le jeu déplace la caisse idx vers sa nouvelle position déterministe (même chez tous).
+        if (hooks.onCrateTaken) hooks.onCrateTaken(idx, msg.gen >>> 0, msg.by === myId);
+        break;
+      }
+
+      case 'heal-taken': {
+        const idx = msg.idx | 0;
+        if (idx >= 0 && idx < healGen.length) healGen[idx] = msg.gen >>> 0;
+        if (hooks.onHealTaken) hooks.onHealTaken(idx, msg.gen >>> 0, msg.by === myId);
+        break;
+      }
+
       case 'kill': {
         const killer = roster.find((p) => p.id === msg.killerId);
         if (killer) killer.kills = (killer.kills || 0) + 1;
@@ -306,6 +330,9 @@ export function initMultiplayer(hooks) {
     roomId = null;
     myColor = null;
     roster = [];
+    matchSeed = 0;
+    crateGen = [];
+    healGen = [];
   }
 
   // ---------- API ----------
@@ -362,12 +389,19 @@ export function initMultiplayer(hooks) {
     sendDied(cause) { send({ type: 'died', cause }); },
     sendRespawn() { send({ type: 'respawn-request' }); },
     sendPickupAmmo() { send({ type: 'pickup-ammo' }); },
+    // Ramassage synchronisé : on envoie l'index + la génération qu'on croit courante ; le
+    // serveur ne l'honore que si elle correspond (empêche les doubles), puis relaie à tous.
+    sendPickupCrate(idx, gen) { send({ type: 'pickup-crate', idx, gen }); },
+    sendPickupHeal(idx, gen) { send({ type: 'pickup-heal', idx, gen }); },
 
     // — état consultable par le jeu —
     inRoom() { return roomId !== null; },
     myId() { return myId; },
     myColor() { return myColor; },
     roster() { return roster; },
+    matchSeed() { return matchSeed; },
+    crateGen(idx) { return crateGen[idx] || 0; },
+    healGen(idx) { return healGen[idx] || 0; },
     remotesList() {
       const out = [];
       for (const r of remotes.values()) {
@@ -430,19 +464,22 @@ export function initMultiplayer(hooks) {
       rrect(px, py, pw, ph, 24, 'rgba(12,12,48,0.96)', 'rgba(110,90,255,0.45)');
 
       hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
-      hctx.fillStyle = '#cbc3ff'; hctx.font = '900 24px system-ui';
+      hctx.save();
+      hctx.fillStyle = '#8be9ff'; hctx.font = "16px 'Press Start 2P',monospace";
+      hctx.shadowColor = 'rgba(255,60,200,0.9)'; hctx.shadowOffsetX = 2; hctx.shadowOffsetY = 2;
       hctx.fillText('🦉 MULTIJOUEUR', W / 2, py + 34);
+      hctx.restore();
 
       // Statut + pseudo
-      hctx.fillStyle = '#9fb0d8'; hctx.font = '13px system-ui';
+      hctx.fillStyle = '#9fb0d8'; hctx.font = '13px VT323,monospace';
       hctx.fillText(statusMessage, W / 2, py + 60);
-      hctx.font = 'bold 13px system-ui'; hctx.fillStyle = '#e8ecff';
+      hctx.font = 'bold 13px VT323,monospace'; hctx.fillStyle = '#e8ecff';
       const pseudoLine = pseudo ? ('Pseudo : ' + pseudo + '   [P] changer') : '[P] Choisir un pseudo';
       hctx.fillText(pseudoLine, W / 2, py + 82);
       pseudoRect = { x: W / 2 - 140, y: py + 70, w: 280, h: 24 };
 
       if (lobbyError) {
-        hctx.fillStyle = '#ff8866'; hctx.font = 'bold 13px system-ui';
+        hctx.fillStyle = '#ff8866'; hctx.font = 'bold 13px VT323,monospace';
         hctx.fillText(lobbyError, W / 2, py + 104);
       }
 
@@ -454,9 +491,9 @@ export function initMultiplayer(hooks) {
       // — Colonne gauche : joueurs connectés —
       rrect(leftX, colTop, leftW, colH, 12, 'rgba(8,8,35,0.7)', 'rgba(100,90,220,0.3)');
       hctx.textAlign = 'left';
-      hctx.fillStyle = '#cbc3ff'; hctx.font = 'bold 14px system-ui';
+      hctx.fillStyle = '#cbc3ff'; hctx.font = 'bold 14px VT323,monospace';
       hctx.fillText('Joueurs en ligne (' + presenceUsers.length + ')', leftX + 14, colTop + 20);
-      hctx.font = '13px system-ui';
+      hctx.font = '13px VT323,monospace';
       let uy = colTop + 44;
       for (const u of presenceUsers.slice(0, Math.floor((colH - 50) / 20))) {
         hctx.fillStyle = u.away ? '#777799' : '#8fe06a';
@@ -472,7 +509,7 @@ export function initMultiplayer(hooks) {
 
       // — Colonne droite : parties en cours (cliquables) —
       rrect(rightX, colTop, rightW, colH, 12, 'rgba(8,8,35,0.7)', 'rgba(100,90,220,0.3)');
-      hctx.fillStyle = '#cbc3ff'; hctx.font = 'bold 14px system-ui';
+      hctx.fillStyle = '#cbc3ff'; hctx.font = 'bold 14px VT323,monospace';
       hctx.fillText('Parties en cours (' + lobbyRooms.length + ')', rightX + 14, colTop + 20);
       roomRects = [];
       let ry = colTop + 40;
@@ -482,30 +519,30 @@ export function initMultiplayer(hooks) {
         rrect(rightX + 10, ry, rightW - 20, rowH, 8,
           full ? 'rgba(60,60,80,0.5)' : 'rgba(40,40,110,0.55)',
           full ? 'rgba(120,120,140,0.4)' : 'rgba(130,110,255,0.5)');
-        hctx.fillStyle = '#e8ecff'; hctx.font = 'bold 12px system-ui';
+        hctx.fillStyle = '#e8ecff'; hctx.font = 'bold 12px VT323,monospace';
         hctx.fillText('Partie #' + room.id + ' — ' + room.count + '/' + room.max +
           (full ? ' (complète)' : '  → rejoindre'), rightX + 22, ry + 13);
-        hctx.fillStyle = '#b8c0e8'; hctx.font = '11px system-ui';
+        hctx.fillStyle = '#b8c0e8'; hctx.font = '11px VT323,monospace';
         const names = room.players.map((p) => p.pseudo + ' (' + (AURA_COLOR_LABEL[p.color] || p.color) + ')').join(', ');
         hctx.fillText(names.length > 60 ? names.slice(0, 57) + '…' : names, rightX + 22, ry + 28);
         if (!full) roomRects.push({ x: rightX + 10, y: ry, w: rightW - 20, h: rowH, roomId: room.id });
         ry += rowH + 6;
       }
       if (!lobbyRooms.length) {
-        hctx.fillStyle = '#9fb0d8'; hctx.font = '13px system-ui';
+        hctx.fillStyle = '#9fb0d8'; hctx.font = '13px VT323,monospace';
         hctx.fillText('Aucune partie — lancez-en une !', rightX + 14, colTop + 44);
       }
 
       // — Bouton rejoindre (quick-join) —
       const bw = 320, bh = 46;
       const bx = W / 2 - bw / 2, by = py + ph - 84;
-      rrect(bx, by, bw, bh, 14, 'rgba(70,50,200,0.9)', 'rgba(160,140,255,0.9)', 2);
+      retroBtn(hctx, bx, by, bw, bh, '#5b52d6');
       hctx.textAlign = 'center';
-      hctx.fillStyle = '#fff'; hctx.font = '900 17px system-ui';
+      hctx.fillStyle = '#fff'; hctx.font = 'bold 15px VT323,monospace';
       hctx.fillText('REJOINDRE UNE PARTIE  [Entrée]', W / 2, by + bh / 2);
       quickJoinRect = { x: bx, y: by, w: bw, h: bh };
 
-      hctx.fillStyle = '#cbc3dd'; hctx.font = '13px system-ui';
+      hctx.fillStyle = '#cbc3dd'; hctx.font = '13px VT323,monospace';
       hctx.fillText('[Échap] Retour au menu   —   [K] Test solo (sans ours)', W / 2, py + ph - 20);
       hctx.restore();
     },
