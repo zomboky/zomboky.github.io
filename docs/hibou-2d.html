@@ -3,6 +3,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>🦉 Hibou 2D</title>
+<!-- Polices rétro arcade : Press Start 2P (titres) + VT323 (terminal, corps/HUD) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; touch-action: none; }
 body { background: #04040e; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
@@ -147,10 +151,41 @@ function lerpAngle(a, b, t) {
   return a + diff * t;
 }
 
+// ── Style rétro arcade / CRT ──────────────────────────────────────────────
+// Coins nets + cadre néon doublé d'un liseré noir (façon borne d'arcade), à la
+// place des rectangles arrondis « web moderne ». `rrect` garde sa signature (le
+// rayon `r` est ignoré) pour retro-fitter tous les panneaux/barres existants.
 function rrect(x, y, w, h, r, fill, stroke, lw) {
-  ctx.beginPath(); ctx.roundRect(x, y, w, h, r);
-  if (fill)   { ctx.fillStyle = fill; ctx.fill(); }
-  if (stroke) { ctx.lineWidth = lw || 1.5; ctx.strokeStyle = stroke; ctx.stroke(); }
+  x = Math.round(x); y = Math.round(y); w = Math.round(w); h = Math.round(h);
+  if (fill) { ctx.fillStyle = fill; ctx.fillRect(x, y, w, h); }
+  if (stroke) {
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    ctx.strokeStyle = stroke; ctx.lineWidth = lw || 2;
+    ctx.strokeRect(x + 2.5, y + 2.5, w - 5, h - 5);
+  }
+}
+// Bouton biseauté façon borne d'arcade (relief clair haut/gauche, sombre bas/droite).
+function retroBtn(x, y, w, h, fill, pressed) {
+  x = Math.round(x); y = Math.round(y); w = Math.round(w); h = Math.round(h);
+  ctx.fillStyle = fill; ctx.fillRect(x, y, w, h);
+  const lite = 'rgba(255,255,255,0.6)', dark = 'rgba(0,0,0,0.55)';
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = pressed ? dark : lite;
+  ctx.beginPath(); ctx.moveTo(x + 1, y + h - 1); ctx.lineTo(x + 1, y + 1); ctx.lineTo(x + w - 1, y + 1); ctx.stroke();
+  ctx.strokeStyle = pressed ? lite : dark;
+  ctx.beginPath(); ctx.moveTo(x + w - 1, y + 1); ctx.lineTo(x + w - 1, y + h - 1); ctx.lineTo(x + 1, y + h - 1); ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,0.9)'; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+}
+// Voile de scanlines CRT sur une zone.
+function scanlines(x, y, w, h, alpha) {
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.fillStyle = 'rgba(0,0,0,' + (alpha || 0.16) + ')';
+  for (let sy = Math.round(y); sy < y + h; sy += 3) ctx.fillRect(x, sy, w, 1);
+  ctx.restore();
+}
+if (document.fonts && document.fonts.load) {
+  document.fonts.load("16px VT323"); document.fonts.load("16px 'Press Start 2P'");
 }
 function drawEmoji(e, x, y, size) {
   ctx.font = size + 'px serif';
@@ -977,7 +1012,7 @@ function draw() {
     ctx.save(); ctx.globalAlpha = Math.max(0, p.life);
     if (p.type === 'txt') {
       ctx.fillStyle    = p.tType === 'death' ? '#ff3333' : '#ffd700';
-      ctx.font         = '900 24px system-ui, sans-serif';
+      ctx.font         = '900 24px VT323,monospace, sans-serif';
       ctx.textAlign    = 'center'; ctx.textBaseline = 'middle';
       ctx.shadowColor  = '#000'; ctx.shadowBlur = 8;
       ctx.fillText(p.txt, p.x, p.y);
@@ -1128,13 +1163,13 @@ function drawHUD() {
   ctx.save();
   rrect(12, 12, 230, hudH, 14, 'rgba(8,8,35,0.82)', border);
 
-  ctx.fillStyle = '#dde'; ctx.font = 'bold 16px system-ui';
+  ctx.fillStyle = '#dde'; ctx.font = 'bold 16px VT323,monospace';
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillText('Score : ' + score, 24, 32);
 
   let livesStr = '';
   for (let i = 0; i < lives; i++) livesStr += '❤️';
-  ctx.font = '12px system-ui'; ctx.fillText(livesStr, 140, 32);
+  ctx.font = '12px VT323,monospace'; ctx.fillText(livesStr, 140, 32);
 
   let yTxt = 50;
   if (buffs.multi      > 0) { ctx.fillStyle = '#00ffff'; ctx.fillText('✨ SCORE x5',     24, yTxt); yTxt += 16; }
@@ -1143,7 +1178,7 @@ function drawHUD() {
   if (buffs.invincible > 0) { ctx.fillStyle = '#ffd700'; ctx.fillText('🦉 INVINCIBLE !', 24, yTxt); yTxt += 16; }
 
   if (moon.state === 'none' && !storm.active && combo > 1 && buffs.multi === 0) {
-    ctx.fillStyle = '#ffaa00'; ctx.font = 'bold 13px system-ui';
+    ctx.fillStyle = '#ffaa00'; ctx.font = 'bold 13px VT323,monospace';
     ctx.fillText('🔥 Combo x' + combo, 24, 50);
     const cbW = 80 * (comboTimer / MAX_COMBO_TIME);
     rrect(120, 46, 80, 6, 3, 'rgba(255,255,255,0.1)');
@@ -1153,10 +1188,10 @@ function drawHUD() {
   if (moon.state !== 'none') {
     const col = moon.state === 'blood' ? '#ff3333' : '#ccddff';
     const ico = moon.state === 'blood' ? '🩸' : '🌕';
-    ctx.fillStyle = col; ctx.font = '900 14px system-ui';
+    ctx.fillStyle = col; ctx.font = '900 14px VT323,monospace';
     ctx.fillText(`${ico} SURVIE : ${Math.ceil(moon.timer / 60)}s`, 24, 50);
   } else if (storm.active) {
-    ctx.fillStyle = '#cfd3da'; ctx.font = '900 14px system-ui';
+    ctx.fillStyle = '#cfd3da'; ctx.font = '900 14px VT323,monospace';
     ctx.fillText(`🌬️ TEMPÊTE : ${Math.ceil(storm.timer / 60)}s`, 24, 50);
   }
 
@@ -1167,14 +1202,14 @@ function drawHUD() {
   bar.addColorStop(0, '#5cc83a'); bar.addColorStop(1, '#d4a800');
   const blink = nest > 90 && Math.floor(Date.now() / 100) % 2 === 0;
   rrect(22, barY, bw, 10, 5, blink ? '#fff' : bar);
-  ctx.fillStyle    = '#fff'; ctx.font = 'bold 9px system-ui';
+  ctx.fillStyle    = '#fff'; ctx.font = 'bold 9px VT323,monospace';
   ctx.textAlign    = 'center';
   ctx.fillText('NID ' + nest + '% ➔ +1 ❤️', 117, barY + 5);
 
   // Hint touche O (desktop uniquement, hors lootbox)
   if (!isMobile && state === S.PLAY) {
     ctx.fillStyle = 'rgba(150,140,220,0.55)';
-    ctx.font = '10px system-ui';
+    ctx.font = '10px VT323,monospace';
     ctx.textAlign = 'right';
     ctx.fillText('[O] Sensibilité', canvas.width - 14, canvas.height - 14);
   }
@@ -1199,12 +1234,12 @@ function drawSettings(W, H) {
   rrect(p.x, p.y, p.w, p.h, 16, 'rgba(8,8,40,0.97)', 'rgba(110,90,255,0.7)', 2);
 
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#cbc3ff'; ctx.font = 'bold 15px system-ui';
+  ctx.fillStyle = '#cbc3ff'; ctx.font = 'bold 15px VT323,monospace';
   ctx.fillText('🖱️  Sensibilité souris', p.x + p.w / 2, p.y + 22);
 
   // Pourcentage
   const pct = Math.round(mouseSensitivity * 100);
-  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 13px system-ui';
+  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 13px VT323,monospace';
   ctx.fillText(pct + '%', p.x + p.w / 2, p.y + 44);
 
   // Track slider
@@ -1228,12 +1263,12 @@ function drawSettings(W, H) {
   ctx.stroke();
 
   // Labels min/max
-  ctx.fillStyle = 'rgba(180,170,240,0.6)'; ctx.font = '10px system-ui';
+  ctx.fillStyle = 'rgba(180,170,240,0.6)'; ctx.font = '10px VT323,monospace';
   ctx.textAlign = 'left';  ctx.fillText('Lent',   sx,      sy + sh + 12);
   ctx.textAlign = 'right'; ctx.fillText('Rapide', sx + sw, sy + sh + 12);
 
   // Hint fermeture
-  ctx.fillStyle = 'rgba(150,140,220,0.5)'; ctx.font = '10px system-ui';
+  ctx.fillStyle = 'rgba(150,140,220,0.5)'; ctx.font = '10px VT323,monospace';
   ctx.textAlign = 'center';
   ctx.fillText('[O] ou clic extérieur pour fermer', p.x + p.w / 2, p.y + p.h - 10);
 
@@ -1250,8 +1285,11 @@ function drawLootbox(W, H) {
   const cx = W / 2, cy = H / 2;
 
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#ffffff'; ctx.font = '900 20px system-ui';
+  ctx.save();
+  ctx.fillStyle = '#ffd23f'; ctx.font = "16px 'Press Start 2P',monospace";
+  ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
   ctx.fillText('CADEAU !', cx, cy - 120);
+  ctx.restore();
 
   const barW    = CASE_STRIDE * 5 - CASE_GAP;
   const barH    = CASE_W;
@@ -1299,18 +1337,19 @@ function drawLootbox(W, H) {
     ctx.save(); ctx.globalAlpha = alpha;
     const isInvincible = lootbox.result.id === 'invincible';
     ctx.fillStyle  = isInvincible ? '#ffd700' : '#00ffff';
-    ctx.font       = '900 26px system-ui';
+    ctx.font       = '900 26px VT323,monospace';
     ctx.textAlign  = 'center'; ctx.textBaseline = 'middle';
     ctx.shadowColor = isInvincible ? '#ffa500' : '#0088ff';
     ctx.shadowBlur  = 20;
     ctx.fillText(lootbox.result.txt, cx, cy + 80);
-    ctx.font      = '14px system-ui';
+    ctx.font      = '14px VT323,monospace';
     ctx.fillStyle = 'rgba(200,200,255,0.7)';
     ctx.shadowBlur = 0;
     ctx.fillText('Appuie ou clique pour continuer...', cx, cy + 110);
     ctx.restore();
   }
 
+  scanlines(0, 0, W, H, 0.13);
   ctx.restore();
 }
 
@@ -1327,15 +1366,17 @@ function drawStart(W, H) {
 
   drawEmoji('🦉', cx, cy - 95, 72);
 
-  ctx.fillStyle = '#cbc3ff'; ctx.font = '900 32px system-ui';
-  ctx.fillText('HIBOU 2D', cx, cy - 20);
+  ctx.save();
+  ctx.fillStyle = '#8be9ff'; ctx.font = "20px 'Press Start 2P',monospace";
+  ctx.shadowColor = 'rgba(255,60,200,0.95)'; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3;
+  ctx.fillText('HIBOU 2D', cx, cy - 22);
+  ctx.restore();
 
-  const g = ctx.createLinearGradient(cx - 100, cy + 55, cx + 100, cy + 105);
-  g.addColorStop(0, '#5544dd'); g.addColorStop(1, '#9944ee');
-  rrect(cx - 100, cy + 55, 200, 50, 25, g);
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 20px system-ui';
-  ctx.fillText('JOUER', cx, cy + 80);
+  retroBtn(cx - 100, cy + 55, 200, 50, '#5b52d6');
+  ctx.fillStyle = '#fff'; ctx.font = "12px 'Press Start 2P',monospace";
+  ctx.fillText('JOUER', cx, cy + 81);
 
+  scanlines(0, 0, W, H, 0.13);
   ctx.restore();
 }
 
@@ -1348,23 +1389,25 @@ function drawOver(W, H) {
   const cx = W / 2, cy = H / 2;
   rrect(cx - 150, cy - 180, 300, 360, 28, 'rgba(22,8,30,0.97)', 'rgba(255,70,70,0.8)');
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#ffaaaa'; ctx.font = '900 32px system-ui';
+  ctx.save();
+  ctx.fillStyle = '#ff6b6b'; ctx.font = "22px 'Press Start 2P',monospace";
+  ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3;
   ctx.fillText('MANGÉ !', cx, cy - 100);
-  ctx.fillStyle = '#e8e5ff'; ctx.font = '18px system-ui';
+  ctx.restore();
+  ctx.fillStyle = '#e8e5ff'; ctx.font = '18px VT323,monospace';
   ctx.fillText('Score final : ' + score, cx, cy - 30);
   if (best > 0) {
     ctx.fillStyle = (score >= best && score > 0) ? '#ffaa00' : '#c0b0ff';
-    ctx.font = 'bold 16px system-ui';
+    ctx.font = 'bold 16px VT323,monospace';
     ctx.fillText('Record : ' + best, cx, cy);
   }
   const medal = score >= 100 ? '👑' : score >= 50 ? '🥇' : score >= 20 ? '🥈' : '🪺';
   drawEmoji(medal, cx, cy + 50, 45);
-  const pulse = Math.sin(Date.now() / 150) * 5;
-  const gr = ctx.createLinearGradient(cx - 100, cy + 110, cx + 100, cy + 160);
-  gr.addColorStop(0, '#cc2222'); gr.addColorStop(1, '#cc22aa');
-  rrect(cx - 100 - pulse / 2, cy + 110 - pulse / 2, 200 + pulse, 50 + pulse, 25, gr);
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 18px system-ui';
-  ctx.fillText('↺ Rejouer', cx, cy + 135);
+  const pulse = Math.sin(Date.now() / 150) * 4;
+  retroBtn(cx - 100 - pulse / 2, cy + 110 - pulse / 2, 200 + pulse, 50 + pulse, '#c1332f');
+  ctx.fillStyle = '#fff'; ctx.font = "12px 'Press Start 2P',monospace";
+  ctx.fillText('REJOUER', cx, cy + 136);
+  scanlines(0, 0, W, H, 0.13);
   ctx.restore();
 }
 
