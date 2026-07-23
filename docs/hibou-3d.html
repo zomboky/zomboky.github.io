@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>🦉 Hibou 3D</title>
 
+<!-- Polices rétro arcade : Press Start 2P (titres) + VT323 (terminal, corps/HUD) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+
 <!-- importmap : mappe 'three' vers le build local (docs/three/), même convention que space.html -->
 <script type="importmap">
 {
@@ -24,30 +29,36 @@
     position: fixed; inset: 0; z-index: 10;
     align-items: center; justify-content: center;
     background: rgba(4,4,14,0.88); backdrop-filter: blur(2px);
-    font-family: system-ui, sans-serif; color: #fff;
+    font-family: VT323, monospace, sans-serif; color: #d8ffe0;
+    image-rendering: pixelated;
   }
   #campaign-lock.open { display: flex; }
   #campaign-lock-form {
     width: min(320px, 86vw); text-align: center;
-    background: rgba(20,16,48,0.96); border: 1px solid rgba(180,140,255,0.5);
-    border-radius: 14px; padding: 1.6rem 1.4rem;
+    background: #0b0b22; padding: 1.6rem 1.4rem;
+    border: 2px solid #000; outline: 2px solid #6e5aff; outline-offset: -6px;
+    box-shadow: 6px 6px 0 rgba(0,0,0,0.6);
   }
-  #campaign-lock-title { font-size: 0.95rem; font-weight: bold; margin: 0 0 1.1rem; line-height: 1.4; color: #d8c8ff; }
-  #campaign-lock-form label { display: block; text-align: left; margin-bottom: 0.4rem; font-size: 0.8rem; color: #cbc3dd; }
+  #campaign-lock-title { font-size: 1.25rem; font-weight: bold; margin: 0 0 1.1rem; line-height: 1.35; color: #8be9ff; }
+  #campaign-lock-form label { display: block; text-align: left; margin-bottom: 0.4rem; font-size: 1.05rem; color: #b7f7c4; letter-spacing: 1px; }
   #campaign-lock-input {
-    width: 100%; padding: 0.5rem 0.6rem; font-size: 1rem; border-radius: 8px;
-    border: 1px solid rgba(180,140,255,0.5); background: #16122e; color: #fff;
+    width: 100%; padding: 0.45rem 0.6rem; font-size: 1.2rem; font-family: inherit;
+    border: 2px solid #000; outline: 2px solid #6e5aff; outline-offset: -4px;
+    background: #05130a; color: #5cff8f; letter-spacing: 2px;
   }
   #campaign-lock-form button {
-    margin-top: 0.9rem; width: 100%; padding: 0.55rem; border: none; border-radius: 8px;
-    background: rgba(180,90,255,0.7); color: #fff; font-weight: bold; font-size: 0.9rem; cursor: pointer;
+    margin-top: 0.9rem; width: 100%; padding: 0.5rem; font-family: inherit;
+    background: #a23bd6; color: #fff; font-weight: bold; font-size: 1.2rem; cursor: pointer;
+    letter-spacing: 1px; border: 2px solid #000;
+    border-top-color: #d78bf0; border-left-color: #d78bf0; border-bottom-color: #4a1466; border-right-color: #4a1466;
   }
+  #campaign-lock-form button:active { border-top-color: #4a1466; border-left-color: #4a1466; border-bottom-color: #d78bf0; border-right-color: #d78bf0; }
   #campaign-lock-form button:disabled { opacity: 0.6; cursor: default; }
   #campaign-lock-cancel {
-    display: block; margin-top: 0.7rem; background: none; border: none; color: #9b93cc;
-    font-size: 0.78rem; text-decoration: underline; cursor: pointer; width: 100%;
+    display: block; margin-top: 0.7rem; background: none; border: none !important; outline: none !important; color: #7fb0ff;
+    font-size: 1rem; text-decoration: underline; cursor: pointer; width: 100%; box-shadow: none;
   }
-  #campaign-lock-error { display: none; color: #ff6666; margin: 0.8rem 0 0; font-size: 0.82rem; }
+  #campaign-lock-error { display: none; color: #ff5555; margin: 0.8rem 0 0; font-size: 1.05rem; }
 </style>
 </head>
 <body>
@@ -3656,14 +3667,14 @@ function drawCutscene() {
     // Texte : fondu d'apparition sur la première demi-seconde de l'étape
     hctx.globalAlpha = Math.min(1, cutscene.t / 0.5);
     hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
-    hctx.font = 'italic bold 20px system-ui';
+    hctx.font = 'italic bold 20px VT323,monospace';
     hctx.fillStyle = '#f2eeff';
     hctx.shadowColor = '#000'; hctx.shadowBlur = 10;
     hctx.fillText(step.text, W / 2, H - barH / 2);
     hctx.shadowBlur = 0;
   }
   hctx.globalAlpha = 0.75;
-  hctx.font = '12px system-ui'; hctx.textAlign = 'right'; hctx.textBaseline = 'middle';
+  hctx.font = '12px VT323,monospace'; hctx.textAlign = 'right'; hctx.textBaseline = 'middle';
   hctx.fillStyle = '#cbc3dd';
   hctx.fillText(isMobile ? 'Touche l’écran pour passer' : '[Espace] Passer', W - 20, barH / 2);
   hctx.restore();
@@ -4929,10 +4940,47 @@ function updateParticles() {
 // ══════════════════════════════════════════════════
 //  HUD / ÉCRANS (canvas 2D superposé, indépendant de la caméra 3D)
 // ══════════════════════════════════════════════════
+// ── Style rétro arcade / CRT ──────────────────────────────────────────────
+// Fini les rectangles arrondis « web moderne » : coins nets, cadre néon doublé
+// d'un liseré noir, façon borne d'arcade / interface pixel. `rrect` conserve sa
+// signature (le rayon `r` est ignoré) pour retro-fitter tous les panneaux/barres
+// existants sans toucher aux centaines d'appels.
 function rrect(x, y, w, h, r, fill, stroke, lw) {
-  hctx.beginPath(); hctx.roundRect(x, y, w, h, r);
-  if (fill)   { hctx.fillStyle = fill; hctx.fill(); }
-  if (stroke) { hctx.lineWidth = lw || 1.5; hctx.strokeStyle = stroke; hctx.stroke(); }
+  x = Math.round(x); y = Math.round(y); w = Math.round(w); h = Math.round(h);
+  if (fill) { hctx.fillStyle = fill; hctx.fillRect(x, y, w, h); }
+  if (stroke) {
+    hctx.strokeStyle = 'rgba(0,0,0,0.85)'; hctx.lineWidth = 1;
+    hctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);          // liseré noir extérieur
+    hctx.strokeStyle = stroke; hctx.lineWidth = lw || 2;
+    hctx.strokeRect(x + 2.5, y + 2.5, w - 5, h - 5);          // trait néon intérieur
+  }
+}
+
+// Bouton biseauté façon borne d'arcade : fond plein saturé + relief (clair en
+// haut/gauche, sombre en bas/droite), inversé quand `pressed`.
+function retroBtn(c, x, y, w, h, fill, pressed) {
+  x = Math.round(x); y = Math.round(y); w = Math.round(w); h = Math.round(h);
+  c.fillStyle = fill; c.fillRect(x, y, w, h);
+  const lite = 'rgba(255,255,255,0.6)', dark = 'rgba(0,0,0,0.55)';
+  c.lineWidth = 2;
+  c.strokeStyle = pressed ? dark : lite;
+  c.beginPath(); c.moveTo(x + 1, y + h - 1); c.lineTo(x + 1, y + 1); c.lineTo(x + w - 1, y + 1); c.stroke();
+  c.strokeStyle = pressed ? lite : dark;
+  c.beginPath(); c.moveTo(x + w - 1, y + 1); c.lineTo(x + w - 1, y + h - 1); c.lineTo(x + 1, y + h - 1); c.stroke();
+  c.strokeStyle = 'rgba(0,0,0,0.9)'; c.lineWidth = 1; c.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+}
+
+// Voile de scanlines CRT sur une zone (menus plein écran).
+function scanlines(c, x, y, w, h, alpha) {
+  c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip();
+  c.fillStyle = 'rgba(0,0,0,' + (alpha || 0.16) + ')';
+  for (let sy = Math.round(y); sy < y + h; sy += 3) c.fillRect(x, sy, w, 1);
+  c.restore();
+}
+
+// Réchauffe les polices rétro pour que le canvas les utilise dès qu'elles arrivent.
+if (document.fonts && document.fonts.load) {
+  document.fonts.load("16px VT323"); document.fonts.load("16px 'Press Start 2P'");
 }
 
 // Vignette dynamique + lignes de vitesse radiales : l'écran « se resserre » et file
@@ -4974,24 +5022,24 @@ function drawHUD() {
   } else {
   if (campaignCtx) drawCampaignObjective(); // niveau de campagne au sol : bandeau d'objectif
   rrect(12, 12, 230, 100, 14, 'rgba(8,8,35,0.82)', 'rgba(100,90,220,0.4)');
-  hctx.fillStyle = '#dde'; hctx.font = 'bold 16px system-ui';
+  hctx.fillStyle = '#dde'; hctx.font = 'bold 16px VT323,monospace';
   hctx.textAlign = 'left'; hctx.textBaseline = 'middle';
   hctx.fillText('Score : ' + score, 24, 32);
 
   let livesStr = ''; for (let i = 0; i < lives; i++) livesStr += '❤️';
-  hctx.font = '12px system-ui'; hctx.fillText(livesStr, 140, 32);
+  hctx.font = '12px VT323,monospace'; hctx.fillText(livesStr, 140, 32);
 
   let buffY = 50;
-  if (buffs.multi      > 0) { hctx.fillStyle = '#00ffff'; hctx.font = 'bold 13px system-ui'; hctx.fillText('✨ SCORE x5',     24, buffY); buffY += 16; }
-  if (buffs.speed      > 0) { hctx.fillStyle = '#00ffff'; hctx.font = 'bold 13px system-ui'; hctx.fillText('⚡ VITESSE',       24, buffY); buffY += 16; }
-  if (buffs.slow       > 0) { hctx.fillStyle = '#00ffff'; hctx.font = 'bold 13px system-ui'; hctx.fillText('❄️ GELÉS',        24, buffY); buffY += 16; }
-  if (buffs.invincible > 0) { hctx.fillStyle = '#ffd700'; hctx.font = 'bold 13px system-ui'; hctx.fillText('🦉 INVINCIBLE !', 24, buffY); buffY += 16; }
-  if (skimActive)           { hctx.fillStyle = '#8fe06a'; hctx.font = 'bold 13px system-ui'; hctx.fillText('🪶 RASE-MOTTES +' + SKIM_SCORE + '/s', 24, buffY); buffY += 16; }
+  if (buffs.multi      > 0) { hctx.fillStyle = '#00ffff'; hctx.font = 'bold 13px VT323,monospace'; hctx.fillText('✨ SCORE x5',     24, buffY); buffY += 16; }
+  if (buffs.speed      > 0) { hctx.fillStyle = '#00ffff'; hctx.font = 'bold 13px VT323,monospace'; hctx.fillText('⚡ VITESSE',       24, buffY); buffY += 16; }
+  if (buffs.slow       > 0) { hctx.fillStyle = '#00ffff'; hctx.font = 'bold 13px VT323,monospace'; hctx.fillText('❄️ GELÉS',        24, buffY); buffY += 16; }
+  if (buffs.invincible > 0) { hctx.fillStyle = '#ffd700'; hctx.font = 'bold 13px VT323,monospace'; hctx.fillText('🦉 INVINCIBLE !', 24, buffY); buffY += 16; }
+  if (skimActive)           { hctx.fillStyle = '#8fe06a'; hctx.font = 'bold 13px VT323,monospace'; hctx.fillText('🪶 RASE-MOTTES +' + SKIM_SCORE + '/s', 24, buffY); buffY += 16; }
 
   if (combo > 1 && comboTimer > 0 && buffs.multi === 0) {
     // Le compteur de combo enfle avec la série (et pulse au-delà de x5)
     const comboSize = Math.min(13 + combo, 24) + (combo >= 5 ? Math.sin(Date.now() / 90) * 1.5 : 0);
-    hctx.fillStyle = '#ffaa00'; hctx.font = 'bold ' + Math.round(comboSize) + 'px system-ui';
+    hctx.fillStyle = '#ffaa00'; hctx.font = 'bold ' + Math.round(comboSize) + 'px VT323,monospace';
     hctx.fillText('🔥 Combo x' + combo, 24, buffY);
     const cbW = 80 * (comboTimer / MAX_COMBO_TIME);
     rrect(120, buffY - 4, 80, 6, 3, 'rgba(255,255,255,0.1)');
@@ -5005,14 +5053,14 @@ function drawHUD() {
   const bar = hctx.createLinearGradient(22, 0, 212, 0);
   bar.addColorStop(0, '#5cc83a'); bar.addColorStop(1, '#d4a800');
   rrect(22, barY, bw, 10, 5, bar);
-  hctx.fillStyle = '#fff'; hctx.font = 'bold 9px system-ui'; hctx.textAlign = 'center';
+  hctx.fillStyle = '#fff'; hctx.font = 'bold 9px VT323,monospace'; hctx.textAlign = 'center';
   hctx.fillText('NID ' + nest + '% ➔ +1 ❤️', 117, barY + 5);
   hctx.restore();
   }
 
   if (!isMobile) {
     hctx.save();
-    hctx.fillStyle = 'rgba(150,140,220,0.55)'; hctx.font = '11px system-ui';
+    hctx.fillStyle = 'rgba(150,140,220,0.55)'; hctx.font = '11px VT323,monospace';
     hctx.textAlign = 'left'; hctx.textBaseline = 'middle';
     hctx.fillText('[O] Sensibilité souris', 22, 130);
     hctx.restore();
@@ -5025,13 +5073,13 @@ function drawHUD() {
     const pw = 146, ph = 96, px = w - pw - 12, py = 12;
     rrect(px, py, pw, ph, 12, 'rgba(8,8,35,0.82)', 'rgba(100,90,220,0.4)');
     hctx.textBaseline = 'middle';
-    hctx.font = '11px system-ui'; hctx.fillStyle = '#9fb0d8'; hctx.textAlign = 'left';
+    hctx.font = '11px VT323,monospace'; hctx.fillStyle = '#9fb0d8'; hctx.textAlign = 'left';
     hctx.fillText('Vitesse',  px + 12, py + 18);
     hctx.fillText('Altitude', px + 12, py + 38);
     hctx.fillText('Poussée',  px + 12, py + 58);
     hctx.fillText('Vario',    px + 12, py + 78);
 
-    hctx.textAlign = 'right'; hctx.font = 'bold 12px system-ui'; hctx.fillStyle = '#e8ecff';
+    hctx.textAlign = 'right'; hctx.font = 'bold 12px VT323,monospace'; hctx.fillStyle = '#e8ecff';
     hctx.fillText(Math.round(speed) + ' u/s', px + pw - 12, py + 18);
     hctx.fillText(Math.max(0, Math.round(owlGroup.position.y - effectiveGroundY(owlGroup.position.x, owlGroup.position.z))) + ' m', px + pw - 12, py + 38);
     hctx.fillText(Math.round(flight.throttle * 100) + ' %', px + pw - 12, py + 58);
@@ -5047,7 +5095,7 @@ function drawHUD() {
     if (Math.floor(Date.now() / 220) % 2 === 0) {
       hctx.save();
       rrect(w / 2 - 110, h - 92, 220, 40, 12, 'rgba(60,10,10,0.9)', 'rgba(255,90,60,0.95)');
-      hctx.fillStyle = '#ffd0c0'; hctx.font = 'bold 18px system-ui';
+      hctx.fillStyle = '#ffd0c0'; hctx.font = 'bold 18px VT323,monospace';
       hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
       hctx.fillText('⚠ DÉCROCHAGE', w / 2, h - 72);
       hctx.restore();
@@ -5058,7 +5106,7 @@ function drawHUD() {
     hctx.save();
     const w = hudCanvas.width;
     rrect(w / 2 - 140, 12, 280, 40, 14, 'rgba(50,10,10,0.88)', 'rgba(255,80,80,0.7)');
-    hctx.fillStyle = '#ffcccc'; hctx.font = 'bold 16px system-ui';
+    hctx.fillStyle = '#ffcccc'; hctx.font = 'bold 16px VT323,monospace';
     hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
     hctx.fillText('🩸 LUNE DE SANG ! SURVIE : ' + Math.ceil(Math.max(0, moon.timer)) + 's', w / 2, 32);
     hctx.restore();
@@ -5066,7 +5114,7 @@ function drawHUD() {
     hctx.save();
     const w = hudCanvas.width;
     rrect(w / 2 - 140, 12, 280, 40, 14, 'rgba(20,20,50,0.85)', 'rgba(200,220,255,0.6)');
-    hctx.fillStyle = '#ccddff'; hctx.font = 'bold 16px system-ui';
+    hctx.fillStyle = '#ccddff'; hctx.font = 'bold 16px VT323,monospace';
     hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
     hctx.fillText('🌕 PLEINE LUNE ! SURVIE : ' + Math.ceil(Math.max(0, moon.timer)) + 's', w / 2, 32);
     hctx.restore();
@@ -5074,7 +5122,7 @@ function drawHUD() {
     hctx.save();
     const w = hudCanvas.width;
     rrect(w / 2 - 140, 12, 280, 40, 14, 'rgba(40,45,55,0.85)', 'rgba(180,190,205,0.6)');
-    hctx.fillStyle = '#dfe6ee'; hctx.font = 'bold 16px system-ui';
+    hctx.fillStyle = '#dfe6ee'; hctx.font = 'bold 16px VT323,monospace';
     hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
     hctx.fillText('🌬️ TEMPÊTE : ' + Math.ceil(Math.max(0, storm.timer)) + 's', w / 2, 32);
     hctx.restore();
@@ -5082,7 +5130,7 @@ function drawHUD() {
     hctx.save();
     const w = hudCanvas.width;
     rrect(w / 2 - 100, 12, 200, 34, 14, 'rgba(30,38,52,0.75)', 'rgba(140,160,190,0.45)');
-    hctx.fillStyle = '#b8c8de'; hctx.font = 'bold 14px system-ui';
+    hctx.fillStyle = '#b8c8de'; hctx.font = 'bold 14px VT323,monospace';
     hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
     hctx.fillText('🌧️ PLUIE : ' + Math.ceil(Math.max(0, weather.timer)) + 's', w / 2, 29);
     hctx.restore();
@@ -5121,11 +5169,11 @@ function drawMPStatusBox() {
   const rosterList = mp ? mp.roster() : [];
   const boxH = 128 + rosterList.length * 18;
   rrect(12, 12, 230, boxH, 14, 'rgba(8,8,35,0.82)', 'rgba(100,90,220,0.4)');
-  hctx.fillStyle = '#dde'; hctx.font = 'bold 15px system-ui';
+  hctx.fillStyle = '#dde'; hctx.font = 'bold 15px VT323,monospace';
   hctx.textAlign = 'left'; hctx.textBaseline = 'middle';
   hctx.fillText('Munitions : ' + mpAmmo + ' / ' + MP_MAG_CAP, 24, 32);
 
-  hctx.font = '11px system-ui'; hctx.fillStyle = '#9fb0d8';
+  hctx.font = '11px VT323,monospace'; hctx.fillStyle = '#9fb0d8';
   const govBars = [['Aile G', governEff.leftWing], ['Aile D', governEff.rightWing], ['Queue', governEff.tail]];
   let by = 52;
   for (const [label, loss] of govBars) {
@@ -5144,7 +5192,7 @@ function drawMPStatusBox() {
   by += 20;
 
   let yy = by;
-  hctx.font = 'bold 12px system-ui';
+  hctx.font = 'bold 12px VT323,monospace';
   for (const p of rosterList) {
     hctx.fillStyle = mp.colorCss(p.color);
     hctx.fillText('●', 24, yy);
@@ -5163,9 +5211,9 @@ function drawScoreboard() {
   const x = W / 2 - boxW / 2, y = 10;
   rrect(x, y, boxW, boxH, 12, 'rgba(8,8,35,0.82)', 'rgba(100,90,220,0.4)');
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
-  hctx.fillStyle = '#dde'; hctx.font = 'bold 13px system-ui';
+  hctx.fillStyle = '#dde'; hctx.font = 'bold 13px VT323,monospace';
   hctx.fillText('SCORE', W / 2, y + 16);
-  hctx.font = '12px system-ui'; hctx.textAlign = 'left';
+  hctx.font = '12px VT323,monospace'; hctx.textAlign = 'left';
   let yy = y + 36;
   for (const p of rosterList) {
     hctx.fillStyle = mp.colorCss(p.color);
@@ -5191,14 +5239,14 @@ function drawCampaignObjective() {
   rrect(x, y, boxW, boxH, 12, 'rgba(8,8,35,0.82)', 'rgba(180,90,255,0.4)');
   hctx.save();
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
-  hctx.fillStyle = '#cbc3ff'; hctx.font = 'bold 12px system-ui';
+  hctx.fillStyle = '#cbc3ff'; hctx.font = 'bold 12px VT323,monospace';
   hctx.fillText('🐻 NIVEAU ' + (c.idx + 1) + ' — ' + level.name, W / 2, y + 16);
   const progress = level.type === 'dogfight' ? campaignKills : c.progress;
   let line = (level.type === 'dogfight' ? '💥 Abattu : ' : '🌿 Branches : ') + progress + ' / ' + objective.count;
   if (objective.timeLimit) line += '   ⏱ ' + Math.ceil(Math.max(0, objective.timeLimit - c.elapsed)) + 's';
   const livesLeft = level.type === 'dogfight' ? c.playerLives : lives;
   line += '   ❤️×' + Math.max(0, livesLeft);
-  hctx.font = 'bold 13px system-ui';
+  hctx.font = 'bold 13px VT323,monospace';
   hctx.fillStyle = '#8fe06a';
   hctx.fillText(line, W / 2, y + 38);
   hctx.restore();
@@ -5219,9 +5267,9 @@ function drawBotDebugTag() {
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
   const w = 118, h = 34;
   rrect(s.x - w / 2, s.y - h - 10, w, h, 8, 'rgba(8,8,35,0.85)', 'rgba(180,90,255,0.7)');
-  hctx.font = 'bold 12px system-ui'; hctx.fillStyle = '#e8ecff';
+  hctx.font = 'bold 12px VT323,monospace'; hctx.fillStyle = '#e8ecff';
   hctx.fillText('🤖 BOT', s.x, s.y - h + 2);
-  hctx.font = '11px system-ui';
+  hctx.font = '11px VT323,monospace';
   hctx.fillStyle = reactivity > 70 ? '#8fe06a' : reactivity > 30 ? '#ff9a6a' : '#ff4444';
   hctx.fillText('Réactivité : ' + reactivity + '%', s.x, s.y - h + 18);
   hctx.restore();
@@ -5239,10 +5287,10 @@ function drawInventoryBar() {
     const x = x0 + i * (slotSize + gap);
     const filled = !!inventory[i];
     rrect(x, y0, slotSize, slotSize, 8, filled ? 'rgba(30,60,30,0.85)' : 'rgba(20,20,40,0.6)', filled ? 'rgba(140,255,140,0.6)' : 'rgba(255,255,255,0.2)');
-    hctx.font = '20px system-ui';
+    hctx.font = '20px VT323,monospace';
     hctx.fillStyle = filled ? '#fff' : 'rgba(255,255,255,0.3)';
     hctx.fillText(inventory[i] ? (INVENTORY_ICONS[inventory[i]] || '?') : '', x + slotSize / 2, y0 + slotSize / 2 - 3);
-    hctx.font = '10px system-ui';
+    hctx.font = '10px VT323,monospace';
     hctx.fillStyle = 'rgba(255,255,255,0.5)';
     hctx.fillText(String(i + 1), x + slotSize / 2, y0 + slotSize - 8);
   }
@@ -5295,12 +5343,12 @@ function drawMPDead() {
   const cx = W / 2, cy = H / 2;
   rrect(cx - 170, cy - 140, 340, 280, 28, 'rgba(22,8,30,0.97)', 'rgba(255,70,70,0.8)');
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
-  hctx.fillStyle = '#ffaaaa'; hctx.font = '900 30px system-ui';
+  hctx.fillStyle = '#ffaaaa'; hctx.font = "18px 'Press Start 2P',monospace";
   hctx.fillText(mpDeathCause === 'crash' ? 'CRASHÉ !' : 'TÊTE TOUCHÉE !', cx, cy - 80);
   hctx.font = '55px serif'; hctx.fillText('💀', cx, cy - 15);
-  hctx.fillStyle = '#e8e5ff'; hctx.font = 'bold 18px system-ui';
+  hctx.fillStyle = '#e8e5ff'; hctx.font = 'bold 18px VT323,monospace';
   hctx.fillText('Réapparition dans ' + Math.ceil(Math.max(0, mpRespawnTimer)) + ' s', cx, cy + 55);
-  hctx.fillStyle = '#cbc3dd'; hctx.font = '13px system-ui';
+  hctx.fillStyle = '#cbc3dd'; hctx.font = '13px VT323,monospace';
   hctx.fillText('(automatique, position aléatoire)', cx, cy + 85);
   hctx.restore();
 }
@@ -5347,14 +5395,17 @@ function drawStart() {
   rrect(cx - 190, cy - 220, 380, 420, 28, 'rgba(12,12,48,0.96)', 'rgba(110,90,255,0.45)');
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
   hctx.font = '60px serif'; hctx.fillText('🦉', cx, cy - 160);
-  hctx.fillStyle = '#cbc3ff'; hctx.font = '900 28px system-ui';
-  hctx.fillText('HIBOU 3D', cx, cy - 100);
-  hctx.fillStyle = '#cbc3dd'; hctx.font = '14px system-ui';
+  hctx.save();
+  hctx.fillStyle = '#8be9ff'; hctx.font = "20px 'Press Start 2P',monospace";
+  hctx.shadowColor = 'rgba(255,60,200,0.95)'; hctx.shadowOffsetX = 3; hctx.shadowOffsetY = 3;
+  hctx.fillText('HIBOU 3D', cx, cy - 102);
+  hctx.restore();
+  hctx.fillStyle = '#cbc3dd'; hctx.font = '14px VT323,monospace';
   if (isMobile) {
     hctx.fillText('Joystick = tangage / inclinaison', cx, cy - 54);
     hctx.fillText('Incline pour virer, contre-incline pour redresser', cx, cy - 34);
     hctx.fillText('⚡ = accélérer   ✋ = freiner (progressif)', cx, cy - 14);
-    hctx.fillStyle = '#ffb0a0'; hctx.font = '12px system-ui';
+    hctx.fillStyle = '#ffb0a0'; hctx.font = '12px VT323,monospace';
     hctx.fillText('Trop lent ou trop cabré = décrochage !', cx, cy + 8);
     hctx.fillStyle = '#ffe08a';
     hctx.fillText('Vole en rase-mottes parmi les lucioles : +' + SKIM_SCORE + '/s !', cx, cy + 28);
@@ -5363,13 +5414,13 @@ function drawStart() {
     hctx.fillText('S / Z = cabrer / piquer   (on tire pour monter)', cx, cy - 32);
     hctx.fillText('Espace = accélérer   Shift = freiner (progressif)', cx, cy - 10);
     hctx.fillText('Souris (verrouillée) = pilotage fin   [O] = sensibilité', cx, cy + 12);
-    hctx.fillStyle = '#ffb0a0'; hctx.font = '12px system-ui';
+    hctx.fillStyle = '#ffb0a0'; hctx.font = '12px VT323,monospace';
     hctx.fillText('Monter trop raide tue ta vitesse : DÉCROCHAGE —', cx, cy + 40);
     hctx.fillText('le nez tombe, pique pour raccrocher l\'aile.', cx, cy + 58);
     hctx.fillStyle = '#ffe08a';
     hctx.fillText('Rase le sol parmi les lucioles : +' + SKIM_SCORE + '/s. Suis les flèches 🎁 🌿', cx, cy + 78);
   }
-  hctx.fillStyle = '#fff'; hctx.font = 'bold 15px system-ui';
+  hctx.fillStyle = '#fff'; hctx.font = 'bold 15px VT323,monospace';
   hctx.fillText('Choisis un mode', cx, cy + 102);
 
   // Une seule rangée de 4 boutons (garde la même hauteur de panneau que l'ancien
@@ -5382,22 +5433,22 @@ function drawStart() {
   startMultiBtnRect    = { x: btnX0 + (btnW + btnGap),     y: btnY, w: btnW, h: btnH };
   startCampaignBtnRect = { x: btnX0 + 2 * (btnW + btnGap), y: btnY, w: btnW, h: btnH };
   startQuickIaBtnRect  = { x: btnX0 + 3 * (btnW + btnGap), y: btnY, w: btnW, h: btnH };
-  rrect(startSoloBtnRect.x, btnY, btnW, btnH, 10, 'rgba(120,110,255,0.3)', 'rgba(180,170,255,0.8)');
-  rrect(startMultiBtnRect.x, btnY, btnW, btnH, 10, 'rgba(60,180,255,0.25)', 'rgba(120,220,255,0.8)');
-  rrect(startCampaignBtnRect.x, btnY, btnW, btnH, 10, 'rgba(180,90,255,0.25)', 'rgba(220,140,255,0.8)');
-  rrect(startQuickIaBtnRect.x, btnY, btnW, btnH, 10, 'rgba(255,120,90,0.25)', 'rgba(255,160,120,0.8)');
-  hctx.font = 'bold 12px system-ui'; hctx.fillStyle = '#fff';
+  retroBtn(hctx, startSoloBtnRect.x,     btnY, btnW, btnH, '#5b52d6');
+  retroBtn(hctx, startMultiBtnRect.x,    btnY, btnW, btnH, '#1f8fd6');
+  retroBtn(hctx, startCampaignBtnRect.x, btnY, btnW, btnH, '#a23bd6');
+  retroBtn(hctx, startQuickIaBtnRect.x,  btnY, btnW, btnH, '#d64b3b');
+  hctx.font = 'bold 16px VT323,monospace'; hctx.fillStyle = '#fff';
   hctx.fillText('SOLO', startSoloBtnRect.x + btnW / 2, btnY + btnH / 2);
-  hctx.font = 'bold 10px system-ui';
+  hctx.font = 'bold 14px VT323,monospace';
   hctx.fillText('MULTI', startMultiBtnRect.x + btnW / 2, btnY + btnH / 2 - 7);
   hctx.fillText('JOUEUR', startMultiBtnRect.x + btnW / 2, btnY + btnH / 2 + 7);
   hctx.fillText('CAMPAGNE', startCampaignBtnRect.x + btnW / 2, btnY + btnH / 2 - 8);
   hctx.fillText('🐻 vs 🦉', startCampaignBtnRect.x + btnW / 2, btnY + btnH / 2 + 8);
   hctx.fillText('COMBAT', startQuickIaBtnRect.x + btnW / 2, btnY + btnH / 2 - 8);
   hctx.fillText('VS IA ⚔️', startQuickIaBtnRect.x + btnW / 2, btnY + btnH / 2 + 8);
-  hctx.font = 'bold 13px system-ui';
+  hctx.font = 'bold 13px VT323,monospace';
   if (!isMobile) {
-    hctx.fillStyle = '#9be0ff'; hctx.font = '11px system-ui';
+    hctx.fillStyle = '#9be0ff'; hctx.font = '11px VT323,monospace';
     hctx.fillText('([M] = raccourci multijoueur)', cx, btnY + btnH + 20);
   }
   hctx.restore();
@@ -5430,9 +5481,9 @@ function drawCampaignSelect() {
   hctx.fillStyle = bgGrad; hctx.fillRect(0, 0, W, H);
 
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
-  hctx.fillStyle = '#cbc3ff'; hctx.font = '900 26px system-ui';
+  hctx.fillStyle = '#cbc3ff'; hctx.font = '900 26px VT323,monospace';
   hctx.fillText('🐻 CAMPAGNE', W / 2, 36);
-  hctx.fillStyle = '#9fb0d8'; hctx.font = '13px system-ui';
+  hctx.fillStyle = '#9fb0d8'; hctx.font = '13px VT323,monospace';
   hctx.fillText('Choisis un niveau — ta progression est sauvegardée sur ce navigateur.', W / 2, 62);
 
   // ── Chemin : segments entre nœuds, dorés jusqu'au front de progression ──
@@ -5474,16 +5525,16 @@ function drawCampaignSelect() {
       : unlocked ? 'rgba(200,160,255,0.85)' : 'rgba(120,120,160,0.5)';
     hctx.stroke();
     hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
-    hctx.font = '900 17px system-ui'; hctx.fillStyle = unlocked ? '#fff' : 'rgba(255,255,255,0.35)';
+    hctx.font = '900 17px VT323,monospace'; hctx.fillStyle = unlocked ? '#fff' : 'rgba(255,255,255,0.35)';
     hctx.fillText(unlocked ? String(i + 1) : '🔒', p.x, p.y - 4);
-    hctx.font = '11px system-ui';
+    hctx.font = '11px VT323,monospace';
     hctx.fillText(lvl.type === 'ground' ? '🐻' : '🐻⚔️', p.x, p.y + 12);
     // Nom + état sous le nœud
-    hctx.font = 'bold 12px system-ui';
+    hctx.font = 'bold 12px VT323,monospace';
     hctx.fillStyle = unlocked ? '#e8e5ff' : 'rgba(200,200,230,0.4)';
     hctx.fillText(lvl.name, p.x, p.y + R + 14);
     if (done) {
-      hctx.fillStyle = '#a8ffa0'; hctx.font = '11px system-ui';
+      hctx.fillStyle = '#a8ffa0'; hctx.font = '11px VT323,monospace';
       hctx.fillText('✔ gagné' + (rec.bestTimeS != null ? ' — ' + rec.bestTimeS + 's' : ''), p.x, p.y + R + 30);
     }
     hctx.restore();
@@ -5511,11 +5562,11 @@ function drawCampaignSelect() {
 
   // Bouton retour (indispensable au tactile, Échap au clavier)
   campaignBackBtnRect = { x: 16, y: 16, w: 96, h: 34 };
-  rrect(campaignBackBtnRect.x, campaignBackBtnRect.y, campaignBackBtnRect.w, campaignBackBtnRect.h, 10, 'rgba(110,90,255,0.25)', 'rgba(180,170,255,0.7)');
-  hctx.font = 'bold 12px system-ui'; hctx.fillStyle = '#fff'; hctx.textAlign = 'center';
+  retroBtn(hctx, campaignBackBtnRect.x, campaignBackBtnRect.y, campaignBackBtnRect.w, campaignBackBtnRect.h, '#4a3f8f');
+  hctx.font = 'bold 15px VT323,monospace'; hctx.fillStyle = '#fff'; hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
   hctx.fillText('← Menu', campaignBackBtnRect.x + campaignBackBtnRect.w / 2, campaignBackBtnRect.y + campaignBackBtnRect.h / 2);
   if (!isMobile) {
-    hctx.fillStyle = '#cbc3dd'; hctx.font = '12px system-ui';
+    hctx.fillStyle = '#cbc3dd'; hctx.font = '12px VT323,monospace';
     hctx.fillText('[Échap] Retour au menu', W / 2, H - 20);
   }
   hctx.restore();
@@ -5553,11 +5604,12 @@ function drawQuickSelect() {
 
   const cx = W / 2, cy = H / 2;
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
-  hctx.fillStyle = '#cbc3ff'; hctx.font = '900 26px system-ui';
+  hctx.fillStyle = '#cbc3ff'; hctx.font = '900 26px VT323,monospace';
   hctx.fillText('⚔️ COMBAT CONTRE L\'IA', cx, cy - 90);
-  hctx.fillStyle = '#9fb0d8'; hctx.font = '13px system-ui';
+  hctx.fillStyle = '#9fb0d8'; hctx.font = '13px VT323,monospace';
   hctx.fillText('Duel libre 1v1, sans progression — choisis la difficulté.', cx, cy - 62);
 
+  const DIFF_COLORS = ['#2f9e44', '#c9a227', '#d9741f', '#c1332f']; // facile→expert
   const btnW = 150, btnH = 48, gap = 14;
   quickDifficultyRects = [];
   QUICK_DIFFICULTIES.forEach((d, i) => {
@@ -5566,17 +5618,17 @@ function drawQuickSelect() {
     const y = cy - 20 + row * (btnH + gap);
     const r = { x, y, w: btnW, h: btnH, id: d.id };
     quickDifficultyRects.push(r);
-    rrect(x, y, btnW, btnH, 12, 'rgba(255,120,90,0.22)', 'rgba(255,160,120,0.75)');
-    hctx.font = 'bold 15px system-ui'; hctx.fillStyle = '#fff';
+    retroBtn(hctx, x, y, btnW, btnH, DIFF_COLORS[i]);
+    hctx.font = 'bold 18px VT323,monospace'; hctx.fillStyle = '#fff'; hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
     hctx.fillText(d.label, x + btnW / 2, y + btnH / 2);
   });
 
   quickBackBtnRect = { x: 16, y: 16, w: 96, h: 34 };
-  rrect(quickBackBtnRect.x, quickBackBtnRect.y, quickBackBtnRect.w, quickBackBtnRect.h, 10, 'rgba(110,90,255,0.25)', 'rgba(180,170,255,0.7)');
-  hctx.font = 'bold 12px system-ui'; hctx.fillStyle = '#fff'; hctx.textAlign = 'center';
+  retroBtn(hctx, quickBackBtnRect.x, quickBackBtnRect.y, quickBackBtnRect.w, quickBackBtnRect.h, '#4a3f8f');
+  hctx.font = 'bold 15px VT323,monospace'; hctx.fillStyle = '#fff'; hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
   hctx.fillText('← Menu', quickBackBtnRect.x + quickBackBtnRect.w / 2, quickBackBtnRect.y + quickBackBtnRect.h / 2);
   if (!isMobile) {
-    hctx.fillStyle = '#cbc3dd'; hctx.font = '12px system-ui';
+    hctx.fillStyle = '#cbc3dd'; hctx.font = '12px VT323,monospace';
     hctx.fillText('[Échap] Retour au menu', cx, cy - 20 + 2 * (btnH + gap) + 24);
   }
   hctx.restore();
@@ -5597,21 +5649,24 @@ function drawOver() {
   const cx = W / 2, cy = H / 2;
   rrect(cx - 150, cy - 180, 300, 360, 28, 'rgba(22,8,30,0.97)', 'rgba(255,70,70,0.8)');
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
-  hctx.fillStyle = '#ffaaaa'; hctx.font = '900 32px system-ui';
+  hctx.save();
+  hctx.fillStyle = '#ff6b6b'; hctx.font = "22px 'Press Start 2P',monospace";
+  hctx.shadowColor = 'rgba(0,0,0,0.9)'; hctx.shadowOffsetX = 3; hctx.shadowOffsetY = 3;
   hctx.fillText(overReason === 'crash' ? 'CRASHÉ !' : overReason === 'rock' ? 'ÉCRASÉ !' : 'MANGÉ !', cx, cy - 100);
-  hctx.fillStyle = '#e8e5ff'; hctx.font = '18px system-ui';
+  hctx.restore();
+  hctx.fillStyle = '#e8e5ff'; hctx.font = '18px VT323,monospace';
   hctx.fillText('Score final : ' + score, cx, cy - 30);
   if (best > 0) {
     hctx.fillStyle = (score >= best && score > 0) ? '#ffaa00' : '#c0b0ff';
-    hctx.font = 'bold 16px system-ui';
+    hctx.font = 'bold 16px VT323,monospace';
     hctx.fillText('Record : ' + best, cx, cy);
   }
   const medal = score >= 100 ? '👑' : score >= 50 ? '🥇' : score >= 20 ? '🥈' : '🪺';
   hctx.font = '45px serif'; hctx.fillText(medal, cx, cy + 50);
-  hctx.fillStyle = '#fff'; hctx.font = 'bold 18px system-ui';
+  hctx.fillStyle = '#fff'; hctx.font = 'bold 18px VT323,monospace';
   hctx.fillText('Clique ou appuie pour rejouer', cx, cy + 135);
   if (!isMobile) {
-    hctx.fillStyle = '#9be0ff'; hctx.font = 'bold 12px system-ui';
+    hctx.fillStyle = '#9be0ff'; hctx.font = 'bold 12px VT323,monospace';
     hctx.fillText('[M] = Multijoueur', cx, cy + 160);
   }
   hctx.restore();
@@ -5629,18 +5684,18 @@ function drawLevelEnd() {
   const cx = W / 2, cy = H / 2;
   rrect(cx - 175, cy - 160, 350, 320, 28, 'rgba(12,12,40,0.97)', won ? 'rgba(140,255,120,0.8)' : 'rgba(255,70,70,0.8)');
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
-  hctx.fillStyle = won ? '#b6ffa8' : '#ffaaaa'; hctx.font = '900 30px system-ui';
+  hctx.fillStyle = won ? '#b6ffa8' : '#ffaaaa'; hctx.font = '900 30px VT323,monospace';
   hctx.fillText(won ? '🏆 VICTOIRE !' : '💀 DÉFAITE', cx, cy - 115);
-  hctx.fillStyle = '#e8e5ff'; hctx.font = 'bold 15px system-ui';
+  hctx.fillStyle = '#e8e5ff'; hctx.font = 'bold 15px VT323,monospace';
   hctx.fillText('Niveau ' + (c.idx + 1) + ' — ' + c.level.name, cx, cy - 78);
-  hctx.fillStyle = '#cbc3dd'; hctx.font = '14px system-ui';
+  hctx.fillStyle = '#cbc3dd'; hctx.font = '14px VT323,monospace';
   if (won) {
     hctx.fillText('Temps : ' + Math.round(c.elapsed) + ' s', cx, cy - 46);
     if (c.unlockedNew) {
-      hctx.fillStyle = '#ffe08a'; hctx.font = 'bold 14px system-ui';
+      hctx.fillStyle = '#ffe08a'; hctx.font = 'bold 14px VT323,monospace';
       hctx.fillText('🔓 Niveau suivant débloqué !', cx, cy - 20);
     } else if (c.idx === CAMPAIGN_LEVELS.length - 1) {
-      hctx.fillStyle = '#ffe08a'; hctx.font = 'bold 14px system-ui';
+      hctx.fillStyle = '#ffe08a'; hctx.font = 'bold 14px VT323,monospace';
       hctx.fillText('👑 Campagne terminée !', cx, cy - 20);
     }
   } else {
@@ -5656,13 +5711,13 @@ function drawLevelEnd() {
     { x: x0, y: btnY, w: btnW, h: btnH, action: 'replay' },
     { x: cx + gap / 2, y: btnY, w: btnW, h: btnH, action: 'map' },
   ];
-  rrect(levelEndBtnRects[0].x, btnY, btnW, btnH, 10, 'rgba(180,90,255,0.3)', 'rgba(220,140,255,0.85)');
-  rrect(levelEndBtnRects[1].x, btnY, btnW, btnH, 10, 'rgba(60,180,255,0.25)', 'rgba(120,220,255,0.8)');
-  hctx.font = 'bold 14px system-ui'; hctx.fillStyle = '#fff';
+  retroBtn(hctx, levelEndBtnRects[0].x, btnY, btnW, btnH, '#a23bd6');
+  retroBtn(hctx, levelEndBtnRects[1].x, btnY, btnW, btnH, '#1f8fd6');
+  hctx.font = 'bold 17px VT323,monospace'; hctx.fillStyle = '#fff'; hctx.textBaseline = 'middle';
   hctx.fillText('↻ REJOUER', levelEndBtnRects[0].x + btnW / 2, btnY + btnH / 2);
   hctx.fillText('🗺 CARTE', levelEndBtnRects[1].x + btnW / 2, btnY + btnH / 2);
   if (!isMobile) {
-    hctx.fillStyle = '#9fb0d8'; hctx.font = '12px system-ui';
+    hctx.fillStyle = '#9fb0d8'; hctx.font = '12px VT323,monospace';
     hctx.fillText('[Entrée] Rejouer   [Échap] Carte', cx, cy + 120);
   }
   hctx.restore();
@@ -5685,12 +5740,15 @@ function drawPaused() {
   const cx = W / 2, cy = H / 2;
   rrect(cx - 170, cy - 90, 340, 180, 24, 'rgba(12,12,48,0.96)', 'rgba(110,90,255,0.45)');
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
-  hctx.fillStyle = '#cbc3ff'; hctx.font = '900 24px system-ui';
+  hctx.save();
+  hctx.fillStyle = '#8be9ff'; hctx.font = "18px 'Press Start 2P',monospace";
+  hctx.shadowColor = 'rgba(255,60,200,0.9)'; hctx.shadowOffsetX = 2; hctx.shadowOffsetY = 2;
   hctx.fillText('PAUSE', cx, cy - 30);
-  hctx.fillStyle = '#fff'; hctx.font = 'bold 16px system-ui';
+  hctx.restore();
+  hctx.fillStyle = '#fff'; hctx.font = 'bold 16px VT323,monospace';
   hctx.fillText('Clique ou appuie sur une touche', cx, cy + 10);
   hctx.fillText('pour reprendre le pilotage', cx, cy + 32);
-  hctx.fillStyle = '#cbc3dd'; hctx.font = '13px system-ui';
+  hctx.fillStyle = '#cbc3dd'; hctx.font = '13px VT323,monospace';
   hctx.fillText((multiplayerMode || campaignCtx) ? '[Retour arrière] = quitter la partie' : '(verrouillage souris relâché)', cx, cy + 58);
   hctx.restore();
 }
@@ -5706,11 +5764,11 @@ function drawSettings() {
   rrect(p.x, p.y, p.w, p.h, 16, 'rgba(8,8,40,0.97)', 'rgba(110,90,255,0.7)', 2);
 
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
-  hctx.fillStyle = '#cbc3ff'; hctx.font = 'bold 15px system-ui';
+  hctx.fillStyle = '#cbc3ff'; hctx.font = 'bold 15px VT323,monospace';
   hctx.fillText('🖱️  Sensibilité souris', p.x + p.w / 2, p.y + 22);
 
   const pct = Math.round(mouseSensitivity * 100);
-  hctx.fillStyle = '#ffffff'; hctx.font = 'bold 13px system-ui';
+  hctx.fillStyle = '#ffffff'; hctx.font = 'bold 13px VT323,monospace';
   hctx.fillText(pct + '%', p.x + p.w / 2, p.y + 44);
 
   const sx = hit.x, sy = hit.y, sw = hit.w, sh = hit.h;
@@ -5726,11 +5784,11 @@ function drawSettings() {
   hctx.fillStyle = sliderDrag ? '#ffffff' : '#cbc3ff'; hctx.fill();
   hctx.strokeStyle = '#5544dd'; hctx.lineWidth = 2; hctx.stroke();
 
-  hctx.fillStyle = 'rgba(180,170,240,0.6)'; hctx.font = '10px system-ui';
+  hctx.fillStyle = 'rgba(180,170,240,0.6)'; hctx.font = '10px VT323,monospace';
   hctx.textAlign = 'left';  hctx.fillText('Lent',   sx,      sy + sh + 12);
   hctx.textAlign = 'right'; hctx.fillText('Rapide', sx + sw, sy + sh + 12);
 
-  hctx.fillStyle = 'rgba(150,140,220,0.5)'; hctx.font = '10px system-ui';
+  hctx.fillStyle = 'rgba(150,140,220,0.5)'; hctx.font = '10px VT323,monospace';
   hctx.textAlign = 'center';
   hctx.fillText('[O] ou clic extérieur pour fermer', p.x + p.w / 2, p.y + p.h - 10);
 
@@ -5774,8 +5832,11 @@ function drawLootbox() {
 
   const cx = W / 2, cy = H / 2;
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
-  hctx.fillStyle = '#ffffff'; hctx.font = '900 20px system-ui';
+  hctx.save();
+  hctx.fillStyle = '#ffd23f'; hctx.font = "16px 'Press Start 2P',monospace";
+  hctx.shadowColor = 'rgba(0,0,0,0.9)'; hctx.shadowOffsetX = 2; hctx.shadowOffsetY = 2;
   hctx.fillText('CADEAU !', cx, cy - 120);
+  hctx.restore();
 
   const barW    = CASE_STRIDE * 5 - CASE_GAP;
   const barH    = CASE_W;
@@ -5817,11 +5878,11 @@ function drawLootbox() {
     hctx.save(); hctx.globalAlpha = alpha;
     const isInvincible = lootbox.result.id === 'invincible';
     hctx.fillStyle  = isInvincible ? '#ffd700' : '#00ffff';
-    hctx.font       = '900 26px system-ui';
+    hctx.font       = '900 26px VT323,monospace';
     hctx.shadowColor = isInvincible ? '#ffa500' : '#0088ff';
     hctx.shadowBlur  = 20;
     hctx.fillText(lootbox.result.txt, cx, cy + 80);
-    hctx.font      = '14px system-ui';
+    hctx.font      = '14px VT323,monospace';
     hctx.fillStyle = 'rgba(200,200,255,0.7)';
     hctx.shadowBlur = 0;
     hctx.fillText('Un instant...', cx, cy + 110);
@@ -5851,7 +5912,7 @@ function drawOverlay() {
       hctx.save(); hctx.globalAlpha = Math.max(0, p.life);
       if (p.type === 'txt') {
         hctx.fillStyle = p.tType === 'controlloss' ? '#ff2222' : p.tType === 'repaired' ? '#ffe066' : p.tType === 'death' ? '#ff3333' : '#ffd700';
-        hctx.font = '900 24px system-ui';
+        hctx.font = '900 24px VT323,monospace';
         hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
         hctx.shadowColor = '#000'; hctx.shadowBlur = 8;
         // Clignotement pour les alertes de contrôle (toutes les ~6 frames)
@@ -5872,6 +5933,12 @@ function drawOverlay() {
     else if (state === S.LOOT) drawLootbox();
     if (isMobile && state === S.PLAY) drawMobileControls();
   }
+
+  // Voile CRT (scanlines) sur les écrans de menu plein écran — renforce le look arcade.
+  const menuState = state === S.START || state === S.CAMPAIGN_LOCK || state === S.CAMPAIGN_SELECT
+    || state === S.QUICK_SELECT || state === S.OVER || state === S.LEVEL_END || state === S.MP_DEAD
+    || state === S.PAUSED || state === S.LOOT || state === S.MP_LOBBY;
+  if (menuState) scanlines(hctx, 0, 0, hudCanvas.width, hudCanvas.height, 0.13);
 
   if (settingsOpen) drawSettings();
 
@@ -6076,7 +6143,7 @@ function drawLoading() {
   hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
   hctx.font = '54px serif';
   hctx.fillText('🦉', hudCanvas.width / 2, hudCanvas.height / 2 - 50);
-  hctx.fillStyle = '#cbc3ff'; hctx.font = 'bold 18px system-ui';
+  hctx.fillStyle = '#cbc3ff'; hctx.font = 'bold 18px VT323,monospace';
   hctx.fillText('Chargement des modèles 3D…', hudCanvas.width / 2, hudCanvas.height / 2 - 6);
   const barW = 220, barH = 10;
   const barX = hudCanvas.width / 2 - barW / 2, barY = hudCanvas.height / 2 + 20;
@@ -6084,7 +6151,7 @@ function drawLoading() {
   hctx.strokeRect(barX, barY, barW, barH);
   hctx.fillStyle = 'rgba(180,170,255,0.9)';
   hctx.fillRect(barX, barY, barW * Math.max(0.03, loadProgress), barH);
-  hctx.fillStyle = '#9b93cc'; hctx.font = '12px system-ui';
+  hctx.fillStyle = '#9b93cc'; hctx.font = '12px VT323,monospace';
   hctx.fillText(Math.round(loadProgress * 100) + ' %', hudCanvas.width / 2, barY + 26);
   hctx.restore();
 }
