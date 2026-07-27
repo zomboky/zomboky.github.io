@@ -231,57 +231,23 @@
 
 <h3 id="economie">9. L'économie du lancement</h3>
 
-<div class="schema">
-<svg viewBox="0 0 900 380" role="img" aria-label="Évolution du coût du kilogramme en orbite basse">
-  <rect width="900" height="380" fill="#000"/>
-  <text x="450" y="24" text-anchor="middle" font-family="Arial Black, Arial" font-size="14" fill="#fff" letter-spacing="1">COÛT DU KILOGRAMME EN ORBITE BASSE</text>
-  <text x="450" y="42" text-anchor="middle" font-family="Courier New, monospace" font-size="10" fill="#7fa8c9">échelle logarithmique · dollars constants de 2025</text>
-  <!-- axes -->
-  <line x1="120" y1="60" x2="120" y2="310" stroke="#666" stroke-width="1.5"/>
-  <line x1="120" y1="310" x2="870" y2="310" stroke="#666" stroke-width="1.5"/>
-  <g font-family="Courier New, monospace" font-size="9" fill="#888">
-    <line x1="116" y1="80"  x2="870" y2="80"  stroke="#222"/><text x="60" y="84">100 000 $</text>
-    <line x1="116" y1="138" x2="870" y2="138" stroke="#222"/><text x="66" y="142">50 000 $</text>
-    <line x1="116" y1="196" x2="870" y2="196" stroke="#222"/><text x="66" y="200">10 000 $</text>
-    <line x1="116" y1="254" x2="870" y2="254" stroke="#222"/><text x="72" y="258">2 000 $</text>
-    <line x1="116" y1="292" x2="870" y2="292" stroke="#222"/><text x="78" y="296">200 $</text>
-  </g>
-  <!-- barres -->
-  <g font-family="Courier New, monospace" font-size="9" text-anchor="middle">
-    <g fill="#3366aa"><rect x="150" y="196" width="46" height="114"/></g>
-    <text x="173" y="326" fill="#88aaff">Saturn V</text><text x="173" y="337" fill="#666">1967</text><text x="173" y="190" fill="#88aaff">~9 000 $</text>
-
-    <g fill="#aa3333"><rect x="230" y="132" width="46" height="178"/></g>
-    <text x="253" y="326" fill="#ff8888">Navette</text><text x="253" y="337" fill="#666">1981</text><text x="253" y="126" fill="#ff8888">~54 000 $</text>
-
-    <g fill="#3366aa"><rect x="310" y="200" width="46" height="110"/></g>
-    <text x="333" y="326" fill="#88aaff">Ariane 5</text><text x="333" y="337" fill="#666">1996</text><text x="333" y="194" fill="#88aaff">~9 500 $</text>
-
-    <g fill="#aa6633"><rect x="390" y="215" width="46" height="95"/></g>
-    <text x="413" y="326" fill="#ffaa66">Proton</text><text x="413" y="337" fill="#666">2000</text><text x="413" y="209" fill="#ffaa66">~4 300 $</text>
-
-    <g fill="#3366aa"><rect x="470" y="205" width="46" height="105"/></g>
-    <text x="493" y="326" fill="#88aaff">Atlas V</text><text x="493" y="337" fill="#666">2005</text><text x="493" y="199" fill="#88aaff">~8 000 $</text>
-
-    <g fill="#33aa66"><rect x="550" y="248" width="46" height="62"/></g>
-    <text x="573" y="326" fill="#66ffaa">Falcon 9</text><text x="573" y="337" fill="#666">2018</text><text x="573" y="242" fill="#66ffaa">~2 700 $</text>
-
-    <g fill="#33aa66"><rect x="630" y="262" width="46" height="48"/></g>
-    <text x="653" y="326" fill="#66ffaa">F. Heavy</text><text x="653" y="337" fill="#666">2020</text><text x="653" y="256" fill="#66ffaa">~1 500 $</text>
-
-    <g fill="#666666"><rect x="710" y="104" width="46" height="206"/></g>
-    <text x="733" y="326" fill="#bbb">Electron</text><text x="733" y="337" fill="#666">2020</text><text x="733" y="98" fill="#bbb">~25 000 $</text>
-
-    <g fill="#ffffff" opacity="0.6"><rect x="790" y="290" width="46" height="20"/></g>
-    <text x="813" y="326" fill="#fff">Starship</text><text x="813" y="337" fill="#666">objectif</text><text x="813" y="284" fill="#fff">100-300 $ ?</text>
-  </g>
-  <g font-family="Courier New, monospace" font-size="9" fill="#7fa8c9">
-    <text x="130" y="360">Les micro-lanceurs (Electron) coûtent cher au kilo mais vendent un service différent : orbite dédiée et date choisie.</text>
-    <text x="130" y="372">Le chiffre de Starship reste un objectif annoncé, non démontré. Aucun lanceur n'a jamais tenu ses prévisions initiales.</text>
-  </g>
-</svg>
-<div class="legende">Schéma original — ordres de grandeur reconstitués à partir des prix catalogue et des coûts de programme amortis.</div>
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Coût du kilogramme en orbite basse (dollars constants de 2025)</caption>
+<tr><th>Lanceur</th><th>Année</th><th>Coût/kg en LEO</th></tr>
+<tr><td>Saturn V</td><td>1967</td><td class="num">~9 000 $</td></tr>
+<tr><td>Navette spatiale</td><td>1981</td><td class="num">~54 000 $</td></tr>
+<tr><td>Ariane 5</td><td>1996</td><td class="num">~9 500 $</td></tr>
+<tr><td>Proton</td><td>2000</td><td class="num">~4 300 $</td></tr>
+<tr><td>Atlas V</td><td>2005</td><td class="num">~8 000 $</td></tr>
+<tr><td>Falcon 9</td><td>2018</td><td class="num">~2 700 $</td></tr>
+<tr><td>Falcon Heavy</td><td>2020</td><td class="num">~1 500 $</td></tr>
+<tr><td>Electron</td><td>2020</td><td class="num">~25 000 $</td></tr>
+<tr><td>Starship</td><td>objectif</td><td class="num part">100-300 $ ?</td></tr>
+</table>
 </div>
+
+<p>Ordres de grandeur reconstitués à partir des prix catalogue et des coûts de programme amortis. Les micro-lanceurs (Electron) coûtent cher au kilo mais vendent un service différent : orbite dédiée et date choisie. Le chiffre de Starship reste un objectif annoncé, non démontré — aucun lanceur n'a jamais tenu ses prévisions initiales.</p>
 
 <h3 id="critiques">10. Débats et limites</h3>
 
