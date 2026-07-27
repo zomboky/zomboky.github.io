@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Données techniques et mécanique orbitale — CAPCOM ZOMBOKY</title>
+<meta name="description" content="Équation de Tsiolkovski, budgets de delta-v, impulsions spécifiques, ergols, bases de lancement et tableaux comparatifs.">
+<link rel="shortcut icon" type="image/x-icon" href="https://raw.githubusercontent.com/zomboky/zomboky.github.io/master/docs/assets/icons/ours.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+
+<div class="bandeau">
+  <h1>CAPCOM <span class="rouge">ZOMBOKY</span></h1>
+  <p class="sous-titre">L'encyclopédie de la conquête spatiale &middot; 1232 &rarr; 2026 &middot; toutes les nations</p>
+  <div class="filets"></div>
+</div>
+
+<div class="menu">
+  <a href="index.html">Accueil</a>
+  <a href="pionniers.html">Pionniers</a>
+  <a href="spoutnik.html">Spoutnik</a>
+  <a href="mercury-gemini.html">Mercury/Gemini</a>
+  <a href="apollo.html">Apollo</a>
+  <a href="lune-sovietique.html">Lune URSS</a>
+  <a href="stations.html">Stations</a>
+  <a href="navettes.html">Navettes</a>
+  <a href="lanceurs.html">Lanceurs</a>
+  <a href="sondes.html">Sondes</a>
+  <a href="europe.html">Europe</a>
+  <a href="chine.html">Chine</a>
+  <a href="nations.html">Nations</a>
+  <a href="newspace.html">NewSpace</a>
+  <a href="artemis.html">Artemis</a>
+  <a href="accidents.html">Accidents</a>
+  <a href="hommes.html">Équipages</a>
+  <a class="actif" href="donnees.html">Données</a>
+  <a href="chronologie.html">Chronologie</a>
+</div>
+
+<div class="bandeau-defilant">
+  <marquee behavior="scroll" direction="left" scrollamount="4">
+    ★ BIENVENUE DANS LE CENTRE DE CONTRÔLE ★ 324 lancements orbitaux en 2025, record absolu ★ Artemis II a emmené 4 astronautes autour de la Lune le 1<sup>er</sup> avril 2026 ★ 700+ humains ont volé dans l'espace depuis Gagarine ★ Voyager 1 est à plus de 25 milliards de km ★ Bonne visite !
+  </marquee>
+</div>
+
+<div class="ariane">Vous êtes ici : <a href="index.html">Accueil</a> &rsaquo; <b>Données</b></div>
+
+<div class="contenu">
+
+<h2>Données techniques et mécanique orbitale</h2>
+
+<div class="sommaire">
+  <span class="titre">Sur cette page</span>
+  <ol>
+    <li><a href="#tsiolkovski">L'équation fondamentale</a></li>
+    <li><a href="#vitesses">Les vitesses caractéristiques</a></li>
+    <li><a href="#orbites">Les types d'orbites</a></li>
+    <li><a href="#deltav">La carte des Δv</a></li>
+    <li><a href="#moteurs">Les grands moteurs-fusées</a></li>
+    <li><a href="#assistance">L'assistance gravitationnelle</a></li>
+    <li><a href="#hohmann">Transferts et fenêtres de lancement</a></li>
+    <li><a href="#rentree">La rentrée atmosphérique</a></li>
+    <li><a href="#constantes">Constantes et conversions</a></li>
+    <li><a href="#glossaire">Glossaire</a></li>
+  </ol>
+</div>
+
+<h3 id="tsiolkovski">1. L'équation fondamentale</h3>
+
+<div class="fiche">
+  <h4>Équation de Tsiolkovski (1903)</h4>
+  <dl>
+    <dt>Formulation</dt><dd><b>Δv = I<sub>sp</sub> · g<sub>0</sub> · ln(m<sub>0</sub> / m<sub>f</sub>)</b></dd>
+    <dt>I<sub>sp</sub></dt><dd>impulsion spécifique du moteur, en secondes</dd>
+    <dt>g<sub>0</sub></dt><dd>9,80665 m/s² (constante de conversion, pas la gravité locale)</dd>
+    <dt>m<sub>0</sub> / m<sub>f</sub></dt><dd>rapport entre masse initiale (pleine) et masse finale (vide)</dd>
+  </dl>
+</div>
+
+<p><b>Exemple travaillé.</b> Un étage à kérosène-oxygène liquide (I<sub>sp</sub> = 330 s) dont la masse passe de 100 t à 20 t :</p>
+
+<p class="mono">Δv = 330 × 9,80665 × ln(100/20) = 3 236 × 1,609 = <b>5 208 m/s</b></p>
+
+<p>Si l'on veut le double de Δv (10 400 m/s) avec le même moteur, il faut ln(m<sub>0</sub>/m<sub>f</sub>) = 3,22, donc un rapport de masse de <b>25</b> : une structure de 20 t exigerait 480 t d'ergols. Avec de l'hydrogène liquide (I<sub>sp</sub> = 450 s), le même Δv ne demande qu'un rapport de 10,4. C'est toute la raison d'être des étages cryogéniques — et de l'étagement.</p>
+
+<h3 id="vitesses">2. Les vitesses caractéristiques</h3>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Vitesses de référence</caption>
+<tr><th>Grandeur</th><th>Valeur</th><th>Commentaire</th></tr>
+<tr><td>Vitesse orbitale à 200 km</td><td class="num">7 784 m/s</td><td>Période 88,5 min</td></tr>
+<tr><td>Vitesse orbitale à 400 km (ISS)</td><td class="num">7 669 m/s</td><td>Période 92,7 min</td></tr>
+<tr><td>Vitesse orbitale géostationnaire</td><td class="num">3 075 m/s</td><td>Altitude 35 786 km, période 23 h 56 min 4 s</td></tr>
+<tr><td>Vitesse de libération terrestre (au sol)</td><td class="num">11 186 m/s</td><td>« Deuxième vitesse cosmique »</td></tr>
+<tr><td>Δv réel pour atteindre l'orbite basse</td><td class="num">9 300 à 9 600 m/s</td><td>7 800 m/s d'orbite + 1 500 à 2 000 m/s de pertes</td></tr>
+<tr><td>Pertes gravitationnelles</td><td class="num">1 200 à 1 500 m/s</td><td>Énergie dépensée à lutter contre la pesanteur pendant la montée</td></tr>
+<tr><td>Pertes aérodynamiques</td><td class="num">100 à 300 m/s</td><td>Traînée dans les 50 premiers kilomètres</td></tr>
+<tr><td>Gain apporté par la rotation terrestre</td><td class="num">jusqu'à +465 m/s</td><td>À l'équateur, pour un tir vers l'est ; nul pour une orbite polaire</td></tr>
+<tr><td>Vitesse de libération lunaire</td><td class="num">2 380 m/s</td><td>Pourquoi remonter de la Lune coûte si peu</td></tr>
+<tr><td>Vitesse de libération martienne</td><td class="num">5 027 m/s</td><td>Le vrai problème du retour de Mars</td></tr>
+</table>
+</div>
+
+<h3 id="orbites">3. Les types d'orbites</h3>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Les grandes familles d'orbites</caption>
+<tr><th>Orbite</th><th>Altitude</th><th>Période</th><th>Usage</th></tr>
+<tr><td><b>LEO</b> — orbite terrestre basse</td><td>160 à 2 000 km</td><td>88 à 127 min</td><td>Vols habités, observation de la Terre, constellations. En deçà de 300 km, la traînée impose des rehaussements réguliers.</td></tr>
+<tr><td><b>SSO</b> — héliosynchrone</td><td>600 à 800 km, inclinaison ~98°</td><td>~100 min</td><td>L'orbite précesse de 0,986° par jour, exactement comme la Terre autour du Soleil : le satellite repasse toujours à la même heure solaire locale. Idéal pour comparer des images.</td></tr>
+<tr><td><b>MEO</b> — orbite moyenne</td><td>2 000 à 35 786 km</td><td>2 à 24 h</td><td>Navigation : GPS (20 200 km), Galileo (23 222 km), Beidou, GLONASS</td></tr>
+<tr><td><b>GEO</b> — géostationnaire</td><td>35 786 km, inclinaison 0°</td><td>23 h 56 min 4 s</td><td>Télécommunications, météorologie. Le satellite paraît immobile. Imaginée par Arthur C. Clarke en 1945 ; l'anneau ne compte que ~1 800 emplacements utiles.</td></tr>
+<tr><td><b>GTO</b> — transfert géostationnaire</td><td>~200 × 35 786 km</td><td>~10,5 h</td><td>Orbite d'attente elliptique, avant circularisation par le satellite lui-même</td></tr>
+<tr><td><b>Molnia</b></td><td>500 × 39 900 km, inclinaison 63,4°</td><td>~12 h</td><td>Inclinaison « magique » qui annule la précession de l'apogée ; le satellite reste 8 h au-dessus des hautes latitudes — indispensable à la Russie, mal desservie par la GEO</td></tr>
+<tr><td><b>NRHO</b> — halo quasi rectiligne</td><td>1 500 × 70 000 km autour de la Lune</td><td>6,5 j</td><td>Orbite de la Gateway : peu coûteuse à maintenir, visibilité permanente depuis la Terre</td></tr>
+<tr><td><b>Points de Lagrange</b></td><td>L1/L2 à 1,5 million de km</td><td>—</td><td>L1 : observation solaire (SOHO, DSCOVR). L2 : astronomie infrarouge (JWST, Gaia, Planck) car la Terre, la Lune et le Soleil y sont du même côté</td></tr>
+</table>
+</div>
+
+<h3 id="deltav">4. La carte des Δv</h3>
+
+<div class="schema">
+<svg viewBox="0 0 900 420" role="img" aria-label="Carte des budgets delta-v du système solaire interne">
+  <rect width="900" height="420" fill="#000"/>
+  <text x="450" y="24" text-anchor="middle" font-family="Arial Black, Arial" font-size="14" fill="#fff" letter-spacing="1">CARTE DES Δv — COMBIEN COÛTE CHAQUE DESTINATION</text>
+  <text x="450" y="42" text-anchor="middle" font-family="Courier New, monospace" font-size="10" fill="#7fa8c9">valeurs en m/s, sans freinage atmosphérique</text>
+  <g font-family="Courier New, monospace" font-size="10">
+    <!-- noeuds -->
+    <g stroke="#00ccff" stroke-width="1.5" fill="#04141f">
+      <rect x="40" y="180" width="120" height="34" rx="4"/>
+      <rect x="240" y="180" width="120" height="34" rx="4"/>
+      <rect x="240" y="90"  width="120" height="34" rx="4"/>
+      <rect x="240" y="270" width="120" height="34" rx="4"/>
+      <rect x="450" y="180" width="120" height="34" rx="4"/>
+      <rect x="450" y="90"  width="120" height="34" rx="4"/>
+      <rect x="450" y="270" width="120" height="34" rx="4"/>
+      <rect x="660" y="130" width="130" height="34" rx="4"/>
+      <rect x="660" y="230" width="130" height="34" rx="4"/>
+      <rect x="660" y="330" width="130" height="34" rx="4"/>
+    </g>
+    <g fill="#ffffff" text-anchor="middle">
+      <text x="100" y="201">SOL TERRESTRE</text>
+      <text x="300" y="201">ORBITE BASSE</text>
+      <text x="300" y="111">GÉOSTATIONNAIRE</text>
+      <text x="300" y="291">ÉVASION TERRE</text>
+      <text x="510" y="201">ORBITE LUNAIRE</text>
+      <text x="510" y="111">POINT L2 / NRHO</text>
+      <text x="510" y="291">TRANSFERT MARS</text>
+      <text x="725" y="151">SOL LUNAIRE</text>
+      <text x="725" y="251">ORBITE DE MARS</text>
+      <text x="725" y="351">SOL DE MARS</text>
+    </g>
+    <!-- fleches -->
+    <g stroke="#ffcc00" stroke-width="1.5" fill="none">
+      <line x1="160" y1="197" x2="238" y2="197"/>
+      <line x1="300" y1="180" x2="300" y2="126"/>
+      <line x1="300" y1="214" x2="300" y2="268"/>
+      <line x1="360" y1="197" x2="448" y2="197"/>
+      <line x1="360" y1="107" x2="448" y2="107"/>
+      <line x1="360" y1="287" x2="448" y2="287"/>
+      <line x1="570" y1="190" x2="658" y2="155"/>
+      <line x1="570" y1="280" x2="658" y2="255"/>
+      <line x1="725" y1="264" x2="725" y2="328"/>
+    </g>
+    <g fill="#ffcc00" text-anchor="middle" font-size="9">
+      <text x="199" y="190">9 400</text>
+      <text x="330" y="155">3 900</text>
+      <text x="332" y="245">3 200</text>
+      <text x="404" y="190">4 100</text>
+      <text x="404" y="100">3 400</text>
+      <text x="404" y="280">600</text>
+      <text x="618" y="164">1 870</text>
+      <text x="618" y="258">1 400</text>
+      <text x="752" y="300">4 100</text>
+    </g>
+  </g>
+  <g font-family="Courier New, monospace" font-size="9" fill="#7fa8c9">
+    <text x="40" y="386">Lecture : Terre → orbite basse coûte 9 400 m/s ; orbite basse → surface lunaire coûte 4 100 + 1 870 = 5 970 m/s.</text>
+    <text x="40" y="400">Un <tspan fill="#00ff66">aérofreinage</tspan> dans l'atmosphère de Mars économise ~1 400 m/s ; un retour sur Terre est « gratuit » (l'atmosphère fait tout le travail).</text>
+    <text x="40" y="414">C'est pourquoi la moitié du Δv d'une mission lunaire est dépensée dans les 200 premiers kilomètres.</text>
+  </g>
+</svg>
+<div class="legende">Schéma original — valeurs arrondies, typiques des trajectoires de Hohmann.</div>
+</div>
+
+<h3 id="moteurs">5. Les grands moteurs-fusées</h3>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Moteurs marquants de l'histoire</caption>
+<tr><th>Moteur</th><th>Pays</th><th>Ergols</th><th>Poussée (vide)</th><th>I<sub>sp</sub> (vide)</th><th>Cycle</th><th>Employé sur</th></tr>
+<tr><td>A-4 / V-2</td><td><span class="badge autre">DEU</span></td><td>Éthanol/LOX</td><td class="num">270 kN</td><td class="num">239 s</td><td>Générateur (H₂O₂)</td><td>V-2</td></tr>
+<tr><td>RD-107 / RD-108</td><td><span class="badge urss">URSS</span></td><td>Kérosène/LOX</td><td class="num">1 000 / 941 kN</td><td class="num">313 / 315 s</td><td>Générateur</td><td>R-7, Soyouz (depuis 1957)</td></tr>
+<tr><td><b>F-1</b></td><td><span class="badge usa">USA</span></td><td>RP-1/LOX</td><td class="num">7 770 kN</td><td class="num">304 s</td><td>Générateur</td><td>Saturn V (1<sup>er</sup> étage)</td></tr>
+<tr><td>J-2</td><td><span class="badge usa">USA</span></td><td>LH₂/LOX</td><td class="num">1 023 kN</td><td class="num">421 s</td><td>Générateur</td><td>Saturn V (2<sup>e</sup> et 3<sup>e</sup> étages)</td></tr>
+<tr><td>NK-33</td><td><span class="badge urss">URSS</span></td><td>Kérosène/LOX</td><td class="num">1 638 kN</td><td class="num">331 s</td><td>Combustion étagée oxydant-riche</td><td>N1, puis Antares (AJ26)</td></tr>
+<tr><td><b>RS-25 / SSME</b></td><td><span class="badge usa">USA</span></td><td>LH₂/LOX</td><td class="num">2 279 kN</td><td class="num"><b>452 s</b></td><td>Combustion étagée</td><td>Navette, SLS</td></tr>
+<tr><td><b>RD-170 / RD-171</b></td><td><span class="badge urss">URSS</span></td><td>Kérosène/LOX</td><td class="num">7 900 kN</td><td class="num">337 s</td><td>Combustion étagée oxydant-riche, 4 chambres</td><td>Energia, Zenit — <b>le plus puissant moteur à ergols liquides jamais construit</b></td></tr>
+<tr><td>RD-180</td><td><span class="badge urss">RUS</span></td><td>Kérosène/LOX</td><td class="num">4 152 kN</td><td class="num">338 s</td><td>Combustion étagée</td><td>Atlas III et V (américains)</td></tr>
+<tr><td>RL-10</td><td><span class="badge usa">USA</span></td><td>LH₂/LOX</td><td class="num">110 kN</td><td class="num">465 s</td><td>Expander</td><td>Centaur, DCSS, EUS — en service depuis 1963</td></tr>
+<tr><td>Vulcain 2</td><td><span class="badge eur">EUR</span></td><td>LH₂/LOX</td><td class="num">1 390 kN</td><td class="num">434 s</td><td>Générateur</td><td>Ariane 5 et 6</td></tr>
+<tr><td>Vinci</td><td><span class="badge eur">EUR</span></td><td>LH₂/LOX</td><td class="num">180 kN</td><td class="num">457 s</td><td>Expander, réallumable</td><td>Ariane 6 (étage supérieur)</td></tr>
+<tr><td>Merlin 1D</td><td><span class="badge priv">SpaceX</span></td><td>RP-1/LOX</td><td class="num">981 kN</td><td class="num">348 s</td><td>Générateur</td><td>Falcon 9, Falcon Heavy</td></tr>
+<tr><td><b>Raptor 3</b></td><td><span class="badge priv">SpaceX</span></td><td>CH₄/LOX</td><td class="num">~2 750 kN</td><td class="num">~350 s</td><td class="ok">Combustion étagée <i>full-flow</i> — jamais volée avant Starship</td><td>Starship / Super Heavy</td></tr>
+<tr><td>BE-4</td><td><span class="badge priv">Blue Origin</span></td><td>CH₄/LOX</td><td class="num">2 400 kN</td><td class="num">~340 s</td><td>Combustion étagée oxydant-riche</td><td>New Glenn, Vulcan</td></tr>
+<tr><td>YF-100 / YF-77</td><td><span class="badge chn">CHN</span></td><td>Kérosène/LOX — LH₂/LOX</td><td class="num">1 340 / 700 kN</td><td class="num">335 / 430 s</td><td>Combustion étagée / générateur</td><td>Longue Marche 5, 6, 7, 10</td></tr>
+<tr><td>LE-9</td><td><span class="badge jpn">JPN</span></td><td>LH₂/LOX</td><td class="num">1 471 kN</td><td class="num">425 s</td><td>Expander bleed</td><td>H3</td></tr>
+<tr><td>Moteur ionique NSTAR / T6</td><td><span class="badge usa">USA</span> <span class="badge eur">EUR</span></td><td>Xénon</td><td class="num">0,09 N</td><td class="num"><b>3 100 à 4 300 s</b></td><td>Propulsion électrique</td><td>Dawn, BepiColombo — poussée d'une feuille de papier, mais pendant des années</td></tr>
+</table>
+</div>
+
+<h3 id="assistance">6. L'assistance gravitationnelle</h3>
+
+<p>Le survol rapproché d'une planète permet d'échanger de l'énergie avec elle : dans le référentiel de la planète, la sonde repart à la même vitesse mais dans une autre direction ; dans le référentiel du Soleil, elle peut avoir gagné (ou perdu) plusieurs kilomètres par seconde. La planète, elle, ralentit ou accélère d'une quantité infinitésimale — la conservation de la quantité de mouvement est respectée.</p>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Assistances gravitationnelles célèbres</caption>
+<tr><th>Mission</th><th>Manœuvre</th><th>Gain</th></tr>
+<tr><td>Mariner 10 (1974)</td><td>Vénus → Mercure</td><td>Première utilisation opérationnelle ; sans elle, Mercure était inaccessible</td></tr>
+<tr><td>Voyager 2 (1977-1989)</td><td>Jupiter → Saturne → Uranus → Neptune</td><td>Neptune atteinte en 12 ans au lieu de 30</td></tr>
+<tr><td>Galileo (1989-1995)</td><td>Vénus → Terre → Terre (« VEEGA »)</td><td>Compense la faiblesse du lanceur imposée après Challenger</td></tr>
+<tr><td>Cassini (1997-2004)</td><td>Vénus → Vénus → Terre → Jupiter</td><td>6,7 ans de voyage pour 3,5 milliards de km</td></tr>
+<tr><td>Parker Solar Probe (2018-2025)</td><td>7 survols de Vénus</td><td>Pour <b>freiner</b> et se rapprocher du Soleil — le plus difficile</td></tr>
+<tr><td>BepiColombo (2018-2026)</td><td>Terre, 2 × Vénus, 6 × Mercure</td><td>Neuf survols avant l'insertion en orbite</td></tr>
+</table>
+</div>
+
+<h3 id="hohmann">7. Transferts et fenêtres de lancement</h3>
+
+<p>Le <b>transfert de Hohmann</b> (1925) est la manœuvre à deux impulsions la plus économe entre deux orbites circulaires coplanaires : une accélération à la périapse pour créer une ellipse tangente à l'orbite visée, puis une seconde à l'apoapse pour circulariser. Il impose son propre calendrier :</p>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Fenêtres de tir et durées de transfert (trajectoires économes)</caption>
+<tr><th>Destination</th><th>Période synodique</th><th>Durée du transfert</th><th>Δv depuis la LEO</th></tr>
+<tr><td>Lune</td><td>quasi permanente</td><td class="num">3 jours</td><td class="num">3 100 m/s</td></tr>
+<tr><td>Mars</td><td class="num">25,6 mois</td><td class="num">6 à 9 mois</td><td class="num">3 600 m/s</td></tr>
+<tr><td>Vénus</td><td class="num">19,2 mois</td><td class="num">4 à 5 mois</td><td class="num">3 500 m/s</td></tr>
+<tr><td>Jupiter</td><td class="num">13,1 mois</td><td class="num">2,7 ans (directe)</td><td class="num">6 300 m/s</td></tr>
+<tr><td>Mercure</td><td class="num">3,8 mois</td><td class="num">années (freinage)</td><td class="num">&gt; 13 000 m/s sans assistance</td></tr>
+</table>
+</div>
+
+<h3 id="rentree">8. La rentrée atmosphérique</h3>
+
+<p>Revenir est un problème d'énergie : un vaisseau en orbite basse possède environ <b>33 mégajoules par kilogramme</b>. Il faut les dissiper. La clé, découverte par <b>H. Julian Allen</b> à la NACA en 1951, est contre-intuitive : il faut un corps <b>émoussé</b>, et non pointu. Une forme épaisse crée une onde de choc détachée qui éloigne le plasma de la paroi et renvoie 90 % de la chaleur dans l'air ambiant.</p>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Conditions de rentrée</caption>
+<tr><th>Type de retour</th><th>Vitesse</th><th>Décélération</th><th>Température de pointe</th></tr>
+<tr><td>Orbite basse (Soyouz, Dragon)</td><td class="num">7,8 km/s</td><td class="num">3 à 4 <i>g</i></td><td class="num">~1 600 °C</td></tr>
+<tr><td>Orbite basse, rentrée balistique de secours</td><td class="num">7,8 km/s</td><td class="num">8 à 9 <i>g</i></td><td class="num">~1 800 °C</td></tr>
+<tr><td>Retour lunaire (Apollo, Orion)</td><td class="num">11,0 km/s</td><td class="num">6,8 <i>g</i></td><td class="num">~2 760 °C</td></tr>
+<tr><td>Retour interplanétaire (Stardust, 2006)</td><td class="num">12,8 km/s</td><td class="num">34 <i>g</i></td><td class="num">~2 900 °C — record pour un objet artificiel</td></tr>
+<tr><td>Entrée martienne</td><td class="num">5,5 à 7 km/s</td><td class="num">9 à 12 <i>g</i></td><td class="num">~2 100 °C</td></tr>
+</table>
+</div>
+
+<p>Deux familles de protection : les <b>boucliers ablatifs</b> (la matière se sublime en emportant la chaleur : Avcoat, PICA, PICA-X) et les <b>protections réutilisables</b> (tuiles de silice de la navette, carbone-carbone renforcé). Le corridor de rentrée est étroit : trop raide, la décélération tue ; trop plat, le vaisseau rebondit sur l'atmosphère et repart dans l'espace. Pour Apollo, la fenêtre faisait environ <b>2 degrés</b>.</p>
+
+<h3 id="constantes">9. Constantes et conversions</h3>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Constantes utiles</caption>
+<tr><th>Grandeur</th><th>Valeur</th></tr>
+<tr><td>Rayon équatorial terrestre</td><td class="num">6 378,137 km</td></tr>
+<tr><td>Paramètre gravitationnel terrestre μ</td><td class="num">398 600,4418 km³/s²</td></tr>
+<tr><td>Accélération standard g₀</td><td class="num">9,80665 m/s²</td></tr>
+<tr><td>Unité astronomique</td><td class="num">149 597 870,7 km</td></tr>
+<tr><td>Distance moyenne Terre-Lune</td><td class="num">384 400 km</td></tr>
+<tr><td>Rayon de la Lune / gravité</td><td class="num">1 737,4 km / 1,62 m/s² (0,165 <i>g</i>)</td></tr>
+<tr><td>Rayon de Mars / gravité</td><td class="num">3 389,5 km / 3,72 m/s² (0,379 <i>g</i>)</td></tr>
+<tr><td>Pression atmosphérique martienne</td><td class="num">6,1 mbar (0,6 % de celle de la Terre)</td></tr>
+<tr><td>Ligne de Kármán</td><td class="num">100 km</td></tr>
+<tr><td>1 tonne-force</td><td class="num">9,80665 kN</td></tr>
+<tr><td>1 livre-force</td><td class="num">4,448 N</td></tr>
+<tr><td>Vitesse de la lumière (délai Terre-Lune)</td><td class="num">1,28 s dans un sens</td></tr>
+<tr><td>Délai Terre-Mars</td><td class="num">3 à 22 minutes selon la configuration</td></tr>
+</table>
+</div>
+
+<h3 id="glossaire">10. Glossaire</h3>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Vocabulaire de l'astronautique</caption>
+<tr><th>Terme</th><th>Définition</th></tr>
+<tr><td><b>Ablatif</b></td><td>Matériau de protection thermique qui se consume en emportant la chaleur</td></tr>
+<tr><td><b>Apogée / Périgée</b></td><td>Points le plus éloigné et le plus proche de la Terre sur une orbite (apoapse/périapse en général ; aposélène/périsélène pour la Lune)</td></tr>
+<tr><td><b>Coiffe</b></td><td>Carénage aérodynamique protégeant la charge utile pendant la traversée de l'atmosphère</td></tr>
+<tr><td><b>Cryogénique</b></td><td>Ergol liquéfié à très basse température (LOX −183 °C, LH₂ −253 °C, CH₄ −162 °C)</td></tr>
+<tr><td><b>Δv (delta-v)</b></td><td>Variation de vitesse ; la « monnaie » de l'astronautique</td></tr>
+<tr><td><b>EVA</b></td><td>Sortie extravéhiculaire</td></tr>
+<tr><td><b>Hypergolique</b></td><td>Couple d'ergols qui s'enflamme spontanément au contact, sans allumeur</td></tr>
+<tr><td><b>I<sub>sp</sub></b></td><td>Impulsion spécifique : rendement d'un moteur, en secondes</td></tr>
+<tr><td><b>ISRU</b></td><td>Utilisation des ressources locales (produire ergols, eau ou oxygène sur place)</td></tr>
+<tr><td><b>Pogo</b></td><td>Oscillation longitudinale auto-entretenue entre la poussée et les circuits d'ergols</td></tr>
+<tr><td><b>Régolithe</b></td><td>Couche de débris et de poussière recouvrant un sol sans atmosphère</td></tr>
+<tr><td><b>Rendez-vous / Amarrage</b></td><td>Rapprochement de deux engins, puis liaison mécanique (<i>docking</i> actif, ou <i>berthing</i> par bras robotique)</td></tr>
+<tr><td><b>Sas</b></td><td>Compartiment permettant de passer d'un milieu pressurisé au vide</td></tr>
+<tr><td><b>Vernier</b></td><td>Petit moteur orientable assurant le pilotage</td></tr>
+</table>
+</div>
+
+
+<div class="nav-pages">
+  <a href="hommes.html">&laquo; Équipages</a>
+  <a href="chronologie.html">Chronologie &raquo;</a>
+</div>
+
+
+</div><!-- /contenu -->
+
+<div class="pied">
+  CAPCOM ZOMBOKY — encyclopédie de la conquête spatiale<br>
+  <span class="maj">Dernière mise à jour : juillet 2026</span> — 19 pages, 100 % rétro, 0 % cookie<br>
+  Images : NASA / ESA / Roscosmos / JAXA / CNSA via Wikimedia Commons — domaine public ou licences libres<br>
+  <a href="../index.html">Accueil du site</a> · <a href="index.html">Sommaire</a> · <a href="chronologie.html">Chronologie</a> · <a href="donnees.html">Données techniques</a>
+</div>
+
+</div><!-- /page -->
+<script src="../scripts/visitor-counter.js"></script>
+</body>
+</html>

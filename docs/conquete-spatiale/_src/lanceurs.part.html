@@ -1,0 +1,270 @@
+<div class="contenu">
+
+<h2>Les lanceurs du monde</h2>
+
+<div class="sommaire">
+  <span class="titre">Sur cette page</span>
+  <ol>
+    <li><a href="#principes">Principes : étages, ergols, performances</a></li>
+    <li><a href="#geants">Les géants, à l'échelle</a></li>
+    <li><a href="#usa">Les lanceurs américains</a></li>
+    <li><a href="#russie">Les lanceurs soviétiques et russes</a></li>
+    <li><a href="#europe">Les lanceurs européens</a></li>
+    <li><a href="#asie">Chine, Japon, Inde</a></li>
+    <li><a href="#autres">Les autres nations</a></li>
+    <li><a href="#tableau">Tableau général comparatif</a></li>
+    <li><a href="#records">Records et fiabilité</a></li>
+    <li><a href="#bases">Les bases de lancement</a></li>
+  </ol>
+</div>
+
+<h3 id="principes">1. Principes : étages, ergols, performances</h3>
+
+<p>Un lanceur n'est qu'une machine à appliquer l'équation de Tsiolkovski. Trois leviers seulement permettent d'améliorer ses performances : augmenter la <b>vitesse d'éjection</b> (donc l'impulsion spécifique), réduire la <b>masse structurale</b>, ou <b>abandonner en route</b> ce qui ne sert plus — l'étagement.</p>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Les grands couples d'ergols et leurs performances</caption>
+<tr><th>Couple</th><th>I<sub>sp</sub> vide</th><th>Densité</th><th>Avantages</th><th>Inconvénients</th><th>Exemples</th></tr>
+<tr><td><b>LOX / LH₂</b></td><td class="num">450-465 s</td><td class="num">0,28</td><td>Meilleure impulsion spécifique chimique ; produit de l'eau</td><td>−253 °C, volume énorme, fragilisation des métaux, coût</td><td>J-2, RS-25, Vulcain 2, RL-10, LE-9, YF-77</td></tr>
+<tr><td><b>LOX / kérosène (RP-1)</b></td><td class="num">310-340 s</td><td class="num">1,03</td><td>Dense, bon marché, manipulable, adapté au 1<sup>er</sup> étage</td><td>Cokéfaction des circuits, I<sub>sp</sub> moyenne</td><td>F-1, RD-107/180/170, Merlin 1D, NK-33</td></tr>
+<tr><td><b>LOX / méthane (LCH₄)</b></td><td class="num">350-380 s</td><td class="num">0,42</td><td>Propre, réutilisable, productible sur Mars (Sabatier), cryogénie modérée</td><td>Technologie récente, volume intermédiaire</td><td>Raptor, BE-4, Prometheus, Zhuque-2</td></tr>
+<tr><td><b>N₂O₄ / UDMH-Aerozine</b></td><td class="num">285-340 s</td><td class="num">1,18</td><td>Hypergoliques (allumage spontané), stockables des années, fiables</td><td><b>Très toxiques et cancérigènes</b> ; pollution des sites de retombée</td><td>Titan II, Proton, Longue Marche 2/3/4, SPS d'Apollo</td></tr>
+<tr><td><b>Poudre (APCP / PBAN / HTPB)</b></td><td class="num">240-290 s</td><td class="num">1,80</td><td>Poussée énorme, stockage long, simplicité</td><td>Non modulable, non arrêtable, non réutilisable en pratique</td><td>SRB de la navette, EAP d'Ariane 5, P120C, Vega, Minuteman</td></tr>
+</table>
+</div>
+
+<div class="encadre">
+  <span class="titre">Pourquoi étager ?</span>
+  Pour atteindre l'orbite basse, il faut environ <b>9 400 m/s</b> de Δv (7 800 m/s de vitesse orbitale + 1 500 à 2 000 m/s de pertes gravitationnelles et aérodynamiques). Avec un moteur à kérosène (I<sub>sp</sub> 330 s, v<sub>e</sub> = 3 240 m/s), l'équation exige un rapport de masse e<sup>9400/3240</sup> ≈ <b>18</b>. Une structure de fusée pesant au minimum 6 à 10 % de la masse en ergols, un engin monoétage ne laisse aucune marge pour la charge utile. En larguant les réservoirs vides, l'étagement ramène le problème à deux ou trois sauts de rapport de masse ≈ 3 chacun, chacun parfaitement réalisable.
+</div>
+
+<h3 id="geants">2. Les géants, à l'échelle</h3>
+
+<div class="schema">
+<svg viewBox="0 0 920 400" role="img" aria-label="Comparaison à l'échelle des plus grands lanceurs de l'histoire">
+  <rect width="920" height="400" fill="#000"/>
+  <text x="460" y="24" text-anchor="middle" font-family="Arial Black, Arial" font-size="14" fill="#fff" letter-spacing="1">LES PLUS GRANDS LANCEURS — SILHOUETTES À L'ÉCHELLE</text>
+  <!-- sol -->
+  <line x1="30" y1="330" x2="900" y2="330" stroke="#666" stroke-width="2"/>
+  <!-- échelle : 121 m -> 260 px  => 1 m = 2.148 px -->
+  <g stroke="#333" stroke-width="1" font-family="Courier New, monospace" font-size="9" fill="#777">
+    <line x1="30" y1="330" x2="900" y2="330"/>
+    <line x1="30" y1="266" x2="900" y2="266" stroke-dasharray="3 6"/><text x="4" y="270">30 m</text>
+    <line x1="30" y1="223" x2="900" y2="223" stroke-dasharray="3 6"/><text x="4" y="227">50 m</text>
+    <line x1="30" y1="158" x2="900" y2="158" stroke-dasharray="3 6"/><text x="4" y="162">80 m</text>
+    <line x1="30" y1="94"  x2="900" y2="94"  stroke-dasharray="3 6"/><text x="0" y="98">110 m</text>
+  </g>
+  <g font-family="Courier New, monospace" font-size="8" fill="#ccc" text-anchor="middle">
+    <!-- V-2 : 14 m -->
+    <g><rect x="56" y="300" width="6" height="30" fill="#223" stroke="#7fa8c9"/><text x="59" y="346">V-2</text><text x="59" y="356">14 m</text></g>
+    <!-- R-7 Soyouz : 46 m -->
+    <g><rect x="94" y="231" width="14" height="99" fill="#2a1010" stroke="#ff6666"/><text x="101" y="346">Soyouz</text><text x="101" y="356">46 m</text></g>
+    <!-- Ariane 5 : 53 m -->
+    <g><rect x="138" y="216" width="14" height="114" fill="#101a2a" stroke="#5599ff"/><text x="145" y="346">Ariane 5</text><text x="145" y="356">53 m</text></g>
+    <!-- Ariane 6 : 63 m -->
+    <g><rect x="182" y="195" width="14" height="135" fill="#101a2a" stroke="#5599ff"/><text x="189" y="346">Ariane 6</text><text x="189" y="356">63 m</text></g>
+    <!-- Falcon 9 : 70 m -->
+    <g><rect x="226" y="180" width="14" height="150" fill="#1a1a1a" stroke="#dddddd"/><text x="233" y="346">Falcon 9</text><text x="233" y="356">70 m</text></g>
+    <!-- Longue Marche 5 : 57 m -->
+    <g><rect x="270" y="208" width="18" height="122" fill="#2a1a05" stroke="#ffcc33"/><text x="279" y="346">CZ-5</text><text x="279" y="356">57 m</text></g>
+    <!-- Proton : 58 m -->
+    <g><rect x="316" y="205" width="15" height="125" fill="#2a1010" stroke="#ff6666"/><text x="323" y="346">Proton</text><text x="323" y="356">58 m</text></g>
+    <!-- Shuttle : 56 m -->
+    <g><rect x="360" y="210" width="20" height="120" fill="#1a2a3a" stroke="#00ccff"/><text x="370" y="346">Navette</text><text x="370" y="356">56 m</text></g>
+    <!-- Energia : 59 m -->
+    <g><rect x="408" y="203" width="22" height="127" fill="#2a1010" stroke="#ff6666"/><text x="419" y="346">Energia</text><text x="419" y="356">59 m</text></g>
+    <!-- Falcon Heavy : 70 m -->
+    <g><rect x="456" y="180" width="24" height="150" fill="#1a1a1a" stroke="#dddddd"/><text x="468" y="346">F. Heavy</text><text x="468" y="356">70 m</text></g>
+    <!-- New Glenn : 98 m -->
+    <g><rect x="506" y="120" width="20" height="210" fill="#0a1a2a" stroke="#66aaff"/><text x="516" y="346">New Glenn</text><text x="516" y="356">98 m</text></g>
+    <!-- SLS Block 1 : 98 m -->
+    <g><rect x="556" y="120" width="22" height="210" fill="#2a1505" stroke="#ff9933"/><text x="567" y="346">SLS</text><text x="567" y="356">98 m</text></g>
+    <!-- N1 : 105 m -->
+    <g><path d="M612 330 L646 330 L638 118 L620 118 Z" fill="#2a1010" stroke="#ff6666"/><text x="629" y="346">N1</text><text x="629" y="356">105 m</text></g>
+    <!-- Saturn V : 110.6 m -->
+    <g><rect x="676" y="93" width="22" height="237" fill="#16222e" stroke="#00ccff"/><text x="687" y="346">Saturn V</text><text x="687" y="356">111 m</text></g>
+    <!-- Longue Marche 10 : 92 m -->
+    <g><rect x="726" y="132" width="24" height="198" fill="#2a1a05" stroke="#ffcc33"/><text x="738" y="346">CZ-10</text><text x="738" y="356">92 m</text></g>
+    <!-- Starship : 121 m -->
+    <g><rect x="782" y="70" width="26" height="260" fill="#111" stroke="#ffffff" stroke-width="1.5"/><text x="795" y="346">Starship</text><text x="795" y="356">121 m</text></g>
+  </g>
+  <g font-family="Courier New, monospace" font-size="9" fill="#7fa8c9">
+    <text x="40" y="378">Bleu : États-Unis/Europe · Rouge : URSS-Russie · Jaune : Chine · Blanc : SpaceX</text>
+    <text x="40" y="392">Hauteurs totales avec coiffe ou charge utile. Starship (121 m) est le plus grand engin volant jamais construit.</text>
+  </g>
+</svg>
+<div class="legende">Schéma original — échelle commune, 1 mètre = 2,15 pixels.</div>
+</div>
+
+<div class="galerie">
+  <figure>
+    <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Soyuz_TMA-09M_spacecraft_at_the_Baikonur_Cosmodrome_launch_pad_(4).jpg?width=380" alt="Un lanceur Soyouz dressé sur son pas de tir à Baïkonour">
+    <figcaption>Un Soyouz dressé sur son pas de tir. Soixante-dix ans après le premier tir de la R-7, la même architecture en grappe vole toujours — plus de 1 970 lancements, record absolu.<br><span class="credit">NASA / domaine public</span></figcaption>
+  </figure>
+  <figure>
+    <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Angara_1.2_A5.svg?width=380" alt="Schéma comparatif des versions Angara 1.2 et A5">
+    <figcaption>La famille russe Angara illustre la logique modulaire moderne : un même bloc URM-1 est répété de une à cinq fois selon la performance recherchée.<br><span class="credit">Wikimedia Commons — CC BY-SA</span></figcaption>
+  </figure>
+</div>
+
+<h3 id="usa">3. Les lanceurs américains</h3>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Principales familles de lanceurs américains</caption>
+<tr><th>Famille</th><th>Période</th><th>Origine</th><th>Performances (LEO)</th><th>Faits marquants</th></tr>
+<tr><td><b>Vanguard</b></td><td>1957-1959</td><td>Fusée-sonde Viking (NRL)</td><td>9-11 kg</td><td>3 succès sur 11 tirs. Vanguard 1 : plus vieux satellite encore en orbite.</td></tr>
+<tr><td><b>Juno / Jupiter-C</b></td><td>1958-1961</td><td>Missile Redstone (von Braun)</td><td>11-25 kg</td><td>Explorer 1, premiers satellites américains</td></tr>
+<tr><td><b>Scout</b></td><td>1961-1994</td><td>Poudre, 4 étages</td><td>190 kg</td><td>Premier lanceur orbital entièrement à propergol solide ; 118 tirs</td></tr>
+<tr><td><b>Thor / Delta</b></td><td>1960-2024</td><td>IRBM Thor</td><td>0,4 à 28,8 t (Delta IV Heavy)</td><td>La famille la plus prolifique de l'Ouest : <b>plus de 380 tirs</b>. Delta II : 155 tirs, 98,7 % de succès. Delta IV Heavy retirée en avril 2024.</td></tr>
+<tr><td><b>Atlas</b></td><td>1957-aujourd'hui</td><td>ICBM Atlas</td><td>2 à 20,5 t (Atlas V 551)</td><td>Structure « ballon » d'origine ; Atlas V : 101 tirs, un seul succès partiel. Moteur russe RD-180 jusqu'en 2022.</td></tr>
+<tr><td><b>Titan</b></td><td>1959-2005</td><td>ICBM Titan I/II</td><td>3,6 à 21,7 t (Titan IV-B)</td><td>Lanceur de Gemini, des sondes Voyager et Cassini, des satellites espions KH-11</td></tr>
+<tr><td><b>Saturn</b></td><td>1961-1975</td><td>Programme lunaire</td><td>9 à 140 t</td><td>Voir <a href="apollo.html">Apollo</a></td></tr>
+<tr><td><b>Space Shuttle</b></td><td>1981-2011</td><td>—</td><td>27,5 t</td><td>Voir <a href="navettes.html">Navettes</a></td></tr>
+<tr><td><b>Falcon 9 / Heavy</b></td><td>2010-aujourd'hui</td><td>SpaceX</td><td>22,8 t / 63,8 t</td><td>Premier étage réutilisable ; a bouleversé l'économie du secteur (voir <a href="newspace.html">NewSpace</a>)</td></tr>
+<tr><td><b>SLS</b></td><td>2022-aujourd'hui</td><td>Héritage navette</td><td>95 t (Block 1)</td><td>Lanceur d'Artemis ; 2 vols (2022, 2026)</td></tr>
+<tr><td><b>Vulcan Centaur</b></td><td>2024-aujourd'hui</td><td>ULA</td><td>27,2 t</td><td>Remplace Atlas V et Delta IV ; moteurs BE-4 au méthane</td></tr>
+<tr><td><b>Electron / Neutron</b></td><td>2018-aujourd'hui</td><td>Rocket Lab</td><td>320 kg / 13 t</td><td>Micro-lanceur à moteurs électro-pompés imprimés en 3D</td></tr>
+<tr><td><b>New Glenn</b></td><td>2025-aujourd'hui</td><td>Blue Origin</td><td>45 t</td><td>Premier étage réutilisable, coiffe de 7 m</td></tr>
+<tr><td><b>Starship</b></td><td>2023-aujourd'hui</td><td>SpaceX</td><td>100-150 t (objectif)</td><td>Le plus grand lanceur jamais construit ; entièrement réutilisable</td></tr>
+</table>
+</div>
+
+<h3 id="russie">4. Les lanceurs soviétiques et russes</h3>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Principales familles de lanceurs soviétiques et russes</caption>
+<tr><th>Famille</th><th>Période</th><th>Ergols</th><th>Performances (LEO)</th><th>Faits marquants</th></tr>
+<tr><td><b>R-7 / Soyouz</b></td><td>1957-aujourd'hui</td><td>LOX/kérosène</td><td>4,7 à 8,2 t</td><td class="ok"><b>Plus de 1 970 lancements</b> — record mondial absolu. Fiabilité de la version Soyouz-U supérieure à 97 %. A lancé Spoutnik, Gagarine et tous les équipages soviétiques et russes.</td></tr>
+<tr><td><b>Kosmos</b> (63S1, 11K65M)</td><td>1961-2010</td><td>Hypergoliques</td><td>1,5 t</td><td>Petits satellites militaires ; 600+ tirs depuis Plessetsk et Kapoustine Iar</td></tr>
+<tr><td><b>Proton</b> (UR-500)</td><td>1965-2025</td><td>N₂O₄/UDMH</td><td>23,0 t (Proton-M)</td><td>Conçu par Tchelomeï comme lanceur lourd et ICBM à 100 mégatonnes. A lancé Saliout, Mir, Zarya, tous les modules russes de l'ISS. 400+ tirs, ~89 % de succès. Retiré au profit d'Angara.</td></tr>
+<tr><td><b>Tsyklon</b></td><td>1967-2009</td><td>Hypergoliques</td><td>3,6 t</td><td>Dérivé du missile R-36 ; satellites de reconnaissance océanique à réacteur nucléaire (RORSAT)</td></tr>
+<tr><td><b>Zenit</b></td><td>1985-2017</td><td>LOX/kérosène</td><td>13,7 t</td><td>Le plus moderne des lanceurs soviétiques (moteur RD-171), construit en Ukraine ; utilisé par Sea Launch depuis une plate-forme équatoriale flottante</td></tr>
+<tr><td><b>Energia</b></td><td>1987-1988</td><td>LOX/LH₂ + LOX/kérosène</td><td>100 t</td><td>2 vols seulement ; le plus puissant lanceur soviétique</td></tr>
+<tr><td><b>Dnepr / Rokot / Strela</b></td><td>1999-2019</td><td>Hypergoliques</td><td>3,7 t / 1,95 t</td><td>ICBM R-36M et UR-100N reconvertis en lanceurs commerciaux</td></tr>
+<tr><td><b>Angara</b></td><td>2014-aujourd'hui</td><td>LOX/kérosène</td><td>3,8 t (1.2) à 24,5 t (A5)</td><td>Premier lanceur entièrement russe (sans composants ukrainiens) ; modules URM interchangeables ; montée en cadence lente</td></tr>
+<tr><td><b>Soyouz-5 / Amour</b></td><td>en développement</td><td>LOX/kérosène, LOX/méthane</td><td>17 t / 10,5 t</td><td>Successeurs annoncés, dont un lanceur réutilisable au méthane</td></tr>
+</table>
+</div>
+
+<h3 id="europe">5. Les lanceurs européens</h3>
+
+<p>Détaillés page <a href="europe.html">L'Europe spatiale</a>. En résumé : <b>Diamant</b> (France, 1965-1975, 12 tirs), <b>Europa</b> (échec collectif, 1968-1971), puis la lignée <b>Ariane 1 à 6</b> (depuis 1979) et <b>Vega / Vega-C</b> (depuis 2012). Ariane 4 a régné sur le marché commercial des années 1990 avec 50 % des parts mondiales ; Ariane 5 a réalisé 117 lancements dont 112 succès consécutifs entre 2003 et 2017 ; Ariane 6 a effectué son vol inaugural le 9 juillet 2024 et son premier vol en configuration lourde <b>Ariane 64</b> le 12 février 2026.</p>
+
+<h3 id="asie">6. Chine, Japon, Inde</h3>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Les lanceurs asiatiques</caption>
+<tr><th>Lanceur</th><th>Pays</th><th>Depuis</th><th>LEO</th><th>Remarques</th></tr>
+<tr><td>Longue Marche 2F</td><td><span class="badge chn">CHN</span></td><td>1999</td><td class="num">8,4 t</td><td>Lanceur habité chinois (Shenzhou), 100 % de succès</td></tr>
+<tr><td>Longue Marche 3B/E</td><td><span class="badge chn">CHN</span></td><td>1996</td><td class="num">11,2 t</td><td>Lanceur géostationnaire de référence ; hypergolique</td></tr>
+<tr><td>Longue Marche 5 / 5B</td><td><span class="badge chn">CHN</span></td><td>2016</td><td class="num">25 t</td><td>Lanceur lourd cryogénique ; modules de Tiangong, Tianwen-1, Chang'e 5</td></tr>
+<tr><td>Longue Marche 6/7/8/12</td><td><span class="badge chn">CHN</span></td><td>2015-2024</td><td class="num">4 à 14 t</td><td>Nouvelle génération LOX/kérosène ; CZ-8 destinée à la cadence commerciale</td></tr>
+<tr><td>Longue Marche 10</td><td><span class="badge chn">CHN</span></td><td>essais depuis 2025</td><td class="num">70 t</td><td>Lanceur lunaire habité ; le premier étage 10B a réussi un retour propulsif le 10 juillet 2026</td></tr>
+<tr><td>H-IIA / H-IIB</td><td><span class="badge jpn">JPN</span></td><td>2001-2025</td><td class="num">10 à 16,5 t</td><td>Fiabilité de 98 % sur 50 tirs ; cargo HTV vers l'ISS</td></tr>
+<tr><td>H3</td><td><span class="badge jpn">JPN</span></td><td>2023</td><td class="num">4 à 7,9 t (GTO)</td><td>Moteur LE-9 à cycle expander bleed ; objectif : diviser le coût par deux</td></tr>
+<tr><td>Epsilon</td><td><span class="badge jpn">JPN</span></td><td>2013</td><td class="num">1,5 t</td><td>Lanceur léger à poudre, hérité de la lignée Mu</td></tr>
+<tr><td>PSLV</td><td><span class="badge ind">IND</span></td><td>1993</td><td class="num">3,8 t</td><td>Cheval de bataille indien ; record de <b>104 satellites</b> en un seul tir (15 février 2017)</td></tr>
+<tr><td>GSLV Mk II</td><td><span class="badge ind">IND</span></td><td>2001</td><td class="num">5 t</td><td>Étage cryogénique indigène après le refus russe de transfert de technologie (1993)</td></tr>
+<tr><td>LVM3 (GSLV Mk III)</td><td><span class="badge ind">IND</span></td><td>2014</td><td class="num">10 t</td><td>Lanceur de Chandrayaan-2 et 3, et futur lanceur habité de Gaganyaan</td></tr>
+<tr><td>SSLV</td><td><span class="badge ind">IND</span></td><td>2022</td><td class="num">500 kg</td><td>Micro-lanceur à bas coût, assemblage en 72 heures</td></tr>
+</table>
+</div>
+
+<h3 id="autres">7. Les autres nations</h3>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Les nations disposant d'un accès autonome à l'orbite</caption>
+<tr><th>#</th><th>Pays</th><th>Date du premier satellite national lancé par ses propres moyens</th><th>Lanceur</th><th>Statut en 2026</th></tr>
+<tr><td class="num">1</td><td><span class="badge urss">URSS</span> URSS / Russie</td><td>4 octobre 1957</td><td>Spoutnik (R-7)</td><td>Actif</td></tr>
+<tr><td class="num">2</td><td><span class="badge usa">USA</span> États-Unis</td><td>1<sup>er</sup> février 1958</td><td>Juno I</td><td>Actif</td></tr>
+<tr><td class="num">3</td><td><span class="badge eur">FRA</span> France</td><td>26 novembre 1965</td><td>Diamant A (Astérix)</td><td>Via l'ESA/Ariane</td></tr>
+<tr><td class="num">4</td><td><span class="badge jpn">JPN</span> Japon</td><td>11 février 1970</td><td>Lambda-4S (Ōsumi)</td><td>Actif</td></tr>
+<tr><td class="num">5</td><td><span class="badge chn">CHN</span> Chine</td><td>24 avril 1970</td><td>Longue Marche 1 (Dongfanghong 1)</td><td>Actif</td></tr>
+<tr><td class="num">6</td><td><span class="badge autre">GBR</span> Royaume-Uni</td><td>28 octobre 1971</td><td>Black Arrow (Prospero)</td><td class="ko">Programme annulé le jour même du succès</td></tr>
+<tr><td class="num">7</td><td><span class="badge eur">EUR</span> Europe (ESA)</td><td>24 décembre 1979</td><td>Ariane 1</td><td>Actif</td></tr>
+<tr><td class="num">8</td><td><span class="badge ind">IND</span> Inde</td><td>18 juillet 1980</td><td>SLV-3 (Rohini)</td><td>Actif</td></tr>
+<tr><td class="num">9</td><td><span class="badge autre">ISR</span> Israël</td><td>19 septembre 1988</td><td>Shavit (Ofek 1)</td><td>Actif — tire vers l'ouest, à contre-rotation, pour éviter de survoler ses voisins</td></tr>
+<tr><td class="num">10</td><td><span class="badge autre">IRN</span> Iran</td><td>2 février 2009</td><td>Safir (Omid)</td><td>Actif (Simorgh, Qased, Qaem)</td></tr>
+<tr><td class="num">11</td><td><span class="badge autre">PRK</span> Corée du Nord</td><td>12 décembre 2012</td><td>Unha-3 (Kwangmyongsong-3)</td><td>Actif (Chollima-1)</td></tr>
+<tr><td class="num">12</td><td><span class="badge autre">KOR</span> Corée du Sud</td><td>21 juin 2022 (Nuri, premier succès pleinement national)</td><td>KSLV-II Nuri</td><td>Actif</td></tr>
+<tr><td colspan="5"><i>Cas particuliers :</i> l'<b>Ukraine</b> construit les lanceurs Zenit et Tsyklon mais ne dispose pas de base de tir ; le <b>Brésil</b> a échoué trois fois avec le VLS-1 (dont l'explosion d'Alcântara le 22 août 2003, qui tua 21 ingénieurs) ; l'<b>Australie</b> a vu le lancement de WRESAT (1967) depuis Woomera par une fusée américaine ; l'<b>Italie</b> a lancé San Marco depuis une plate-forme au large du Kenya avec des Scout américains.</td></tr>
+</table>
+</div>
+
+<h3 id="tableau">8. Tableau général comparatif</h3>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Les lanceurs les plus puissants de l'histoire, classés par charge utile en orbite basse</caption>
+<tr><th>Rang</th><th>Lanceur</th><th>Pays</th><th>Période</th><th>Hauteur</th><th>Masse</th><th>Poussée</th><th>LEO</th><th>Vols (succès)</th></tr>
+<tr><td class="num">1</td><td><b>Starship</b></td><td><span class="badge priv">SpaceX</span></td><td>2023-</td><td class="num">121 m</td><td class="num">5 000 t</td><td class="num">74 400 kN</td><td class="num">100-150 t*</td><td class="num">en essais</td></tr>
+<tr><td class="num">2</td><td><b>Saturn V</b></td><td><span class="badge usa">USA</span></td><td>1967-1973</td><td class="num">110,6 m</td><td class="num">2 970 t</td><td class="num">34 000 kN</td><td class="num">140 t</td><td class="num">13 (13)</td></tr>
+<tr><td class="num">3</td><td><b>Energia</b></td><td><span class="badge urss">URSS</span></td><td>1987-1988</td><td class="num">58,8 m</td><td class="num">2 400 t</td><td class="num">34 800 kN</td><td class="num">100 t</td><td class="num">2 (2)</td></tr>
+<tr><td class="num">4</td><td><b>N1</b></td><td><span class="badge urss">URSS</span></td><td>1969-1972</td><td class="num">105,3 m</td><td class="num">2 735 t</td><td class="num">45 400 kN</td><td class="num">95 t*</td><td class="num">4 (0)</td></tr>
+<tr><td class="num">5</td><td><b>SLS Block 1</b></td><td><span class="badge usa">USA</span></td><td>2022-</td><td class="num">98,1 m</td><td class="num">2 610 t</td><td class="num">39 100 kN</td><td class="num">95 t</td><td class="num">2 (2)</td></tr>
+<tr><td class="num">6</td><td><b>Falcon Heavy</b></td><td><span class="badge priv">SpaceX</span></td><td>2018-</td><td class="num">70 m</td><td class="num">1 421 t</td><td class="num">22 800 kN</td><td class="num">63,8 t</td><td class="num">11+ (11)</td></tr>
+<tr><td class="num">7</td><td><b>Longue Marche 10</b></td><td><span class="badge chn">CHN</span></td><td>2025-</td><td class="num">92 m</td><td class="num">2 187 t</td><td class="num">26 500 kN</td><td class="num">70 t</td><td class="num">essais</td></tr>
+<tr><td class="num">8</td><td><b>New Glenn</b></td><td><span class="badge priv">Blue Origin</span></td><td>2025-</td><td class="num">98 m</td><td class="num">1 450 t</td><td class="num">17 100 kN</td><td class="num">45 t</td><td class="num">2+ (2)</td></tr>
+<tr><td class="num">9</td><td><b>Space Shuttle</b></td><td><span class="badge usa">USA</span></td><td>1981-2011</td><td class="num">56,1 m</td><td class="num">2 030 t</td><td class="num">30 250 kN</td><td class="num">27,5 t</td><td class="num">135 (133)</td></tr>
+<tr><td class="num">10</td><td><b>Delta IV Heavy</b></td><td><span class="badge usa">USA</span></td><td>2004-2024</td><td class="num">72 m</td><td class="num">733 t</td><td class="num">9 420 kN</td><td class="num">28,8 t</td><td class="num">16 (15)</td></tr>
+<tr><td class="num">11</td><td><b>Vulcan Centaur</b></td><td><span class="badge usa">USA</span></td><td>2024-</td><td class="num">61,6 m</td><td class="num">546 t</td><td class="num">10 500 kN</td><td class="num">27,2 t</td><td class="num">4+ (4)</td></tr>
+<tr><td class="num">12</td><td><b>Longue Marche 5</b></td><td><span class="badge chn">CHN</span></td><td>2016-</td><td class="num">57 m</td><td class="num">869 t</td><td class="num">10 620 kN</td><td class="num">25 t</td><td class="num">14+ (13)</td></tr>
+<tr><td class="num">13</td><td><b>Angara A5</b></td><td><span class="badge urss">RUS</span></td><td>2014-</td><td class="num">55,4 m</td><td class="num">773 t</td><td class="num">9 610 kN</td><td class="num">24,5 t</td><td class="num">6+ (5)</td></tr>
+<tr><td class="num">14</td><td><b>Proton-M</b></td><td><span class="badge urss">RUS</span></td><td>2001-2025</td><td class="num">58,2 m</td><td class="num">705 t</td><td class="num">10 530 kN</td><td class="num">23 t</td><td class="num">400+ famille</td></tr>
+<tr><td class="num">15</td><td><b>Falcon 9 Block 5</b></td><td><span class="badge priv">SpaceX</span></td><td>2018-</td><td class="num">70 m</td><td class="num">549 t</td><td class="num">7 600 kN</td><td class="num">22,8 t</td><td class="num">500+ (99,3 %)</td></tr>
+<tr><td class="num">16</td><td><b>Ariane 6 (A64)</b></td><td><span class="badge eur">EUR</span></td><td>2024-</td><td class="num">63 m</td><td class="num">870 t</td><td class="num">14 900 kN</td><td class="num">21,6 t</td><td class="num">5+ </td></tr>
+<tr><td class="num">17</td><td><b>Ariane 5 ECA</b></td><td><span class="badge eur">EUR</span></td><td>1996-2023</td><td class="num">53 m</td><td class="num">777 t</td><td class="num">13 000 kN</td><td class="num">21 t</td><td class="num">117 (112)</td></tr>
+<tr><td colspan="9" class="note">* performances annoncées, non encore démontrées en vol opérationnel. Poussées au niveau de la mer.</td></tr>
+</table>
+</div>
+
+<h3 id="records">9. Records et fiabilité</h3>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Records de l'histoire des lanceurs</caption>
+<tr><th>Record</th><th>Détenteur</th><th>Valeur</th></tr>
+<tr><td>Famille la plus lancée</td><td>R-7 (Spoutnik/Vostok/Soyouz)</td><td class="num">1 970+ tirs depuis 1957</td></tr>
+<tr><td>Modèle unique le plus lancé</td><td>Soyouz-U</td><td class="num">786 tirs (1973-2017), 97,3 % de succès</td></tr>
+<tr><td>Plus longue série de succès consécutifs</td><td>Falcon 9</td><td class="num">300+ (série en cours depuis 2021)</td></tr>
+<tr><td>Plus grande poussée au décollage</td><td>Starship / Super Heavy</td><td class="num">74 400 kN (7 590 tf)</td></tr>
+<tr><td>Plus grande charge utile lancée</td><td>Saturn V (Skylab)</td><td class="num">76,5 t en un seul objet</td></tr>
+<tr><td>Plus de satellites en un lancement</td><td>Falcon 9 (Transporter-6)</td><td class="num">143 satellites (janvier 2023)</td></tr>
+<tr><td>Cadence annuelle record d'un opérateur</td><td>SpaceX</td><td class="num">165 vols Falcon 9 en 2025</td></tr>
+<tr><td>Cadence mondiale record</td><td>Toutes nations</td><td class="num">324 tentatives orbitales en 2025</td></tr>
+<tr><td>Premier étage le plus réutilisé</td><td>Falcon 9 B1067 (et similaires)</td><td class="num">30 vols et plus</td></tr>
+</table>
+</div>
+
+<h3 id="bases">10. Les bases de lancement</h3>
+
+<p>La latitude d'un site détermine le « coup de pouce » gratuit fourni par la rotation terrestre (465 m/s à l'équateur) et les inclinaisons orbitales accessibles sans manœuvre coûteuse. D'où l'avantage décisif de Kourou.</p>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Les principales bases de lancement du monde</caption>
+<tr><th>Base</th><th>Pays</th><th>Latitude</th><th>Ouverture</th><th>Lanceurs</th><th>Particularité</th></tr>
+<tr><td><b>Centre spatial guyanais</b> (Kourou)</td><td>France / ESA</td><td class="num">5,2° N</td><td>1968</td><td>Ariane, Vega, Soyouz (2011-2022)</td><td class="ok">Latitude quasi équatoriale : +17 % de charge utile en GTO par rapport à Cap Canaveral ; tir au-dessus de l'océan sur 3 000 km</td></tr>
+<tr><td><b>Cap Canaveral / Kennedy</b></td><td>États-Unis</td><td class="num">28,5° N</td><td>1950</td><td>Falcon, Atlas, Vulcan, SLS, New Glenn</td><td>Le site le plus actif du monde ; complexes 39A et 39B hérités d'Apollo</td></tr>
+<tr><td><b>Baïkonour</b> (Tioura-Tam)</td><td>Kazakhstan (loué par la Russie)</td><td class="num">45,9° N</td><td>1955</td><td>Soyouz, Proton</td><td>Le plus ancien et le plus grand cosmodrome du monde : 6 717 km²</td></tr>
+<tr><td><b>Vandenberg</b></td><td>États-Unis</td><td class="num">34,7° N</td><td>1958</td><td>Falcon 9, Minotaur</td><td>Orbites polaires et héliosynchrones, tir vers le sud au-dessus du Pacifique</td></tr>
+<tr><td><b>Plessetsk</b></td><td>Russie</td><td class="num">62,9° N</td><td>1957</td><td>Soyouz-2, Angara</td><td>Base la plus septentrionale ; a longtemps détenu le record mondial du nombre de tirs</td></tr>
+<tr><td><b>Vostotchny</b></td><td>Russie</td><td class="num">51,9° N</td><td>2016</td><td>Soyouz-2, Angara</td><td>Construit pour réduire la dépendance à Baïkonour</td></tr>
+<tr><td><b>Jiuquan</b></td><td>Chine</td><td class="num">40,9° N</td><td>1958</td><td>Longue Marche 2F</td><td>Base des vols habités chinois</td></tr>
+<tr><td><b>Xichang</b> / <b>Taiyuan</b></td><td>Chine</td><td class="num">28,2° N / 38,8° N</td><td>1984 / 1968</td><td>CZ-3B, CZ-4</td><td>Géostationnaire et héliosynchrone ; retombées d'étages sur des zones habitées</td></tr>
+<tr><td><b>Wenchang</b></td><td>Chine (île de Hainan)</td><td class="num">19,6° N</td><td>2016</td><td>CZ-5, CZ-7, CZ-8</td><td>Site côtier : autorise les gros lanceurs transportés par mer</td></tr>
+<tr><td><b>Tanegashima</b></td><td>Japon</td><td class="num">30,4° N</td><td>1969</td><td>H-IIA, H3</td><td>Longtemps limité à deux fenêtres de tir par an à cause des pêcheurs locaux</td></tr>
+<tr><td><b>Satish Dhawan</b> (Sriharikota)</td><td>Inde</td><td class="num">13,7° N</td><td>1971</td><td>PSLV, GSLV, LVM3</td><td>Île-barrière sur la côte est</td></tr>
+<tr><td><b>Mahia</b></td><td>Nouvelle-Zélande</td><td class="num">39,3° S</td><td>2017</td><td>Electron</td><td>Premier site de lancement orbital privé au monde</td></tr>
+<tr><td><b>Starbase</b> (Boca Chica)</td><td>États-Unis</td><td class="num">25,9° N</td><td>2019</td><td>Starship</td><td>Site intégré de production et de lancement</td></tr>
+</table>
+</div>
+
+<!-- NAVPAGES -->
+
+</div><!-- /contenu -->
