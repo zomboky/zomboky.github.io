@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Les cosmodromes — NEW HORIZON</title>
+<meta name="description" content="Baïkonour, Plessetsk, Vostotchny, Canaveral, Vandenberg, Kourou, Wenchang, Sriharikota, Mahia : pourquoi la latitude et les couloirs de tir décident de tout.">
+<link rel="shortcut icon" type="image/x-icon" href="https://raw.githubusercontent.com/zomboky/zomboky.github.io/master/docs/assets/icons/ours.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+
+<div class="bandeau">
+  <h1>NEW <span class="rouge">HORIZON</span></h1>
+  <p class="sous-titre">L'encyclopédie de la conquête spatiale &middot; 1232 &rarr; 2026 &middot; toutes les nations</p>
+  <div class="filets"></div>
+</div>
+
+<div class="menu">
+  <a href="index.html">Accueil</a>
+  <span class="menu-ep">I &middot; Avant le spatial (…→1957)</span>
+  <a href="avant-espace.html">Avant l'espace</a>
+  <a href="pionniers.html">Pionniers</a>
+  <a href="propulsion.html">Propulsion</a>
+  <a href="animaux.html">Animaux</a>
+  <a class="actif" href="cosmodromes.html">Cosmodromes</a>
+  <span class="menu-ep">II &middot; L'ouverture de l'espace (1957→1969)</span>
+  <a href="spoutnik.html">Spoutnik</a>
+  <a href="lanceurs.html">Lanceurs</a>
+  <a href="sondes.html">Sondes</a>
+  <a href="satellites.html">Satellites</a>
+  <a href="mercury-gemini.html">Mercury/Gemini</a>
+  <a href="apollo.html">Apollo</a>
+  <a href="lune-sovietique.html">Lune URSS</a>
+  <a href="europe.html">Europe</a>
+  <span class="menu-ep">III &middot; Stations et navettes (1970→2000)</span>
+  <a href="chine.html">Chine</a>
+  <a href="nations.html">Nations</a>
+  <a href="stations.html">Stations</a>
+  <a href="navettes.html">Navettes</a>
+  <span class="menu-ep">IV &middot; L'espace contemporain (2000→2026)</span>
+  <a href="newspace.html">NewSpace</a>
+  <a href="artemis.html">Artemis</a>
+  <span class="menu-ep">Annexes</span>
+  <a href="accidents.html">Accidents</a>
+  <a href="hommes.html">Équipages</a>
+  <a href="donnees.html">Données</a>
+  <a href="chronologie.html">Chronologie</a>
+</div>
+
+<div class="bandeau-defilant">
+  <marquee behavior="scroll" direction="left" scrollamount="4">
+    ★ BIENVENUE DANS LE CENTRE DE CONTRÔLE ★ 324 lancements orbitaux en 2025, record absolu ★ Artemis II a emmené 4 astronautes autour de la Lune le 1<sup>er</sup> avril 2026 ★ 700+ humains ont volé dans l'espace depuis Gagarine ★ Voyager 1 est à plus de 25 milliards de km ★ Bonne visite !
+  </marquee>
+</div>
+
+<div class="ariane">Vous êtes ici : <a href="index.html">Accueil</a> &rsaquo; <b>Cosmodromes</b></div>
+
+<div class="contenu">
+
+<h2>Les cosmodromes : la géographie commande</h2>
+
+<p>On ne choisit pas un pas de tir. On le subit. Trois contraintes déterminent l'emplacement
+d'une base de lancement, et aucune n'est négociable : la <b>latitude</b>, qui fixe les orbites
+accessibles et la vitesse offerte par la rotation terrestre ; les <b>couloirs de tir</b>, qui
+imposent qu'un étage largué ne retombe pas sur une ville ; et la <b>logistique</b>, qui
+détermine si l'on peut acheminer un lanceur de 5 mètres de diamètre. Cette page explique ces
+règles, puis passe en revue les seize sites qui comptent.</p>
+
+<div class="sommaire">
+  <span class="titre">Sur cette page</span>
+  <ol>
+    <li><a href="#rotation">Le cadeau de la rotation terrestre</a></li>
+    <li><a href="#inclinaison">La règle d'or : on ne descend pas sous sa latitude</a></li>
+    <li><a href="#azimut">Azimuts, couloirs de tir et zones de retombée</a></li>
+    <li><a href="#baikonour">Baïkonour, le plus grand et le plus trompeur</a></li>
+    <li><a href="#plessetsk">Plessetsk, la base qui n'existait pas</a></li>
+    <li><a href="#vostotchny">Vostotchny, le divorce d'avec le Kazakhstan</a></li>
+    <li><a href="#canaveral">Cap Canaveral et le Kennedy Space Center</a></li>
+    <li><a href="#vandenberg">Vandenberg : tirer vers le sud</a></li>
+    <li><a href="#wallops">Wallops et les petits lanceurs</a></li>
+    <li><a href="#kourou">Kourou, le mieux placé du monde</a></li>
+    <li><a href="#chine">Les quatre sites chinois</a></li>
+    <li><a href="#asie">Japon et Inde</a></li>
+    <li><a href="#sud">Hémisphère sud : Alcântara et Mahia</a></li>
+    <li><a href="#tableau">Tableau général des cosmodromes</a></li>
+  </ol>
+</div>
+
+<h3 id="rotation">1. Le cadeau de la rotation terrestre</h3>
+
+<p>La Terre tourne. Un point de l'équateur se déplace vers l'est à <b>465 m/s</b>, soit
+1 674 km/h. Un lanceur qui décolle vers l'est part donc avec cette vitesse déjà acquise —
+c'est autant de Δv que les moteurs n'auront pas à fournir. Mais ce cadeau diminue avec la
+latitude, selon une loi élémentaire :</p>
+
+<div class="mono">
+  v<sub>rotation</sub> = 465,1 × cos( latitude ) &nbsp;&nbsp; [m/s]
+</div>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Vitesse offerte par la rotation terrestre selon la latitude du pas de tir</caption>
+<tr><th>Site</th><th>Latitude</th><th>Gain vers l'est</th><th>Manque à gagner par rapport à l'équateur</th></tr>
+<tr><td class="ok"><b>Alcântara</b> <span class="badge autre">Brésil</span></td><td class="num">2,34° S</td><td class="num">464,7 m/s</td><td class="num">0,4 m/s</td></tr>
+<tr><td class="ok"><b>Kourou</b> <span class="badge eur">Europe</span></td><td class="num">5,17° N</td><td class="num">463,2 m/s</td><td class="num">1,9 m/s</td></tr>
+<tr><td><b>Sriharikota</b> <span class="badge ind">Inde</span></td><td class="num">13,72° N</td><td class="num">451,8 m/s</td><td class="num">13,3 m/s</td></tr>
+<tr><td><b>Wenchang</b> <span class="badge chn">Chine</span></td><td class="num">19,61° N</td><td class="num">438,1 m/s</td><td class="num">27,0 m/s</td></tr>
+<tr><td><b>Xichang</b> <span class="badge chn">Chine</span></td><td class="num">28,25° N</td><td class="num">409,7 m/s</td><td class="num">55,4 m/s</td></tr>
+<tr><td><b>Cap Canaveral / KSC</b> <span class="badge usa">É.-U.</span></td><td class="num">28,52° N</td><td class="num">408,6 m/s</td><td class="num">56,5 m/s</td></tr>
+<tr><td><b>Tanegashima</b> <span class="badge jpn">Japon</span></td><td class="num">30,40° N</td><td class="num">401,2 m/s</td><td class="num">63,9 m/s</td></tr>
+<tr><td><b>Uchinoura</b> <span class="badge jpn">Japon</span></td><td class="num">31,25° N</td><td class="num">397,6 m/s</td><td class="num">67,5 m/s</td></tr>
+<tr><td><b>Vandenberg</b> <span class="badge usa">É.-U.</span></td><td class="num">34,75° N</td><td class="num">382,1 m/s</td><td class="num">83,0 m/s</td></tr>
+<tr><td><b>Wallops</b> <span class="badge usa">É.-U.</span></td><td class="num">37,83° N</td><td class="num">367,3 m/s</td><td class="num">97,8 m/s</td></tr>
+<tr><td><b>Taiyuan</b> <span class="badge chn">Chine</span></td><td class="num">38,85° N</td><td class="num">362,2 m/s</td><td class="num">102,9 m/s</td></tr>
+<tr><td><b>Mahia</b> <span class="badge priv">Rocket Lab</span></td><td class="num">39,26° S</td><td class="num">360,1 m/s</td><td class="num">105,0 m/s</td></tr>
+<tr><td><b>Jiuquan</b> <span class="badge chn">Chine</span></td><td class="num">40,96° N</td><td class="num">351,2 m/s</td><td class="num">113,9 m/s</td></tr>
+<tr><td><b>Baïkonour</b> <span class="badge urss">Russie/Kaz.</span></td><td class="num">45,97° N</td><td class="num">323,3 m/s</td><td class="num">141,8 m/s</td></tr>
+<tr><td><b>Vostotchny</b> <span class="badge urss">Russie</span></td><td class="num">51,89° N</td><td class="num">287,1 m/s</td><td class="num">178,0 m/s</td></tr>
+<tr><td class="ko"><b>Plessetsk</b> <span class="badge urss">Russie</span></td><td class="num">62,93° N</td><td class="num">211,7 m/s</td><td class="num">253,4 m/s</td></tr>
+</table>
+</div>
+
+<div class="encadre">
+  <span class="titre">253 m/s, est-ce beaucoup ?</span>
+  L'écart entre Plessetsk et l'équateur est de 253 m/s — sur un budget de mise en orbite de
+  9 400 m/s, cela représente <b>2,7 %</b> du Δv total. Cela paraît négligeable. Ça ne l'est
+  pas : par le jeu du logarithme de l'équation de Tsiolkovski (voir
+  <a href="propulsion.html">Propulsion</a>), quelques pour cent de Δv se traduisent par
+  <b>plusieurs dizaines de pour cent de charge utile</b>. Pour une mission géostationnaire,
+  l'écart entre Kourou et Cap Canaveral atteint couramment <b>10 à 15 % de masse utile</b> —
+  une différence commerciale décisive, et la raison d'être du succès d'Ariane dans les années
+  1980.
+</div>
+
+<h3 id="inclinaison">2. La règle d'or : on ne descend pas sous sa latitude</h3>
+
+<p>La contrainte la plus rigide n'est pas énergétique, elle est géométrique. Le plan d'une
+orbite passe nécessairement par le <b>centre de la Terre</b>. Or le pas de tir se trouve sur
+l'orbite au moment du largage. Il en découle une règle sans exception :</p>
+
+<div class="mono">
+  inclinaison minimale atteignable = latitude du pas de tir
+</div>
+
+<p>Un lanceur parti de Baïkonour (46° N) ne peut donc pas placer directement un satellite sur
+une orbite inclinée à 30°. Pour y parvenir, il faudrait un <b>changement de plan</b> en
+orbite — la manœuvre la plus coûteuse de toute la mécanique spatiale, dont le prix approche
+plusieurs kilomètres par seconde de Δv.</p>
+
+<div class="schema">
+<svg viewBox="0 0 900 380" role="img" aria-label="Pourquoi l'inclinaison d'une orbite ne peut pas être inférieure à la latitude du pas de tir">
+  <rect width="900" height="380" fill="#000"/>
+
+  <g font-family="Courier New, monospace" font-size="11" fill="#ffcc00">
+    <text x="20" y="22">POURQUOI ON NE DESCEND JAMAIS SOUS SA LATITUDE</text>
+  </g>
+
+  <!-- ===== cas 1 : Kourou ===== -->
+  <g transform="translate(215,200)">
+    <text x="0" y="-160" font-family="Arial, sans-serif" font-size="12" fill="#ffffff" text-anchor="middle">Kourou · 5,2° N</text>
+    <!-- Terre -->
+    <circle cx="0" cy="0" r="88" fill="#001a2a" stroke="#00ccff" stroke-width="2"/>
+    <!-- equateur -->
+    <ellipse cx="0" cy="0" rx="88" ry="17" fill="none" stroke="#00cc66" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="96" y="4" font-family="Courier New, monospace" font-size="9" fill="#00cc66">équateur</text>
+    <!-- axe -->
+    <line x1="0" y1="-104" x2="0" y2="104" stroke="#555" stroke-width="1" stroke-dasharray="3 3"/>
+    <!-- site -->
+    <circle cx="86" cy="-8" r="4" fill="#ffcc00"/>
+    <!-- orbite faiblement inclinee -->
+    <ellipse cx="0" cy="0" rx="88" ry="22" fill="none" stroke="#ff9900" stroke-width="2" transform="rotate(-5)"/>
+    <text x="0" y="126" font-family="Courier New, monospace" font-size="10" fill="#ff9900" text-anchor="middle">i minimale = 5,2°</text>
+    <text x="0" y="142" font-family="Arial, sans-serif" font-size="10" fill="#cfe3ff" text-anchor="middle">quasi équatorial : le géostationnaire</text>
+    <text x="0" y="156" font-family="Arial, sans-serif" font-size="10" fill="#cfe3ff" text-anchor="middle">coûte presque rien de plus</text>
+  </g>
+
+  <!-- ===== cas 2 : Baikonour ===== -->
+  <g transform="translate(650,200)">
+    <text x="0" y="-160" font-family="Arial, sans-serif" font-size="12" fill="#ffffff" text-anchor="middle">Baïkonour · 46,0° N</text>
+    <circle cx="0" cy="0" r="88" fill="#001a2a" stroke="#00ccff" stroke-width="2"/>
+    <ellipse cx="0" cy="0" rx="88" ry="17" fill="none" stroke="#00cc66" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="96" y="4" font-family="Courier New, monospace" font-size="9" fill="#00cc66">équateur</text>
+    <line x1="0" y1="-104" x2="0" y2="104" stroke="#555" stroke-width="1" stroke-dasharray="3 3"/>
+    <!-- site a 46 N -->
+    <circle cx="61" cy="-63" r="4" fill="#ffcc00"/>
+    <text x="70" y="-68" font-family="Courier New, monospace" font-size="9" fill="#ffcc00">46° N</text>
+    <!-- orbite inclinee 46 -->
+    <ellipse cx="0" cy="0" rx="88" ry="62" fill="none" stroke="#ff9900" stroke-width="2" transform="rotate(-40)"/>
+    <!-- orbite equatoriale impossible -->
+    <ellipse cx="0" cy="0" rx="88" ry="17" fill="none" stroke="#ff4444" stroke-width="2"/>
+    <g stroke="#ff4444" stroke-width="2">
+      <line x1="-24" y1="-24" x2="24" y2="24" transform="translate(0,0)"/>
+      <line x1="24" y1="-24" x2="-24" y2="24"/>
+    </g>
+    <text x="0" y="126" font-family="Courier New, monospace" font-size="10" fill="#ff9900" text-anchor="middle">i minimale = 46°</text>
+    <text x="0" y="142" font-family="Arial, sans-serif" font-size="10" fill="#ff6666" text-anchor="middle">l'orbite équatoriale ne passe pas</text>
+    <text x="0" y="156" font-family="Arial, sans-serif" font-size="10" fill="#ff6666" text-anchor="middle">par le pas de tir : impossible directement</text>
+  </g>
+
+  <!-- explication centrale -->
+  <g transform="translate(30,314)">
+    <rect x="0" y="0" width="840" height="52" fill="#001133" stroke="#3366cc" stroke-width="1"/>
+    <g font-family="Arial, sans-serif" font-size="11" fill="#cfe3ff">
+      <text x="14" y="21">Le plan d'une orbite contient obligatoirement le centre de la Terre. Comme le pas de tir se trouve sur l'orbite à l'instant du largage,</text>
+      <text x="14" y="39">ce plan doit passer par sa latitude — donc s'incliner au moins d'autant. Descendre plus bas exige un changement de plan en orbite, à plusieurs km/s.</text>
+    </g>
+  </g>
+</svg>
+<div class="legende">À gauche, un site quasi équatorial : toutes les orbites lui sont ouvertes. À droite, un site à 46° de latitude : l'orbite équatoriale (en rouge) ne passe pas par le pas de tir et lui est donc inaccessible sans manœuvre coûteuse. Représentation schématique.</div>
+</div>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Conséquences directes de la latitude sur les missions possibles</caption>
+<tr><th>Type d'orbite</th><th>Inclinaison requise</th><th>Sites bien placés</th><th>Sites mal placés</th></tr>
+<tr><td><b>Géostationnaire</b></td><td class="num">0°</td><td class="ok">Kourou, Alcântara, Sriharikota, Wenchang</td><td class="ko">Plessetsk, Vostotchny, Baïkonour</td></tr>
+<tr><td><b>Station spatiale internationale</b></td><td class="num">51,6°</td><td class="ok">Baïkonour (46°), Canaveral (28,5°) — tous deux sous 51,6°</td><td>—</td></tr>
+<tr><td><b>Héliosynchrone</b></td><td class="num">~ 98° (rétrograde)</td><td class="ok">Vandenberg, Taiyuan, Plessetsk, Sriharikota, Mahia</td><td class="part">Sites contraints à tirer vers l'est</td></tr>
+<tr><td><b>Molnia</b> (fortement elliptique)</td><td class="num">63,4°</td><td class="ok">Plessetsk (62,9°) — quasi exactement à la bonne latitude</td><td class="ko">Kourou</td></tr>
+<tr><td><b>Polaire</b></td><td class="num">90°</td><td class="ok">Accessible depuis n'importe quelle latitude</td><td>—</td></tr>
+</table>
+</div>
+
+<div class="note">
+  L'inclinaison de <b>51,6°</b> de la Station spatiale internationale n'a pas été choisie
+  pour des raisons scientifiques : c'est un compromis politique. Il fallait une orbite
+  atteignable depuis <b>Baïkonour</b> — dont la latitude de 46° et les couloirs de tir
+  autorisés imposaient au minimum cette inclinaison — tout en restant accessible aux navettes
+  américaines parties de Floride. La géographie kazakhe a donc dicté l'orbite de la plus
+  grande structure jamais assemblée dans l'espace. Voir <a href="stations.html">Stations</a>.
+</div>
+
+<h3 id="azimut">3. Azimuts, couloirs de tir et zones de retombée</h3>
+
+<p>La latitude fixe la borne basse ; les <b>couloirs de tir</b> font le reste. Un lanceur
+largue des étages qui retombent : il est donc interdit de survoler des zones peuplées pendant
+les premières minutes. Chaque base dispose ainsi d'un <b>éventail d'azimuts autorisés</b>,
+souvent bien plus restrictif que la physique ne l'exigerait.</p>
+
+<div class="schema">
+<svg viewBox="0 0 900 420" role="img" aria-label="Éventails d'azimuts autorisés depuis quatre grandes bases de lancement">
+  <rect width="900" height="420" fill="#000"/>
+
+  <g font-family="Courier New, monospace" font-size="11" fill="#ffcc00">
+    <text x="20" y="22">COULOIRS DE TIR AUTORISÉS — VUE DE DESSUS, NORD EN HAUT</text>
+  </g>
+
+  <!-- ============ KOUROU ============ -->
+  <g transform="translate(150,150)">
+    <text x="0" y="-118" font-family="Arial, sans-serif" font-size="12" fill="#ffffff" text-anchor="middle">Kourou · 5,2° N</text>
+    <!-- terre a l'ouest -->
+    <path d="M-100 -100 L0 -100 L0 100 L-100 100 Z" fill="#0d2a0d"/>
+    <text x="-58" y="4" font-family="Courier New, monospace" font-size="9" fill="#4a8a4a" text-anchor="middle">continent</text>
+    <!-- ocean a l'est -->
+    <path d="M0 -100 L100 -100 L100 100 L0 100 Z" fill="#00161f"/>
+    <text x="58" y="-80" font-family="Courier New, monospace" font-size="9" fill="#2a6a8a" text-anchor="middle">Atlantique</text>
+    <!-- eventail -10.5 a 93.5 depuis le nord -->
+    <path d="M0 0 L18 -98 A100 100 0 0 1 99 -6 Z" fill="#00663a" fill-opacity="0.45" stroke="#00ff88" stroke-width="1.5"/>
+    <circle cx="0" cy="0" r="4" fill="#ffcc00"/>
+    <g font-family="Courier New, monospace" font-size="9" fill="#00ff88">
+      <text x="0" y="-106" text-anchor="middle">−10,5°</text>
+      <text x="106" y="-2">93,5°</text>
+    </g>
+    <text x="0" y="124" font-family="Courier New, monospace" font-size="10" fill="#00ff88" text-anchor="middle">104° d'ouverture</text>
+    <text x="0" y="138" font-family="Arial, sans-serif" font-size="10" fill="#cfe3ff" text-anchor="middle">du polaire au géostationnaire</text>
+  </g>
+
+  <!-- ============ CANAVERAL ============ -->
+  <g transform="translate(400,150)">
+    <text x="0" y="-118" font-family="Arial, sans-serif" font-size="12" fill="#ffffff" text-anchor="middle">Canaveral · 28,5° N</text>
+    <path d="M-100 -100 L0 -100 L0 100 L-100 100 Z" fill="#0d2a0d"/>
+    <text x="-58" y="4" font-family="Courier New, monospace" font-size="9" fill="#4a8a4a" text-anchor="middle">Floride</text>
+    <path d="M0 -100 L100 -100 L100 100 L0 100 Z" fill="#00161f"/>
+    <!-- eventail 35 a 120 -->
+    <path d="M0 0 L57 -82 A100 100 0 0 1 87 50 Z" fill="#00663a" fill-opacity="0.45" stroke="#00ff88" stroke-width="1.5"/>
+    <circle cx="0" cy="0" r="4" fill="#ffcc00"/>
+    <g font-family="Courier New, monospace" font-size="9" fill="#00ff88">
+      <text x="62" y="-88">35°</text>
+      <text x="94" y="58">120°</text>
+    </g>
+    <!-- interdit vers le nord : Bahamas / cotes -->
+    <g stroke="#ff4444" stroke-width="1.5" stroke-dasharray="4 3" fill="none">
+      <path d="M0 0 L0 -100"/>
+    </g>
+    <text x="4" y="-92" font-family="Courier New, monospace" font-size="9" fill="#ff6666">côte est</text>
+    <text x="0" y="124" font-family="Courier New, monospace" font-size="10" fill="#00ff88" text-anchor="middle">85° d'ouverture</text>
+    <text x="0" y="138" font-family="Arial, sans-serif" font-size="10" fill="#cfe3ff" text-anchor="middle">i de 28,5° à 57°</text>
+  </g>
+
+  <!-- ============ VANDENBERG ============ -->
+  <g transform="translate(650,150)">
+    <text x="0" y="-118" font-family="Arial, sans-serif" font-size="12" fill="#ffffff" text-anchor="middle">Vandenberg · 34,8° N</text>
+    <path d="M0 -100 L100 -100 L100 100 L0 100 Z" fill="#0d2a0d"/>
+    <text x="58" y="4" font-family="Courier New, monospace" font-size="9" fill="#4a8a4a" text-anchor="middle">Californie</text>
+    <path d="M-100 -100 L0 -100 L0 100 L-100 100 Z" fill="#00161f"/>
+    <text x="-58" y="-80" font-family="Courier New, monospace" font-size="9" fill="#2a6a8a" text-anchor="middle">Pacifique</text>
+    <!-- eventail vers le sud : 158 a 201 -->
+    <path d="M0 0 L37 93 A100 100 0 0 1 -36 93 Z" fill="#663300" fill-opacity="0.5" stroke="#ff9900" stroke-width="1.5"/>
+    <circle cx="0" cy="0" r="4" fill="#ffcc00"/>
+    <g font-family="Courier New, monospace" font-size="9" fill="#ffcc66">
+      <text x="44" y="102">158°</text>
+      <text x="-52" y="102">201°</text>
+    </g>
+    <text x="0" y="124" font-family="Courier New, monospace" font-size="10" fill="#ff9900" text-anchor="middle">tir vers le SUD</text>
+    <text x="0" y="138" font-family="Arial, sans-serif" font-size="10" fill="#cfe3ff" text-anchor="middle">polaire et héliosynchrone</text>
+  </g>
+
+  <!-- ============ BAIKONOUR ============ -->
+  <g transform="translate(275,320)">
+    <text x="0" y="-58" font-family="Arial, sans-serif" font-size="12" fill="#ffffff" text-anchor="middle">Baïkonour · 46,0° N — enclavé</text>
+    <rect x="-160" y="-44" width="320" height="94" fill="#1a1400" stroke="#665500" stroke-width="1"/>
+    <text x="0" y="-26" font-family="Arial, sans-serif" font-size="10" fill="#ccbb66" text-anchor="middle">Aucune mer sous la trajectoire : tous les étages</text>
+    <text x="0" y="-10" font-family="Arial, sans-serif" font-size="10" fill="#ccbb66" text-anchor="middle">retombent sur des terres habitées du Kazakhstan,</text>
+    <text x="0" y="6" font-family="Arial, sans-serif" font-size="10" fill="#ccbb66" text-anchor="middle">de Russie et d'Asie centrale.</text>
+    <text x="0" y="28" font-family="Courier New, monospace" font-size="10" fill="#ff6666" text-anchor="middle">Survol de la Chine interdit → azimuts fortement bridés</text>
+    <text x="0" y="44" font-family="Courier New, monospace" font-size="10" fill="#ffcc00" text-anchor="middle">i minimale pratique : 51,6°, et non 46°</text>
+  </g>
+
+  <!-- encart regle -->
+  <g transform="translate(600,276)">
+    <rect x="0" y="0" width="270" height="94" fill="#001133" stroke="#3366cc" stroke-width="1"/>
+    <text x="12" y="20" font-family="Courier New, monospace" font-size="10" fill="#99bbff">RELATION AZIMUT ↔ INCLINAISON</text>
+    <text x="12" y="42" font-family="Courier New, monospace" font-size="11" fill="#cfe3ff">cos( i ) = sin( azimut ) × cos( lat )</text>
+    <text x="12" y="64" font-family="Arial, sans-serif" font-size="10" fill="#cfe3ff">Azimut 90° (plein est) → i = latitude.</text>
+    <text x="12" y="80" font-family="Arial, sans-serif" font-size="10" fill="#cfe3ff">Azimut 180° (plein sud) → i = 90°, polaire.</text>
+  </g>
+</svg>
+<div class="legende">Kourou dispose de l'éventail le plus large du monde : 104 degrés d'azimuts au-dessus de l'Atlantique, sans aucune terre habitée sous la trajectoire. Baïkonour, entièrement enclavé, est à l'opposé — ses couloirs sont fixés par la géopolitique autant que par la physique. Valeurs indicatives.</div>
+</div>
+
+<h3 id="baikonour">4. Baïkonour, le plus grand et le plus trompeur</h3>
+
+<figure class="fig-droite">
+  <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Baikonur_Cosmodrome_Soyuz_launch_pad.jpg?width=360" alt="Pas de tir Soyouz du cosmodrome de Baïkonour">
+  <figcaption>Un pas de tir Soyouz à Baïkonour. Le lanceur est suspendu par quatre bras basculants qui s'écartent sous l'effet de son propre poids au décollage.<br><span class="credit">NASA / domaine public</span></figcaption>
+</figure>
+
+<div class="fiche">
+  <h4>Fiche — Cosmodrome de Baïkonour <span class="badge urss">Russie / Kazakhstan</span></h4>
+  <dl>
+    <dt>Position</dt><dd>45,965° N — 63,305° E, à 90 m d'altitude</dd>
+    <dt>Construction</dt><dd>1955</dd>
+    <dt>Superficie</dt><dd>Environ <b>6 700 km²</b> — le plus vaste complexe de lancement du monde, plus grand que la Corse</dd>
+    <dt>Statut</dt><dd>Territoire kazakh <b>loué à la Russie</b> par un bail courant jusqu'en 2050</dd>
+    <dt>Site 1/5</dt><dd>Le « Start de Gagarine » : d'ici sont partis Spoutnik 1 le 4 octobre 1957 et Youri Gagarine le 12 avril 1961</dd>
+    <dt>Contrainte majeure</dt><dd>Entièrement enclavé — aucune retombée en mer possible</dd>
+    <dt>Lanceurs</dt><dd>Soyouz, Proton, Zenit historiquement ; N1 en son temps</dd>
+  </dl>
+</div>
+
+<div class="encadre">
+  <span class="titre">Un nom choisi pour tromper</span>
+  Le cosmodrome ne se trouve pas à Baïkonour. La véritable bourgade de Baïkonour est située à
+  environ <b>350 kilomètres au nord-est</b> du site réel, qui est bâti près de la gare de
+  <b>Tiouratam</b>. Le nom trompeur a été attribué délibérément en 1961 pour égarer le
+  renseignement occidental au moment de l'enregistrement du vol de Gagarine auprès de la
+  Fédération aéronautique internationale — laquelle exigeait la localisation du site. Les
+  Soviétiques allèrent jusqu'à construire de faux aménagements près du vrai Baïkonour. La
+  supercherie n'a pas tenu longtemps face à la photographie aérienne, mais le nom est resté.
+</div>
+
+<h3 id="plessetsk">5. Plessetsk, la base qui n'existait pas</h3>
+
+<div class="fiche">
+  <h4>Fiche — Cosmodrome de Plessetsk <span class="badge urss">Russie</span></h4>
+  <dl>
+    <dt>Position</dt><dd>62,926° N — 40,578° E, oblast d'Arkhangelsk</dd>
+    <dt>Création</dt><dd>1957, comme base de missiles balistiques R-7</dd>
+    <dt>Latitude</dt><dd>La plus élevée de tous les grands sites de lancement du monde</dd>
+    <dt>Spécialité</dt><dd>Orbites polaires, héliosynchrones et surtout <b>orbites Molnia</b> inclinées à 63,4° — soit presque exactement la latitude du site</dd>
+    <dt>Activité historique</dt><dd>Pendant plusieurs années des décennies 1970-1980, <b>le site le plus actif du monde</b> en nombre de lancements</dd>
+  </dl>
+</div>
+
+<div class="alerte">
+  <span class="titre">Découvert par un professeur de lycée et ses élèves</span>
+  L'URSS n'a jamais reconnu l'existence de Plessetsk avant les années 1980. Le site fut
+  pourtant identifié dès <b>1966</b> par <b>Geoffrey Perry</b>, professeur de physique à la
+  <i>Kettering Grammar School</i> en Angleterre, et ses élèves. Le « groupe de Kettering »
+  écoutait avec du matériel radio ordinaire les émissions des satellites Cosmos et analysait
+  le <b>décalage Doppler</b> de leurs signaux pour reconstituer leurs orbites. En remontant
+  les plans orbitaux, ils démontrèrent qu'un second cosmodrome existait, très au nord de
+  Baïkonour, et publièrent leurs conclusions. Le renseignement occidental le savait déjà par
+  imagerie satellitaire, mais ne pouvait rien en dire ; ce sont des lycéens qui l'ont rendu
+  public.
+</div>
+
+<h3 id="vostotchny">6. Vostotchny, le divorce d'avec le Kazakhstan</h3>
+
+<div class="fiche">
+  <h4>Fiche — Cosmodrome de Vostotchny <span class="badge urss">Russie</span></h4>
+  <dl>
+    <dt>Position</dt><dd>51,885° N, oblast de l'Amour, Extrême-Orient russe</dd>
+    <dt>Premier lancement</dt><dd>28 avril 2016, Soyouz-2.1a</dd>
+    <dt>Raison d'être</dt><dd>Mettre fin à la dépendance russe envers un site situé en <b>territoire étranger</b> — et au loyer annuel versé au Kazakhstan</dd>
+    <dt>Avantage sur Baïkonour</dt><dd>Situé plus au sud de 6 degrés, donc gain de <b>36 m/s</b> ; retombées d'étages au-dessus de zones peu peuplées et de l'océan Pacifique</dd>
+    <dt>Difficultés</dt><dd class="ko">Retards répétés, dépassements de coûts et affaires de corruption ayant donné lieu à des condamnations pénales</dd>
+    <dt>Cadence</dt><dd class="part">Faible — le site reste très en deçà de Baïkonour en nombre de tirs</dd>
+  </dl>
+</div>
+
+<h3 id="canaveral">7. Cap Canaveral et le Kennedy Space Center</h3>
+
+<figure class="fig-gauche">
+  <img src="https://commons.wikimedia.org/wiki/Special:FilePath/STS-125_and_STS-400_on_Launch_Pads.jpg?width=360" alt="Les pas de tir 39A et 39B du Kennedy Space Center occupés simultanément">
+  <figcaption>Les complexes 39A et 39B du Kennedy Space Center occupés simultanément — configuration rarissime, ici pour la mission de réparation de Hubble et sa navette de secours.<br><span class="credit">NASA / domaine public</span></figcaption>
+</figure>
+
+<div class="fiche">
+  <h4>Fiche — Cap Canaveral / Kennedy Space Center <span class="badge usa">États-Unis</span></h4>
+  <dl>
+    <dt>Position</dt><dd>28,524° N — 80,65° O, Merritt Island et Cap Canaveral, Floride</dd>
+    <dt>Origine</dt><dd>Champ de tir de missiles à partir de 1949 ; le KSC est créé pour Apollo au début des années 1960</dd>
+    <dt>Complexe 39</dt><dd>Pas de tir <b>39A</b> et <b>39B</b>, construits pour la Saturn V — d'où sont partis Apollo 11 puis la quasi-totalité des navettes</dd>
+    <dt>Bâtiment d'assemblage (VAB)</dt><dd>160 mètres de haut ; l'un des plus grands bâtiments du monde en volume</dd>
+    <dt>Transport</dt><dd>Le lanceur assemblé est acheminé debout sur un <b>crawler-transporter</b> à chenilles, à environ 1,6 km/h</dd>
+    <dt>Azimuts autorisés</dt><dd>Environ 35° à 120°, soit des inclinaisons de <b>28,5° à 57°</b></dd>
+    <dt>Interdiction</dt><dd>Tir vers le nord impossible : la côte est américaine est sous la trajectoire</dd>
+    <dt>Occupants actuels</dt><dd>SpaceX (39A), NASA/SLS (39B), ULA et divers opérateurs sur les pas de tir voisins</dd>
+  </dl>
+</div>
+
+<h3 id="vandenberg">8. Vandenberg : tirer vers le sud</h3>
+
+<p>La base de <b>Vandenberg</b>, en Californie, est le miroir de Canaveral. Située à
+34,751° N sur une côte orientée ouest, elle permet de tirer <b>vers le sud</b> au-dessus du
+Pacifique, sans survoler aucune terre habitée avant l'Antarctique. C'est ce qui en fait le
+site américain des orbites <b>polaires</b> et <b>héliosynchrones</b> — donc de presque tous
+les satellites d'observation de la Terre et de reconnaissance militaire.</p>
+
+<div class="fiche">
+  <h4>Fiche — Vandenberg Space Force Base <span class="badge usa">États-Unis</span></h4>
+  <dl>
+    <dt>Position</dt><dd>34,751° N — 120,520° O, comté de Santa Barbara, Californie</dd>
+    <dt>Origine</dt><dd>Camp Cooke, camp d'entraînement de l'armée de terre créé en 1941-1942 ; converti au tir de missiles à la fin des années 1950</dd>
+    <dt>Azimuts</dt><dd>Vers le sud, environ 158° à 201°</dd>
+    <dt>Orbites accessibles</dt><dd>Polaires, héliosynchrones et rétrogrades — inaccessibles depuis la Floride</dd>
+    <dt>Particularité perdue</dt><dd>Le complexe SLC-6 avait été aménagé pour lancer des <b>navettes spatiales en orbite polaire</b> à des fins militaires ; le programme fut abandonné après l'accident de <i>Challenger</i> en 1986, sans qu'aucune navette n'en soit jamais partie</dd>
+  </dl>
+</div>
+
+<h3 id="wallops">9. Wallops et les petits lanceurs</h3>
+
+<p>Le <b>Wallops Flight Facility</b>, en Virginie (37,833° N), occupe une niche différente :
+il est historiquement le terrain des <b>fusées-sondes</b> et des ballons scientifiques, avec
+plusieurs milliers de tirs suborbitaux à son actif depuis 1945. C'est de là qu'a décollé
+SERT-1 en 1964 (voir <a href="propulsion.html">Propulsion</a>). Il accueille aujourd'hui des
+lanceurs légers et moyens, dont Antares pour le ravitaillement de la Station.</p>
+
+<h3 id="kourou">10. Kourou, le mieux placé du monde</h3>
+
+<figure class="fig-droite">
+  <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Ariane_5_lifting_off_from_the_Guiana_Space_Centre_in_Kourou%2C_French_Guiana.jpg?width=360" alt="Décollage d'une Ariane 5 depuis le Centre spatial guyanais">
+  <figcaption>Décollage d'une Ariane 5 depuis Kourou. À 5,2° de latitude, le site offre presque tout le bénéfice de la rotation terrestre.<br><span class="credit">ESA / CNES / Arianespace</span></figcaption>
+</figure>
+
+<div class="fiche">
+  <h4>Fiche — Centre spatial guyanais (CSG) <span class="badge eur">Europe / France</span></h4>
+  <dl>
+    <dt>Position</dt><dd>5,169° N — 52,690° O, Kourou, Guyane française</dd>
+    <dt>Mise en service</dt><dd>1968, par le CNES ; l'ESA en fait son port spatial à partir de 1975</dd>
+    <dt>Exploitants</dt><dd>CNES, ESA et Arianespace</dd>
+    <dt>Lancements totaux</dt><dd>Plus de <b>330</b></dd>
+    <dt>Gain de rotation</dt><dd>463,2 m/s — à moins de 2 m/s de l'optimum équatorial</dd>
+    <dt>Éventail d'azimuts</dt><dd>D'environ −10,5° à 93,5°, soit <b>104 degrés</b> d'ouverture au-dessus de l'Atlantique : le plus large du monde</dd>
+    <dt>Orbites accessibles</dt><dd>Du polaire au géostationnaire depuis le même pas de tir</dd>
+    <dt>Risque naturel</dt><dd class="ok">Aucun cyclone — la Guyane est trop proche de l'équateur pour que la force de Coriolis permette leur formation</dd>
+    <dt>Lanceurs</dt><dd>Ariane 5 et 6, Vega-C, et historiquement Soyouz depuis 2011</dd>
+  </dl>
+</div>
+
+<div class="encadre">
+  <span class="titre">Pourquoi les Soviétiques ont tiré depuis Kourou</span>
+  Le meilleur témoignage de la qualité du site est venu de ses concurrents. De <b>2011 à
+  2022</b>, des lanceurs <b>Soyouz russes</b> ont décollé depuis un pas de tir construit pour
+  eux à Kourou. La raison est purement arithmétique : une Soyouz partie de Guyane place en
+  orbite de transfert géostationnaire près du <b>double</b> de la charge utile qu'elle
+  emporterait depuis Baïkonour, grâce aux 140 m/s de rotation supplémentaires et à
+  l'inclinaison initiale bien plus favorable. La coopération a pris fin avec l'invasion de
+  l'Ukraine en 2022. Voir <a href="europe.html">Europe</a>.
+</div>
+
+<h3 id="chine">11. Les quatre sites chinois</h3>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Les bases de lancement chinoises <span class="badge chn">Chine</span></caption>
+<tr><th>Site</th><th>Latitude</th><th>Province</th><th>Spécialité</th><th>Lancements</th></tr>
+<tr><td><b>Jiuquan</b></td><td class="num">40,958° N</td><td>Mongolie-Intérieure / Gansu</td><td>Vols habités <b>Shenzhou</b>, orbites basses. Le plus ancien, ouvert en 1958</td><td class="num">~ 262</td></tr>
+<tr><td><b>Taiyuan</b></td><td class="num">38,849° N</td><td>Shanxi</td><td>Orbites héliosynchrones et polaires, météorologie</td><td class="num">—</td></tr>
+<tr><td><b>Xichang</b></td><td class="num">28,246° N</td><td>Sichuan</td><td>Orbites de transfert géostationnaire, constellation Beidou</td><td class="num">—</td></tr>
+<tr><td class="ok"><b>Wenchang</b></td><td class="num">19,614° N</td><td>Hainan</td><td>Lanceurs lourds Longue Marche 5, missions lunaires et station Tiangong</td><td class="num">~ 50</td></tr>
+</table>
+</div>
+
+<div class="alerte">
+  <span class="titre">Pourquoi la Chine a dû construire Wenchang</span>
+  Les trois premiers sites chinois sont profondément <b>enclavés</b> — un choix stratégique
+  des années 1960, destiné à les mettre hors de portée d'une frappe. Ce choix a eu un coût
+  différé considérable : les étages ne pouvaient y parvenir que par <b>chemin de fer</b>, et
+  le gabarit ferroviaire chinois limite le diamètre transportable à environ <b>3,35 m</b>.
+  Impossible, donc, de construire un lanceur lourd. La Longue Marche 5, avec ses <b>5 mètres
+  de diamètre</b>, imposait un site accessible <b>par la mer</b>. D'où Wenchang, sur l'île de
+  Hainan, ouvert en 2016 — qui offre en prime la latitude la plus basse du pays, 19,6°, et
+  des retombées d'étages en mer de Chine plutôt que sur des villages. Voir
+  <a href="chine.html">Chine</a>.
+</div>
+
+<h3 id="asie">12. Japon et Inde</h3>
+
+<div class="fiche">
+  <h4>Fiche — Centre spatial de Tanegashima <span class="badge jpn">Japon</span></h4>
+  <dl>
+    <dt>Position</dt><dd>30,400° N, île de Tanegashima, préfecture de Kagoshima</dd>
+    <dt>Exploitant</dt><dd>JAXA</dd>
+    <dt>Lanceurs</dt><dd>H-IIA, H-IIB, H3</dd>
+    <dt>Contrainte historique</dt><dd class="ko">Un accord conclu avec les <b>coopératives de pêche locales</b> limitait longtemps les tirs à <b>deux fenêtres par an</b>, d'environ 45 jours chacune — une restriction sans équivalent au monde, assouplie depuis</dd>
+    <dt>Second site</dt><dd><b>Uchinoura</b> (31,251° N), dédié aux lanceurs légers Epsilon et, auparavant, à la famille Mu de l'ISAS</dd>
+  </dl>
+</div>
+
+<div class="fiche">
+  <h4>Fiche — Centre spatial Satish-Dhawan (SDSC SHAR) <span class="badge ind">Inde</span></h4>
+  <dl>
+    <dt>Position</dt><dd>13,72° N — 80,23° E, île de Sriharikota, Andhra Pradesh</dd>
+    <dt>Exploitant</dt><dd>ISRO</dd>
+    <dt>Lancements</dt><dd>Plus de <b>100</b></dd>
+    <dt>Atout</dt><dd>Latitude basse — 451,8 m/s de gain — et façade orientale sur le golfe du Bengale, donc retombées en mer</dd>
+    <dt>Lanceurs</dt><dd>PSLV, GSLV, LVM3</dd>
+    <dt>Missions notables</dt><dd>Chandrayaan, Mangalyaan, et le programme habité Gaganyaan</dd>
+  </dl>
+</div>
+
+<h3 id="sud">13. Hémisphère sud : Alcântara et Mahia</h3>
+
+<p><b>Alcântara</b>, au Brésil, détient un record que rien ne lui enlèvera : à
+<b>2,34° de latitude sud</b>, c'est le site de lancement le plus proche de l'équateur du
+monde, avec 464,7 m/s de gain — à 0,4 m/s de l'optimum théorique. Sa façade atlantique offre
+en outre des couloirs de tir dégagés.</p>
+
+<div class="alerte">
+  <span class="titre">22 août 2003 : l'accident d'Alcântara</span>
+  Le programme brésilien a été brisé net. Trois jours avant le tir prévu du lanceur
+  <b>VLS-1 V03</b>, l'un des propulseurs à poudre s'est allumé accidentellement sur le pas de
+  tir alors que les équipes travaillaient autour du véhicule. L'explosion et l'incendie ont
+  tué <b>21 personnes</b>, dont une grande partie des ingénieurs du programme spatial
+  brésilien — une perte de compétences dont le pays ne s'est jamais complètement remis. Le
+  site, techniquement le mieux placé du monde, reste très largement sous-employé et cherche
+  depuis à s'ouvrir à des opérateurs étrangers.
+</div>
+
+<div class="fiche">
+  <h4>Fiche — Rocket Lab Launch Complex 1, Mahia <span class="badge priv">Nouvelle-Zélande</span></h4>
+  <dl>
+    <dt>Position</dt><dd>39,261° S — 177,866° E, péninsule de Mahia, Nouvelle-Zélande</dd>
+    <dt>Exploitant</dt><dd>Rocket Lab</dd>
+    <dt>Statut</dt><dd class="ok">Le <b>premier port spatial orbital entièrement privé</b> du monde</dd>
+    <dt>Lancements</dt><dd>Près de <b>80</b></dd>
+    <dt>Lanceur</dt><dd>Electron</dd>
+    <dt>Atout décisif</dt><dd>Un espace aérien et maritime presque vide, autorisant un très large éventail d'azimuts et une <b>cadence élevée</b> sans coordination lourde avec le trafic civil</dd>
+    <dt>Portée</dt><dd>Démontre qu'un opérateur privé peut se doter de sa propre base plutôt que de louer un créneau sur un site d'État</dd>
+  </dl>
+</div>
+
+<hr class="sep">
+
+<h3 id="tableau">14. Tableau général des cosmodromes</h3>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Synthèse : les seize sites qui comptent</caption>
+<tr><th>Site</th><th>Pays</th><th>Latitude</th><th>Direction de tir</th><th>Vocation dominante</th></tr>
+<tr><td>Alcântara</td><td><span class="badge autre">Brésil</span></td><td class="num">2,34° S</td><td>Est / nord-est</td><td class="part">Sous-employé</td></tr>
+<tr><td class="ok">Kourou (CSG)</td><td><span class="badge eur">Europe</span></td><td class="num">5,17° N</td><td>Est à nord</td><td>Géostationnaire, polaire, science</td></tr>
+<tr><td>Sriharikota</td><td><span class="badge ind">Inde</span></td><td class="num">13,72° N</td><td>Est / sud-est</td><td>Toutes orbites</td></tr>
+<tr><td>Wenchang</td><td><span class="badge chn">Chine</span></td><td class="num">19,61° N</td><td>Est / sud-est</td><td>Lanceurs lourds, Lune, station</td></tr>
+<tr><td>Xichang</td><td><span class="badge chn">Chine</span></td><td class="num">28,25° N</td><td>Sud-est</td><td>Géostationnaire, Beidou</td></tr>
+<tr><td class="ok">Cap Canaveral / KSC</td><td><span class="badge usa">É.-U.</span></td><td class="num">28,52° N</td><td>Est / sud-est</td><td>Vols habités, géostationnaire</td></tr>
+<tr><td>Tanegashima</td><td><span class="badge jpn">Japon</span></td><td class="num">30,40° N</td><td>Est / sud-est</td><td>Lanceurs lourds japonais</td></tr>
+<tr><td>Uchinoura</td><td><span class="badge jpn">Japon</span></td><td class="num">31,25° N</td><td>Sud-est</td><td>Lanceurs légers, science</td></tr>
+<tr><td>Vandenberg</td><td><span class="badge usa">É.-U.</span></td><td class="num">34,75° N</td><td class="ok">Sud</td><td>Polaire, héliosynchrone, militaire</td></tr>
+<tr><td>Wallops</td><td><span class="badge usa">É.-U.</span></td><td class="num">37,83° N</td><td>Est / sud-est</td><td>Fusées-sondes, lanceurs légers</td></tr>
+<tr><td>Taiyuan</td><td><span class="badge chn">Chine</span></td><td class="num">38,85° N</td><td>Sud</td><td>Héliosynchrone</td></tr>
+<tr><td>Mahia (LC-1)</td><td><span class="badge priv">N.-Zél.</span></td><td class="num">39,26° S</td><td>Nord à sud</td><td class="ok">Premier port spatial privé</td></tr>
+<tr><td>Jiuquan</td><td><span class="badge chn">Chine</span></td><td class="num">40,96° N</td><td>Sud-est</td><td>Vols habités Shenzhou</td></tr>
+<tr><td class="ok">Baïkonour</td><td><span class="badge urss">Russie/Kaz.</span></td><td class="num">45,97° N</td><td>Nord-est</td><td>Vols habités, Proton</td></tr>
+<tr><td>Vostotchny</td><td><span class="badge urss">Russie</span></td><td class="num">51,89° N</td><td>Est / sud-est</td><td>Remplacer Baïkonour</td></tr>
+<tr><td>Plessetsk</td><td><span class="badge urss">Russie</span></td><td class="num">62,93° N</td><td>Nord</td><td>Molnia, polaire, militaire</td></tr>
+</table>
+</div>
+
+<div class="stat-ligne">
+  <div class="stat"><span class="val">465</span><span class="lib">m/s offerts à l'équateur</span></div>
+  <div class="stat"><span class="val">6 700</span><span class="lib">km² de Baïkonour</span></div>
+  <div class="stat"><span class="val">104°</span><span class="lib">d'azimuts à Kourou</span></div>
+  <div class="stat"><span class="val">2,34°</span><span class="lib">latitude d'Alcântara</span></div>
+  <div class="stat"><span class="val">3,35 m</span><span class="lib">le gabarit ferroviaire qui a forcé Wenchang</span></div>
+</div>
+
+<div class="note">
+  <b>Pour aller plus loin :</b> l'équation qui sous-tend tous ces calculs est détaillée dans
+  <a href="propulsion.html">Propulsion</a> ; les lanceurs partis de ces sites dans
+  <a href="lanceurs.html">Lanceurs</a> ; le cas guyanais dans
+  <a href="europe.html">Europe</a> ; les sites chinois dans <a href="chine.html">Chine</a>.
+</div>
+
+<div class="sources">
+  <b>Pour approfondir :</b>
+  <ul>
+    <li>Jonathan McDowell, <i>Jonathan's Space Report</i> et la base de données <i>planet4589.org</i> — recensement de référence des sites de lancement, coordonnées et statistiques de tirs.</li>
+    <li>Gunter Krebs, <i>Gunter's Space Page</i>, section <i>Launch Sites</i> — fiches détaillées des pas de tir.</li>
+    <li>Anatoly Zak, <i>RussianSpaceWeb</i> — dossiers Baïkonour, Plessetsk et Vostotchny, notamment sur les zones de retombée et les litiges kazakhs.</li>
+    <li>CNES et ESA, dossiers de présentation du Centre spatial guyanais — azimuts autorisés et avantage équatorial chiffré.</li>
+    <li>NASA, <i>Kennedy Space Center Story</i> et documentation du complexe de lancement 39.</li>
+    <li>Asif A. Siddiqi, <i>Challenge to Apollo</i>, NASA SP-2000-4408 — sur la dénomination trompeuse de Baïkonour et l'enregistrement du vol de Gagarine auprès de la FAI.</li>
+    <li>Geoffrey E. Perry et le <i>Kettering Group</i>, publications sur l'identification de Plessetsk par analyse Doppler, à partir de 1966.</li>
+    <li>JAXA, documentation du Tanegashima Space Center, y compris l'historique des accords avec les pêcheries.</li>
+    <li>ISRO, <i>Satish Dhawan Space Centre SHAR</i> — statistiques de lancement.</li>
+    <li>Agência Espacial Brasileira, rapport d'enquête sur l'accident du VLS-1 V03 du 22 août 2003.</li>
+    <li>Rocket Lab, <i>Launch Complex 1 Payload User's Guide</i> — coordonnées et azimuts de Mahia.</li>
+    <li><i>Encyclopedia Astronautica</i> (astronautix.com), notices des cosmodromes et de leurs pas de tir successifs.</li>
+  </ul>
+</div>
+
+<div class="nav-pages">
+  <a href="animaux.html">&laquo; Animaux</a>
+  <a href="spoutnik.html">Spoutnik &raquo;</a>
+</div>
+
+</div><!-- /contenu -->
+
+<div class="pied">
+  NEW HORIZON — encyclopédie de la conquête spatiale<br>
+  <span class="maj">Dernière mise à jour : juillet 2026</span> — 24 pages, 100 % rétro, 0 % cookie<br>
+  Images : NASA / ESA / Roscosmos / JAXA / CNSA via Wikimedia Commons — domaine public ou licences libres<br>
+  <a href="../index.html">Accueil du site</a> · <a href="index.html">Sommaire</a> · <a href="chronologie.html">Chronologie</a> · <a href="donnees.html">Données techniques</a>
+</div>
+
+</div><!-- /page -->
+<script src="../scripts/visitor-counter.js"></script>
+</body>
+</html>
