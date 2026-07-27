@@ -160,15 +160,17 @@
 <div class="schema">
 <svg viewBox="0 0 900 400" role="img" aria-label="Trajectoires des sondes Voyager 1 et 2 dans le système solaire">
   <rect width="900" height="400" fill="#000"/>
-  <text x="450" y="24" text-anchor="middle" font-family="Arial Black, Arial" font-size="14" fill="#fff" letter-spacing="1">LE GRAND TOUR — TRAJECTOIRES DES VOYAGER</text>
   <!-- soleil -->
   <circle cx="120" cy="230" r="16" fill="#ffcc00"/>
   <text x="120" y="262" text-anchor="middle" font-family="Courier New, monospace" font-size="10" fill="#ffcc00">SOLEIL</text>
   <!-- orbites -->
   <g fill="none" stroke="#334" stroke-width="1">
-    <circle cx="120" cy="230" r="60"/><circle cx="120" cy="230" r="115"/>
-    <circle cx="120" cy="230" r="185"/><circle cx="120" cy="230" r="250"/>
+    <circle cx="120" cy="230" r="60"/><circle cx="120" cy="230" r="127"/>
+    <circle cx="120" cy="230" r="208"/><circle cx="120" cy="230" r="241"/>
   </g>
+  <!-- terre : point de lancement des deux sondes -->
+  <circle cx="145" cy="233" r="3" fill="#5599ff"/>
+  <text x="145" y="250" text-anchor="middle" font-family="Courier New, monospace" font-size="9" fill="#5599ff">Terre</text>
   <!-- planetes -->
   <g font-family="Courier New, monospace" font-size="9">
     <circle cx="180" cy="230" r="7" fill="#cc9966"/><text x="176" y="212" fill="#cc9966">Jupiter</text>
@@ -176,10 +178,13 @@
     <circle cx="298" cy="122" r="5" fill="#99ddee"/><text x="306" y="118" fill="#99ddee">Uranus</text>
     <circle cx="356" cy="180" r="5" fill="#6688ee"/><text x="364" y="176" fill="#6688ee">Neptune</text>
   </g>
-  <!-- trajectoire V2 -->
-  <path d="M120 230 Q 160 244 182 236 Q 214 220 224 164 Q 250 130 296 128 Q 330 140 356 186 Q 420 300 560 380" fill="none" stroke="#00ff66" stroke-width="2"/>
-  <!-- trajectoire V1 -->
-  <path d="M120 230 Q 158 238 180 224 Q 212 190 222 160 Q 260 90 420 40 Q 600 -10 860 30" fill="none" stroke="#00ccff" stroke-width="2"/>
+  <!-- trajectoire V2, lancée de la Terre -->
+  <path d="M145 233 Q 165 244 182 236 Q 214 220 224 164 Q 250 130 296 128 Q 330 140 356 186 Q 420 300 560 380" fill="none" stroke="#00ff66" stroke-width="2"/>
+  <!-- trajectoire V1, lancée de la Terre -->
+  <path d="M145 233 Q 163 238 180 224 Q 212 190 222 160 Q 260 90 420 40 Q 600 -10 860 30" fill="none" stroke="#00ccff" stroke-width="2"/>
+  <!-- titre dessiné après les trajectoires pour rester lisible par-dessus -->
+  <rect x="260" y="10" width="380" height="18" fill="#000"/>
+  <text x="450" y="24" text-anchor="middle" font-family="Arial Black, Arial" font-size="14" fill="#fff" letter-spacing="1">LE GRAND TOUR — TRAJECTOIRES DES VOYAGER</text>
   <g font-family="Courier New, monospace" font-size="10">
     <text x="600" y="70" fill="#00ccff">VOYAGER 1 — lancée le 5 sept. 1977</text>
     <text x="600" y="86" fill="#7fa8c9">Jupiter mars 1979 · Saturne nov. 1980</text>
