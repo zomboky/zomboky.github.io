@@ -39,13 +39,40 @@ aucun composant nouveau. Tout existe déjà dans `docs/conquete-spatiale/style.c
 |---|---|---|
 | 0 | `git pull` + inventaire des 19 pages | ✅ fait |
 | 1 | Menu chronologique + `.nav-pages` + `.menu-ep` + plan du site | ✅ fait (ce commit) |
-| 2 | 5 nouvelles pages : `avant-espace`, `propulsion`, `animaux`, `cosmodromes`, `satellites` | ⬜ à faire |
+| 2 | 5 nouvelles pages : `avant-espace`, `propulsion`, `animaux`, `cosmodromes`, `satellites` | ✅ fait |
 | 3 | 4 nouvelles pages : `militaire`, `telescopes`, `apesanteur`, `debris-droit` | ⬜ à faire |
 | 4 | Enrichissement I-II : `pionniers`, `spoutnik`, `lanceurs`, `sondes`, `mercury-gemini`, `apollo`, `lune-sovietique`, `europe` | ⬜ à faire |
 | 5 | Enrichissement III-IV : `chine`, `nations`, `stations`, `navettes`, `newspace`, `artemis` | ⬜ à faire |
 | 6 | Annexes : `accidents`, `hommes`, `donnees`, `chronologie`, `index` | ⬜ à faire |
 
-**Reprendre au lot 2.**
+**Reprendre au lot 3.**
+
+### Fait dans le lot 2
+
+Les 5 pages sont écrites, `nav.py` et `verif.py` passés après chacune (`OK — liens, menu,
+classes et compteur coherents`, 24 pages). Toutes respectent le cahier des charges du § 6 :
+
+```
+avant-espace  821 l. | 6 fiche |  8 tech | 2 svg | 13 enc/alerte | 13 sources
+propulsion    847 l. | 6 fiche |  7 tech | 3 svg |  9 enc/alerte | 12 sources
+animaux       712 l. | 6 fiche |  4 tech | 2 svg |  9 enc/alerte | 11 sources
+cosmodromes   644 l. | 9 fiche |  4 tech | 2 svg |  6 enc/alerte | 12 sources
+satellites    731 l. | 11 fiche|  4 tech | 2 svg |  9 enc/alerte | 13 sources
+```
+
+Onze schémas SVG originaux ont été créés (canon de Verne, vaisseau BIS, carte du Δv,
+étagement, cycles moteur, altitudes des vols animaux, frise des premières, couloirs de tir,
+latitude/inclinaison, étages orbitaux, Molnia vs GEO). Toutes les images Wikimedia ont été
+vérifiées une par une en HTTP 200 avant intégration.
+
+**Attention — liens différés :** trois renvois vers des pages du lot 3 ont été
+volontairement retirés pour garder `verif.py` vert. À rétablir en écrivant le lot 3 :
+
+| Page | Emplacement | Lien à remettre |
+|---|---|---|
+| `avant-espace.html` | encadré « Un article de droit spatial… » (§ Collier's) | `debris-droit.html` |
+| `animaux.html` | § 11 « Après les pionniers », 1<sup>er</sup> paragraphe | `apesanteur.html` |
+| `animaux.html` | `.note` finale « Pour aller plus loin » | `apesanteur.html` |
 
 ---
 
@@ -198,16 +225,27 @@ poussées, Isp, durées, décisions politiques, controverses documentées.
 
 ### Boucle de recherche (skill `mach2`)
 
-`C:\Users\Zombo\.claude\skills\mach2\` — Python 3.12 OK, cache déjà peuplé.
+Le skill est désormais **versionné dans le dépôt** : `skills/mach2/` (implémentation) et
+`.claude/skills/mach2/SKILL.md` (déclaration). Il fonctionne donc aussi bien en local qu'en
+session cloud. Le chemin Windows `C:\Users\Zombo\.claude\skills\mach2\` mentionné dans les
+versions antérieures de ce document n'est plus la référence.
+
+Au premier usage dans un conteneur neuf :
+`pip install -r skills/mach2/requirements.txt` (requests, trafilatura, beautifulsoup4, lxml,
+markdownify). Toujours lancer depuis la racine du dépôt.
 
 1. `WebSearch` sur le sujet → 8-15 URLs fiables ;
-2. `python mach2.py batch <urls…> --filter "<sujet précis>" --out <scratchpad>/<page>` ;
+2. `python skills/mach2/mach2.py batch <urls…> --filter "<sujet précis>" --out <scratchpad>/<page>` ;
 3. lire `manifest.json`, puis **seulement** les `.md` utiles ;
 4. rédiger en français dans le HTML avec les classes existantes ;
 5. compléter le bloc `.sources` de la page.
 
 **Ne pas** lire les pages une par une avec WebFetch : mach2 écrit dans des fichiers et
 économise énormément de contexte.
+
+⚠️ Retour d'expérience du lot 2 : `--filter` est parfois trop agressif et réduit une page à
+quelques dizaines de mots. Si le manifeste annonce un compte de mots anormalement bas,
+relancer la page sans `--filter` mais avec `--max-chars 7000`.
 
 Domaines à privilégier (`allowed_domains` de WebSearch) : `nasa.gov` (History Series
 SP-4xxx, NTRS), `nssdc.gsfc.nasa.gov`, `esa.int`, `cnes.fr`, `jaxa.jp`, `isro.gov.in`,
