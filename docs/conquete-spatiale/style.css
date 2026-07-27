@@ -28,8 +28,12 @@ body {
   font-family: Arial, Helvetica, sans-serif;
   font-size: 13px;
   color: #000;
+  cursor: url('https://raw.githubusercontent.com/zomboky/zomboky.github.io/master/docs/assets/cursors/real_hand_cursor.cur'), pointer;
 }
 
+/* Chromium force un curseur "pointer" par défaut sur les liens, ce qui
+   écraserait l'héritage depuis body : on le réaffirme explicitement pour
+   que la main reste identique partout, quel que soit l'élément survolé. */
 a, button, [role="button"] {
   cursor: url('https://raw.githubusercontent.com/zomboky/zomboky.github.io/master/docs/assets/cursors/real_hand_cursor.cur'), pointer;
 }
@@ -494,7 +498,7 @@ hr.sep {
 .sources { font-size: 11px; color: #333; background: #f6f6f6; border: 1px solid #ccc; padding: 6px 10px; }
 .sources ul { margin: 4px 0 0 0; }
 
-abbr { border-bottom: 1px dotted #666; cursor: help; }
+abbr { border-bottom: 1px dotted #666; }
 code, .mono { font-family: "Courier New", monospace; background: #eee; padding: 0 3px; }
 
 @media (max-width: 620px) {
