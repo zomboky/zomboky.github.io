@@ -111,6 +111,19 @@ a, button, [role="button"] {
 .menu a:hover { color: var(--jaune); background: #300000; border-color: var(--rouge); }
 .menu a.actif { color: #000; background: var(--jaune); border-color: #fff; }
 
+/* Intertitre d'époque : en display:block il force un retour à la ligne avant et
+   après, ce qui découpe le menu en une rangée de liens par époque. */
+.menu .menu-ep {
+  display: block;
+  margin: 7px 0 0 0;
+  color: var(--jaune);
+  font-family: "Courier New", monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  line-height: 1.5;
+}
+
 /* ---------- Fil d'ariane ---------- */
 
 .ariane {
