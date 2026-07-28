@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Les satellites applicatifs — NEW HORIZON</title>
+<meta name="description" content="SCORE, Echo, TIROS, Transit, Telstar, Syncom, Intelsat, Molnia, Landsat, SPOT, Meteosat, GPS, Galileo, Copernicus, Cospas-Sarsat : l'espace utile.">
+<link rel="shortcut icon" type="image/x-icon" href="https://raw.githubusercontent.com/zomboky/zomboky.github.io/master/docs/assets/icons/ours.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+
+<div class="bandeau">
+  <h1>NEW <span class="rouge">HORIZON</span></h1>
+  <p class="sous-titre">L'encyclopédie de la conquête spatiale &middot; 1232 &rarr; 2026 &middot; toutes les nations</p>
+  <div class="filets"></div>
+</div>
+
+<div class="menu">
+  <a href="index.html">Accueil</a>
+  <span class="menu-ep">I &middot; Avant le spatial (…→1957)</span>
+  <a href="avant-espace.html">Avant l'espace</a>
+  <a href="pionniers.html">Pionniers</a>
+  <a href="propulsion.html">Propulsion</a>
+  <a href="animaux.html">Animaux</a>
+  <a href="cosmodromes.html">Cosmodromes</a>
+  <span class="menu-ep">II &middot; L'ouverture de l'espace (1957→1969)</span>
+  <a href="spoutnik.html">Spoutnik</a>
+  <a href="lanceurs.html">Lanceurs</a>
+  <a href="sondes.html">Sondes</a>
+  <a class="actif" href="satellites.html">Satellites</a>
+  <a href="mercury-gemini.html">Mercury/Gemini</a>
+  <a href="apollo.html">Apollo</a>
+  <a href="lune-sovietique.html">Lune URSS</a>
+  <a href="europe.html">Europe</a>
+  <span class="menu-ep">III &middot; Stations et navettes (1970→2000)</span>
+  <a href="chine.html">Chine</a>
+  <a href="nations.html">Nations</a>
+  <a href="stations.html">Stations</a>
+  <a href="navettes.html">Navettes</a>
+  <span class="menu-ep">IV &middot; L'espace contemporain (2000→2026)</span>
+  <a href="newspace.html">NewSpace</a>
+  <a href="artemis.html">Artemis</a>
+  <span class="menu-ep">Annexes</span>
+  <a href="accidents.html">Accidents</a>
+  <a href="hommes.html">Équipages</a>
+  <a href="donnees.html">Données</a>
+  <a href="chronologie.html">Chronologie</a>
+</div>
+
+<div class="bandeau-defilant">
+  <marquee behavior="scroll" direction="left" scrollamount="4">
+    ★ BIENVENUE DANS LE CENTRE DE CONTRÔLE ★ 324 lancements orbitaux en 2025, record absolu ★ Artemis II a emmené 4 astronautes autour de la Lune le 1<sup>er</sup> avril 2026 ★ 700+ humains ont volé dans l'espace depuis Gagarine ★ Voyager 1 est à plus de 25 milliards de km ★ Bonne visite !
+  </marquee>
+</div>
+
+<div class="ariane">Vous êtes ici : <a href="index.html">Accueil</a> &rsaquo; <b>Satellites</b></div>
+
+<div class="contenu">
+
+<h2>Les satellites applicatifs : l'espace qui sert</h2>
+
+<p>La conquête spatiale a produit des exploits ; elle a surtout produit une
+<b>infrastructure</b>. Téléphoner d'un continent à l'autre, connaître la météo de demain,
+savoir où l'on se trouve à trois mètres près, mesurer la fonte d'un glacier, être secouru en
+mer : tout cela repose sur des machines lancées entre 1958 et aujourd'hui, dont presque
+personne ne connaît le nom. Cette page raconte comment chacune de ces fonctions est née.</p>
+
+<div class="sommaire">
+  <span class="titre">Sur cette page</span>
+  <ol>
+    <li><a href="#clarke">1945 : Arthur C. Clarke invente l'orbite</a></li>
+    <li><a href="#score">SCORE (1958) : la première voix venue du ciel</a></li>
+    <li><a href="#echo">Echo : un ballon comme miroir</a></li>
+    <li><a href="#tiros">TIROS-1 (1960) : voir le temps qu'il fait</a></li>
+    <li><a href="#transit">Transit : la navigation née d'un accident</a></li>
+    <li><a href="#telstar">Telstar (1962) et la bombe qui l'a tué</a></li>
+    <li><a href="#syncom">Syncom : atteindre enfin l'orbite de Clarke</a></li>
+    <li><a href="#intelsat">Intelsat et la naissance d'un marché</a></li>
+    <li><a href="#molnia">L'orbite Molnia : la réponse russe à la géométrie</a></li>
+    <li><a href="#landsat">Landsat (1972) : regarder la Terre autrement</a></li>
+    <li><a href="#europe">SPOT et Meteosat : la réponse européenne</a></li>
+    <li><a href="#gnss">Les quatre constellations de navigation</a></li>
+    <li><a href="#services">Copernicus, Argos et Cospas-Sarsat</a></li>
+    <li><a href="#bilan">Ce que les satellites ont changé</a></li>
+  </ol>
+</div>
+
+<h3 id="clarke">1. 1945 : Arthur C. Clarke invente l'orbite</h3>
+
+<p>En <b>octobre 1945</b>, un officier radariste britannique de 27 ans publie dans la revue
+technique <i>Wireless World</i> un article intitulé <i>« Extra-Terrestrial Relays »</i>. Il
+s'appelle <b>Arthur C. Clarke</b>, il n'est pas encore romancier, et il pose une équation
+simple : à une certaine altitude, la période orbitale d'un satellite égale exactement la
+durée de rotation de la Terre. Vu du sol, l'engin paraît alors <b>immobile</b>.</p>
+
+<div class="fiche">
+  <h4>Fiche — l'orbite géostationnaire, dite « orbite de Clarke »</h4>
+  <dl>
+    <dt>Altitude</dt><dd><b>35 786 km</b> au-dessus de l'équateur</dd>
+    <dt>Rayon depuis le centre de la Terre</dt><dd>42 164 km</dd>
+    <dt>Période</dt><dd>23 h 56 min 4 s — le jour <b>sidéral</b>, et non le jour solaire de 24 h</dd>
+    <dt>Vitesse orbitale</dt><dd>3 075 m/s — soit moins de la moitié de la vitesse en orbite basse</dd>
+    <dt>Inclinaison</dt><dd>Obligatoirement 0° : toute inclinaison non nulle fait osciller le satellite en latitude</dd>
+    <dt>Couverture</dt><dd><b>Trois satellites</b> à 120° les uns des autres couvrent la totalité du globe, hors calottes polaires</dd>
+    <dt>Limite</dt><dd>Le trajet aller-retour du signal impose un délai d'environ <b>240 millisecondes</b>, perceptible en conversation</dd>
+  </dl>
+</div>
+
+<div class="citation">
+  Une station spatiale à 42 000 kilomètres du centre de la Terre effectuerait une révolution
+  en exactement vingt-quatre heures. Elle resterait immobile au-dessus du même point et serait
+  visible depuis presque la moitié de la surface terrestre.
+  <span class="source">Arthur C. Clarke, « Extra-Terrestrial Relays », <i>Wireless World</i>, octobre 1945</span>
+</div>
+
+<div class="encadre">
+  <span class="titre">L'idée que personne n'a brevetée</span>
+  Clarke n'a jamais déposé de brevet sur son concept, jugeant l'idée irréalisable de son
+  vivant — il pensait qu'il faudrait des stations habitées pour remplacer les tubes à vide
+  grillés. L'invention du <b>transistor</b> en 1947 a rendu l'automatisation possible et a
+  périmé cette objection en deux ans. Clarke déclarera plus tard, avec humour, avoir écrit
+  « le mémorandum technique le plus mal rentabilisé de l'histoire ». L'Union internationale
+  des télécommunications a officiellement baptisé la zone <b>« orbite de Clarke »</b>.
+</div>
+
+<h3 id="score">2. SCORE (1958) : la première voix venue du ciel</h3>
+
+<div class="fiche">
+  <h4>Fiche technique — SCORE <span class="badge usa">États-Unis</span></h4>
+  <dl>
+    <dt>Nom complet</dt><dd><i>Signal Communications by Orbiting Relay Equipment</i></dd>
+    <dt>Opérateur</dt><dd>US Army et ARPA</dd>
+    <dt>Lancement</dt><dd>18 décembre 1958 à 23 h 02 GMT, Atlas-B 10B, Cap Canaveral LC-11</dd>
+    <dt>Masse en orbite</dt><dd><b>3 980 kg</b> — car c'est <b>l'étage Atlas entier</b> qui est resté en orbite, l'équipement de communication étant simplement fixé dessus</dd>
+    <dt>Orbite</dt><dd>185 km × 1 484 km, inclinaison 32,3°, période 101,4 min</dd>
+    <dt>Alimentation</dt><dd>Piles seulement — d'où une durée de vie très brève</dd>
+    <dt>Durée de mission</dt><dd>12 jours ; dernier contact le 30 décembre 1958 ; rentrée le 21 janvier 1959</dd>
+    <dt>Surnoms</dt><dd>« <i>The Talking Atlas</i> », « <i>Chatterbox</i> »</dd>
+    <dt>Titre historique</dt><dd class="ok">Premier satellite de télécommunications <b>conçu comme tel</b>, et première diffusion d'une <b>voix humaine</b> depuis l'espace</dd>
+  </dl>
+</div>
+
+<p>Le message enregistré diffusé depuis l'orbite était un vœu de Noël du président
+<b>Eisenhower</b>, dont la phrase clé — « <i>l'Amérique désire la paix sur la Terre et la
+bonne volonté envers les hommes, partout</i> » — fut soigneusement choisie pour répondre au
+choc politique de Spoutnik, quatorze mois plus tôt. SCORE fonctionnait selon deux modes : la
+retransmission en temps réel, et l'enregistrement d'un message pour restitution différée
+au-dessus d'une autre région — l'ancêtre du <i>store-and-forward</i>.</p>
+
+<h3 id="echo">3. Echo : un ballon comme miroir</h3>
+
+<figure class="fig-droite">
+  <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Echo_-_A_Passive_Communications_Satellite_-_GPN-2002-000122.jpg?width=360" alt="Le ballon satellite Echo 1 en cours de gonflage dans un hangar">
+  <figcaption>Essai de gonflage d'Echo 1 : une sphère de plus de 30 mètres en Mylar métallisé, qui ne fait que renvoyer les ondes.<br><span class="credit">NASA / domaine public</span></figcaption>
+</figure>
+
+<p>L'approche opposée fut testée par le <b>projet Echo</b>, premier programme de
+télécommunications spatiales de la NASA. Le concept, proposé en juillet 1958 par
+<b>John R. Pierce</b> des Bell Labs, tient en une phrase : plutôt qu'un répéteur électronique
+fragile, on met en orbite un <b>réflecteur passif</b> — un immense ballon métallisé — et l'on
+fait rebondir les ondes dessus.</p>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Satellite passif contre satellite actif : le choix des années 1960</caption>
+<tr><th>Critère</th><th>Passif (Echo)</th><th>Actif (Telstar, Syncom)</th></tr>
+<tr><td>Électronique embarquée</td><td class="ok">Aucune</td><td class="ko">Complexe et fragile</td></tr>
+<tr><td>Durée de vie</td><td class="ok">Limitée seulement par la traînée</td><td class="ko">Limitée par les composants et les radiations</td></tr>
+<tr><td>Puissance au sol nécessaire</td><td class="ko">Énorme — le signal repart sans amplification</td><td class="ok">Modérée</td></tr>
+<tr><td>Capacité</td><td class="ko">Très faible</td><td class="ok">Élevée et croissante</td></tr>
+<tr><td>Verdict de l'histoire</td><td class="ko">Abandonné</td><td class="ok">Standard universel</td></tr>
+</table>
+</div>
+
+<p>La première liaison passe le <b>12 août 1960</b>, de Goldstone en Californie à Crawford
+Hill, dans le New Jersey. Echo 1 fut aussi, accessoirement, l'un des objets les plus visibles
+du ciel nocturne des années 1960 : sa sphère réfléchissante était aisément repérable à l'œil
+nu. Le dernier satellite du programme s'est désintégré dans l'atmosphère le
+<b>7 juin 1969</b>.</p>
+
+<h3 id="tiros">4. TIROS-1 (1960) : voir le temps qu'il fait</h3>
+
+<figure class="fig-gauche">
+  <img src="https://commons.wikimedia.org/wiki/Special:FilePath/TIROS-1-Earth.png?width=360" alt="Première image télévisée de la Terre prise depuis l'espace par TIROS-1 en 1960">
+  <figcaption>La première image télévisée de la Terre vue de l'espace, prise par TIROS-1 le 1<sup>er</sup> avril 1960. Floue, granuleuse — et elle a changé la météorologie.<br><span class="credit">NASA / domaine public</span></figcaption>
+</figure>
+
+<div class="fiche">
+  <h4>Fiche technique — TIROS-1 <span class="badge usa">États-Unis</span></h4>
+  <dl>
+    <dt>Nom complet</dt><dd><i>Television InfraRed Observation Satellite</i></dd>
+    <dt>Constructeur</dt><dd>RCA Astro, pour la NASA</dd>
+    <dt>Lancement</dt><dd>1<sup>er</sup> avril 1960 à 11 h 40 min 09 s GMT, Thor-Able, Cap Canaveral LC-17A</dd>
+    <dt>Masse</dt><dd>122,5 kg</dd>
+    <dt>Orbite</dt><dd>693 × 750 km, inclinaison 48,40°, période 99,16 min</dd>
+    <dt>Instruments</dt><dd>Deux caméras de télévision à balayage lent — une grand-angle et une à champ étroit — plus des capteurs d'horizon et d'angle solaire</dd>
+    <dt>Durée</dt><dd>75 jours effectifs sur 90 prévus ; dernier contact le 15 juin 1960</dd>
+    <dt>Titre historique</dt><dd class="ok">Premier satellite météorologique opérationnel</dd>
+  </dl>
+</div>
+
+<div class="encadre">
+  <span class="titre">Le seul domaine où l'espace a immédiatement payé</span>
+  Contrairement aux télécommunications, qui ont mis dix ans à devenir rentables, la
+  météorologie spatiale a produit un bénéfice <b>immédiat et mesurable</b>. Avant TIROS, les
+  prévisions reposaient sur un réseau de stations au sol et de navires — c'est-à-dire sur
+  rien du tout au-dessus des océans, soit 70 % de la planète. Dès sa première saison, le
+  système a permis de repérer des cyclones tropicaux <b>avant</b> qu'ils n'atteignent une côte
+  habitée. Le nombre de victimes des ouragans dans l'Atlantique nord s'est effondré au cours
+  des décennies suivantes, alors même que la population côtière augmentait fortement.
+</div>
+
+<h3 id="transit">5. Transit : la navigation née d'un accident</h3>
+
+<p>L'histoire du positionnement par satellite commence par une conversation de couloir. Dans
+les jours qui suivent le lancement de Spoutnik 1, deux physiciens du <b>Applied Physics
+Laboratory</b> de l'université Johns-Hopkins, <b>William Guier</b> et <b>George
+Weiffenbach</b>, écoutent le bip du satellite soviétique. Ils constatent qu'en analysant le
+<b>décalage Doppler</b> de son signal, ils peuvent reconstituer son orbite complète à partir
+d'<b>un seul passage</b>.</p>
+
+<div class="alerte">
+  <span class="titre">Le raisonnement inversé de Frank McClure</span>
+  Leur directeur adjoint, <b>Frank McClure</b>, retourne alors le problème avec une question
+  qui vaut des milliards : « <i>Si vous pouvez déterminer l'orbite d'un satellite depuis un
+  point connu au sol, pouvez-vous déterminer un point inconnu au sol depuis une orbite
+  connue ?</i> » La réponse est oui — et elle règle le problème le plus pressant de la marine
+  américaine, celui de la position exacte de ses <b>sous-marins lance-missiles Polaris</b>,
+  car un missile balistique ne vaut que ce que vaut la connaissance de son point de départ.
+  Toute la navigation par satellite, GPS compris, descend de cette question posée en 1957.
+</div>
+
+<div class="fiche">
+  <h4>Fiche — Transit (NAVSAT / NNSS) <span class="badge usa">États-Unis</span></h4>
+  <dl>
+    <dt>Maîtrise d'œuvre</dt><dd>ARPA et Applied Physics Laboratory de Johns-Hopkins, sous la direction de Richard Kershner</dd>
+    <dt>Commanditaire</dt><dd>US Navy</dd>
+    <dt>Premier lancement</dt><dd>1959</dd>
+    <dt>Service opérationnel</dt><dd>À partir de <b>1964</b> pour les sous-marins Polaris ; ouvert aux usages civils à partir de 1967</dd>
+    <dt>Dernier lancement</dt><dd>1988</dd>
+    <dt>Retrait</dt><dd>1996, remplacé par le GPS</dd>
+    <dt>Principe</dt><dd>Mesure du décalage Doppler sur un passage complet — d'où une contrainte majeure : il faut <b>attendre</b> le passage d'un satellite, et le récepteur doit rester immobile ou de vitesse connue</dd>
+    <dt>Usages dérivés</dt><dd>Levés hydrographiques et géodésiques, positionnement des navires de surface</dd>
+  </dl>
+</div>
+
+<h3 id="telstar">6. Telstar (1962) et la bombe qui l'a tué</h3>
+
+<figure class="fig-droite">
+  <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Telstar.jpg?width=360" alt="Le satellite Telstar 1">
+  <figcaption>Telstar 1 : 78 kg, une sphère de 88 cm couverte de cellules solaires et d'antennes. Le premier satellite à retransmettre la télévision en direct entre continents.<br><span class="credit">NASA / domaine public</span></figcaption>
+</figure>
+
+<div class="fiche">
+  <h4>Fiche technique — Telstar 1 <span class="badge usa">É.-U.</span> <span class="badge eur">Europe</span></h4>
+  <dl>
+    <dt>Opérateurs</dt><dd>AT&amp;T et NASA ; construit par les <b>Bell Labs</b></dd>
+    <dt>Financement</dt><dd>Privé — AT&amp;T a payé à la NASA le coût du lancement, une première</dd>
+    <dt>Lancement</dt><dd>10 juillet 1962 à 08 h 35 UTC, Thor-Delta, Cap Canaveral LC-17B</dd>
+    <dt>Masse</dt><dd>78 kg</dd>
+    <dt>Orbite</dt><dd>952 × 5 933 km, inclinaison 44,8°, période 2 h 37 min — <b>orbite moyenne, non géostationnaire</b></dd>
+    <dt>Conséquence de l'orbite</dt><dd class="part">Les stations de part et d'autre de l'Atlantique ne le voyaient simultanément que pendant environ <b>20 minutes par révolution</b></dd>
+    <dt>Stations sol</dt><dd>Andover (Maine), Pleumeur-Bodou (Côtes-d'Armor) et Goonhilly Downs (Cornouailles)</dd>
+    <dt>Exploit</dt><dd class="ok">Première transmission <b>télévisée en direct</b> entre l'Amérique et l'Europe</dd>
+    <dt>Fin de mission</dt><dd class="ko">Désactivé le 21 février 1963, après seulement 7 mois</dd>
+  </dl>
+</div>
+
+<div class="alerte">
+  <span class="titre">Tué par un essai nucléaire américain</span>
+  La cause de la panne de Telstar est l'un des plus beaux exemples d'effet de bord de
+  l'histoire spatiale. La veille de son lancement, le <b>9 juillet 1962</b>, les États-Unis
+  ont fait exploser une charge thermonucléaire de 1,4 mégatonne à 400 km d'altitude au-dessus
+  du Pacifique : l'essai <b>Starfish Prime</b>. La détonation a injecté un flux considérable
+  d'électrons de haute énergie dans la magnétosphère, créant une <b>ceinture de radiation
+  artificielle</b> bien plus intense que la ceinture naturelle. Les transistors de Telstar,
+  conçus pour un environnement bien plus clément, ont été dégradés puis détruits en quelques
+  mois. Plusieurs autres satellites contemporains ont subi le même sort. Les États-Unis ont
+  donc, en une nuit et par leur propre fait, détruit une partie de leur infrastructure
+  spatiale naissante — un argument qui a pesé lourd dans la négociation du traité
+  d'interdiction partielle des essais nucléaires de 1963. Le satellite, lui, est toujours en
+  orbite.
+</div>
+
+<h3 id="syncom">7. Syncom : atteindre enfin l'orbite de Clarke</h3>
+
+<p>Telstar a démontré la faisabilité, mais son orbite basse imposait des antennes géantes et
+mobiles qui devaient poursuivre le satellite dans le ciel, pour vingt minutes de liaison. La
+solution était connue depuis 1945 : il fallait monter à 35 786 km. Une équipe de <b>Hughes
+Aircraft</b> menée par <b>Harold Rosen</b>, <b>Don Williams</b> et <b>Thomas Hudspeth</b> s'y
+attelle dans le cadre d'un programme NASA lancé en 1961.</p>
+
+<div class="fiche">
+  <h4>Fiche technique — la série Syncom <span class="badge usa">États-Unis</span></h4>
+  <dl>
+    <dt>Constructeur</dt><dd>Hughes Aircraft Company, Culver City, Californie</dd>
+    <dt>Forme</dt><dd>Cylindre de <b>71 cm de diamètre</b> et 39 cm de haut, stabilisé par rotation</dd>
+    <dt>Masse</dt><dd>68 kg au départ, <b>39 kg</b> une fois en orbite après consommation du moteur d'apogée</dd>
+    <dt>Charge utile</dt><dd>25 kg</dd>
+    <dt>Émission</dt><dd>Deux transpondeurs de <b>2 watts</b> seulement</dd>
+    <dt>Capacité</dt><dd class="part">Une <b>seule</b> conversation téléphonique bidirectionnelle, ou 16 liaisons télétype</dd>
+    <dt>Syncom 1</dt><dd class="ko">14 février 1963, Delta B n<sup>o</sup> 16 — perdu quelques secondes après l'allumage du moteur d'apogée, panne électronique</dd>
+    <dt>Syncom 2</dt><dd class="ok">1963 — <b>premier satellite de télécommunications géosynchrone</b> du monde, sur une orbite encore inclinée</dd>
+    <dt>Syncom 3</dt><dd class="ok">1964 — <b>premier satellite véritablement géostationnaire</b> ; il retransmet les Jeux olympiques de Tokyo vers les États-Unis</dd>
+    <dt>Aujourd'hui</dt><dd>Les trois engins sont toujours en orbite, hors service</dd>
+  </dl>
+</div>
+
+<div class="schema">
+<svg viewBox="0 0 900 400" role="img" aria-label="Comparaison des principales orbites utilisées par les satellites applicatifs">
+  <rect width="900" height="400" fill="#000"/>
+
+  <g font-family="Courier New, monospace" font-size="11" fill="#ffcc00">
+    <text x="20" y="22">LES QUATRE ÉTAGES DE L'ESPACE UTILE</text>
+  </g>
+
+  <!-- Terre -->
+  <g transform="translate(160,210)">
+    <circle cx="0" cy="0" r="46" fill="#00202e" stroke="#00ccff" stroke-width="2"/>
+    <ellipse cx="0" cy="0" rx="46" ry="10" fill="none" stroke="#00cc66" stroke-width="1" stroke-dasharray="3 3"/>
+    <text x="0" y="4" font-family="Courier New, monospace" font-size="9" fill="#66ccff" text-anchor="middle">TERRE</text>
+  </g>
+
+  <!-- orbites concentriques -->
+  <g transform="translate(160,210)" fill="none">
+    <!-- LEO -->
+    <circle cx="0" cy="0" r="58" stroke="#00ff88" stroke-width="2"/>
+    <!-- MEO -->
+    <circle cx="0" cy="0" r="104" stroke="#ffcc00" stroke-width="2"/>
+    <!-- GEO -->
+    <circle cx="0" cy="0" r="160" stroke="#ff6600" stroke-width="2"/>
+    <!-- Molnia : ellipse decentree -->
+    <ellipse cx="-86" cy="0" rx="176" ry="118" stroke="#cc66ff" stroke-width="2" stroke-dasharray="6 4" transform="rotate(-25)"/>
+  </g>
+
+  <!-- satellites reperes -->
+  <g transform="translate(160,210)">
+    <circle cx="0" cy="-58" r="4" fill="#00ff88"/>
+    <circle cx="90" cy="-52" r="4" fill="#ffcc00"/>
+    <circle cx="160" cy="0" r="4" fill="#ff6600"/>
+    <circle cx="-206" cy="-98" r="4" fill="#cc66ff"/>
+  </g>
+
+  <!-- legendes a droite -->
+  <g font-family="Arial, sans-serif" font-size="11">
+    <!-- LEO -->
+    <rect x="400" y="52" width="14" height="14" fill="#00ff88"/>
+    <text x="424" y="64" fill="#ffffff">Orbite basse (LEO) — 200 à 2 000 km</text>
+    <text x="424" y="80" fill="#888888" font-size="10">TIROS, Landsat, Sentinel, mégaconstellations. Période ~90 min.</text>
+    <text x="424" y="96" fill="#888888" font-size="10">Résolution maximale, mais couverture fugace : il faut une constellation.</text>
+
+    <!-- MEO -->
+    <rect x="400" y="122" width="14" height="14" fill="#ffcc00"/>
+    <text x="424" y="134" fill="#ffffff">Orbite moyenne (MEO) — ~20 000 km</text>
+    <text x="424" y="150" fill="#888888" font-size="10">GPS (20 180 km), GLONASS (19 100 km), Galileo (23 222 km).</text>
+    <text x="424" y="166" fill="#888888" font-size="10">Compromis : 24 satellites suffisent pour couvrir le globe en permanence.</text>
+
+    <!-- GEO -->
+    <rect x="400" y="192" width="14" height="14" fill="#ff6600"/>
+    <text x="424" y="204" fill="#ffffff">Orbite géostationnaire (GEO) — 35 786 km</text>
+    <text x="424" y="220" fill="#888888" font-size="10">Telecom, Meteosat, alerte précoce. Immobile dans le ciel.</text>
+    <text x="424" y="236" fill="#888888" font-size="10">Trois satellites couvrent le monde — mais 240 ms de latence, et rien aux pôles.</text>
+
+    <!-- Molnia -->
+    <rect x="400" y="262" width="14" height="14" fill="#cc66ff"/>
+    <text x="424" y="274" fill="#ffffff">Orbite Molnia — 500 × 40 000 km, i = 63,4°</text>
+    <text x="424" y="290" fill="#888888" font-size="10">Très elliptique. Le satellite « traîne » ~8 h près de l'apogée,</text>
+    <text x="424" y="306" fill="#888888" font-size="10">haut dans le ciel des latitudes arctiques. Trois suffisent en continu.</text>
+  </g>
+
+  <!-- note apogee -->
+  <g transform="translate(160,210)">
+    <line x1="-206" y1="-98" x2="-150" y2="-150" stroke="#cc66ff" stroke-width="1"/>
+  </g>
+  <text x="20" y="52" font-family="Courier New, monospace" font-size="9" fill="#cc99ff">apogée Molnia</text>
+
+  <!-- note echelle -->
+  <text x="30" y="376" font-family="Courier New, monospace" font-size="9" fill="#666666">Échelle comprimée : la GEO est en réalité à 5,6 rayons terrestres d'altitude.</text>
+</svg>
+<div class="legende">Chaque altitude répond à un compromis différent entre résolution, couverture instantanée, latence et nombre de satellites nécessaires. Aucune n'est supérieure aux autres — elles sont complémentaires. Représentation schématique, échelle non respectée.</div>
+</div>
+
+<h3 id="intelsat">8. Intelsat et la naissance d'un marché</h3>
+
+<div class="fiche">
+  <h4>Fiche technique — Intelsat I, dit « Early Bird » <span class="badge usa">É.-U.</span></h4>
+  <dl>
+    <dt>Opérateur</dt><dd>COMSAT (<i>Communications Satellite Corporation</i>)</dd>
+    <dt>Plateforme</dt><dd>Hughes HS-303</dd>
+    <dt>Lancement</dt><dd>6 avril 1965 à 23 h 47 min 50 s UTC, Delta D, Cap Canaveral LC-17A</dd>
+    <dt>Masse</dt><dd>149 kg</dd>
+    <dt>Puissance</dt><dd>40 watts</dd>
+    <dt>Capacité</dt><dd>240 circuits téléphoniques, <b>ou</b> une seule chaîne de télévision — pas les deux</dd>
+    <dt>Durée prévue</dt><dd>18 mois</dd>
+    <dt>Durée réelle</dt><dd class="ok"><b>4 ans et 4 mois</b></dd>
+    <dt>Titre historique</dt><dd class="ok">Premier satellite <b>commercial</b> en orbite géostationnaire</dd>
+  </dl>
+</div>
+
+<p>Pour mesurer ce que représentent ces 240 circuits, il faut se souvenir qu'en 1965 le câble
+téléphonique transatlantique <b>TAT-1</b>, posé en 1956 au prix d'un effort industriel
+considérable, n'en offrait que <b>36</b>. Early Bird a donc multiplié par près de sept la
+capacité téléphonique entre l'Amérique et l'Europe — depuis un objet de 149 kilogrammes.
+C'est ce rapport-là, et non un exploit technique, qui a créé l'industrie spatiale
+commerciale.</p>
+
+<h3 id="molnia">9. L'orbite Molnia : la réponse russe à la géométrie</h3>
+
+<p>L'orbite géostationnaire a un défaut rédhibitoire pour l'URSS : située au-dessus de
+l'équateur, elle apparaît <b>très bas sur l'horizon</b> — voire sous l'horizon — depuis les
+hautes latitudes. Or la majorité du territoire soviétique se situe au-delà du 50<sup>e</sup>
+parallèle. Les ingénieurs de l'OKB-1 ont donc inventé une autre solution, purement
+géométrique.</p>
+
+<div class="fiche">
+  <h4>Fiche — l'orbite Molnia et les satellites du même nom <span class="badge urss">URSS</span></h4>
+  <dl>
+    <dt>Forme d'orbite</dt><dd>Très elliptique : périgée d'environ 500 km, apogée d'environ 40 000 km</dd>
+    <dt>Période</dt><dd>12 heures — deux révolutions par jour</dd>
+    <dt>Inclinaison</dt><dd><b>63,4°</b> — l'« angle critique »</dd>
+    <dt>Effet recherché</dt><dd>Par la deuxième loi de Kepler, le satellite se déplace lentement près de l'apogée : il reste <b>environ 8 heures</b> visible, très haut dans le ciel de l'hémisphère nord, à chaque révolution</dd>
+    <dt>Couverture continue</dt><dd>Trois satellites suffisent</dd>
+    <dt>Constructeur</dt><dd>OKB-1, plateforme KAUR-2</dd>
+    <dt>Masse</dt><dd>1 600 kg ; 4,4 m de haut, 1,4 m de diamètre à la base ; 6 panneaux solaires</dd>
+    <dt>Durée de vie</dt><dd>1,5 à 5 ans</dd>
+    <dt>Nombre lancés</dt><dd class="ok"><b>164</b></dd>
+    <dt>Usages</dt><dd>Télécommunications civiles et militaires, télévision, et surveillance</dd>
+  </dl>
+</div>
+
+<div class="schema">
+<svg viewBox="0 0 900 340" role="img" aria-label="Comparaison de la visibilité d'un satellite géostationnaire et d'un satellite Molnia depuis une haute latitude">
+  <rect width="900" height="340" fill="#000"/>
+
+  <g font-family="Courier New, monospace" font-size="11" fill="#ffcc00">
+    <text x="20" y="22">VU DEPUIS MOURMANSK (69° N) : LE PROBLÈME QUE MOLNIA RÉSOUT</text>
+  </g>
+
+  <!-- ===== gauche : geostationnaire ===== -->
+  <g transform="translate(40,60)">
+    <text x="180" y="0" font-family="Arial, sans-serif" font-size="12" fill="#ffffff" text-anchor="middle">Satellite géostationnaire</text>
+    <!-- sol -->
+    <line x1="0" y1="200" x2="360" y2="200" stroke="#00cc66" stroke-width="2"/>
+    <text x="6" y="216" font-family="Courier New, monospace" font-size="9" fill="#00cc66">horizon local</text>
+    <!-- observateur -->
+    <circle cx="40" cy="200" r="5" fill="#ffcc00"/>
+    <text x="40" y="234" font-family="Courier New, monospace" font-size="9" fill="#ffcc00" text-anchor="middle">station</text>
+    <!-- ligne de visee tres rasante -->
+    <line x1="40" y1="200" x2="340" y2="172" stroke="#ff4444" stroke-width="2"/>
+    <circle cx="340" cy="172" r="6" fill="#ff6600" stroke="#ffaa00" stroke-width="2"/>
+    <text x="336" y="160" font-family="Courier New, monospace" font-size="9" fill="#ffaa00" text-anchor="end">GEO</text>
+    <!-- angle -->
+    <path d="M70 200 A30 30 0 0 0 69 197" fill="none" stroke="#ff4444" stroke-width="1"/>
+    <text x="86" y="194" font-family="Courier New, monospace" font-size="9" fill="#ff6666">≈ 5°</text>
+    <!-- obstacles -->
+    <g fill="#1a2a1a" stroke="#2a4a2a" stroke-width="1">
+      <path d="M150 200 L172 176 L194 200 Z"/>
+      <path d="M210 200 L236 168 L262 200 Z"/>
+    </g>
+    <text x="180" y="258" font-family="Arial, sans-serif" font-size="10" fill="#ff6666" text-anchor="middle">Élévation de 5° au-dessus de l'horizon :</text>
+    <text x="180" y="272" font-family="Arial, sans-serif" font-size="10" fill="#ff6666" text-anchor="middle">le moindre relief ou bâtiment coupe la liaison.</text>
+  </g>
+
+  <!-- separateur -->
+  <line x1="450" y1="60" x2="450" y2="310" stroke="#444" stroke-width="1"/>
+
+  <!-- ===== droite : Molnia ===== -->
+  <g transform="translate(490,60)">
+    <text x="180" y="0" font-family="Arial, sans-serif" font-size="12" fill="#ffffff" text-anchor="middle">Satellite en orbite Molnia</text>
+    <line x1="0" y1="200" x2="360" y2="200" stroke="#00cc66" stroke-width="2"/>
+    <text x="6" y="216" font-family="Courier New, monospace" font-size="9" fill="#00cc66">horizon local</text>
+    <circle cx="40" cy="200" r="5" fill="#ffcc00"/>
+    <text x="40" y="234" font-family="Courier New, monospace" font-size="9" fill="#ffcc00" text-anchor="middle">station</text>
+    <!-- arc de deplacement lent pres de l'apogee -->
+    <path d="M120 74 Q200 34 290 84" fill="none" stroke="#cc66ff" stroke-width="2" stroke-dasharray="5 4"/>
+    <!-- positions successives -->
+    <g fill="#cc66ff">
+      <circle cx="120" cy="74" r="4"/>
+      <circle cx="168" cy="52" r="4"/>
+      <circle cx="216" cy="44" r="4"/>
+      <circle cx="258" cy="60" r="4"/>
+      <circle cx="290" cy="84" r="4"/>
+    </g>
+    <text x="205" y="26" font-family="Courier New, monospace" font-size="9" fill="#cc99ff" text-anchor="middle">~ 8 h près de l'apogée</text>
+    <!-- ligne de visee haute -->
+    <line x1="40" y1="200" x2="216" y2="44" stroke="#00ff88" stroke-width="2"/>
+    <path d="M76 200 A36 36 0 0 0 66 178" fill="none" stroke="#00ff88" stroke-width="1"/>
+    <text x="88" y="182" font-family="Courier New, monospace" font-size="9" fill="#00ff88">≈ 70°</text>
+    <!-- obstacles ignores -->
+    <g fill="#1a2a1a" stroke="#2a4a2a" stroke-width="1">
+      <path d="M150 200 L172 176 L194 200 Z"/>
+      <path d="M210 200 L236 168 L262 200 Z"/>
+    </g>
+    <text x="180" y="258" font-family="Arial, sans-serif" font-size="10" fill="#00ff88" text-anchor="middle">Satellite haut dans le ciel, et quasi immobile</text>
+    <text x="180" y="272" font-family="Arial, sans-serif" font-size="10" fill="#00ff88" text-anchor="middle">pendant huit heures : liaison franche et stable.</text>
+  </g>
+
+  <!-- bandeau conclusion -->
+  <g transform="translate(40,314)">
+    <text x="0" y="0" font-family="Courier New, monospace" font-size="10" fill="#888888">Trois satellites Molnia se relaient pour assurer une couverture permanente — là où le géostationnaire est inexploitable.</text>
+  </g>
+</svg>
+<div class="legende">Depuis les hautes latitudes, un satellite géostationnaire est rasant : il rase l'horizon et le moindre relief le masque. Un satellite Molnia culmine au contraire très haut dans le ciel et y reste des heures grâce à la lenteur de son passage à l'apogée. Angles indicatifs.</div>
+</div>
+
+<div class="encadre">
+  <span class="titre">Pourquoi exactement 63,4 degrés</span>
+  Ce chiffre n'est pas un réglage empirique. L'aplatissement de la Terre aux pôles fait
+  normalement <b>dériver l'argument du périgée</b> d'une orbite elliptique : au bout de
+  quelques mois, l'apogée se retrouverait au-dessus de l'hémisphère sud, et le satellite ne
+  servirait plus à rien. Or le terme dominant de cette dérive est proportionnel à
+  <span class="mono">(5 cos²i − 1)</span>, qui <b>s'annule</b> pour
+  <span class="mono">i = 63,435°</span>. À cette inclinaison précise, et à elle seule,
+  l'apogée reste figée au-dessus du nord pendant toute la vie du satellite. C'est un cas rare
+  où une constante de la nature dicte directement un choix d'ingénierie — et l'une des
+  raisons pour lesquelles le cosmodrome de Plessetsk, à 62,9° de latitude, est si bien placé
+  (voir <a href="cosmodromes.html">Cosmodromes</a>).
+</div>
+
+<h3 id="landsat">10. Landsat (1972) : regarder la Terre autrement</h3>
+
+<div class="fiche">
+  <h4>Fiche technique — Landsat 1 (initialement ERTS-1) <span class="badge usa">États-Unis</span></h4>
+  <dl>
+    <dt>Opérateur</dt><dd>NASA ; constructeur General Electric</dd>
+    <dt>Lancement</dt><dd>23 juillet 1972 à 18 h 06 UTC, Delta 900, depuis <b>Vandenberg</b> SLC-2W</dd>
+    <dt>Orbite</dt><dd>Héliosynchrone — d'où le tir depuis Vandenberg et non la Floride</dd>
+    <dt>Masse</dt><dd>1 800 kg</dd>
+    <dt>Durée de mission</dt><dd>5 ans, 5 mois et 14 jours</dd>
+    <dt>Instruments</dt><dd>Une caméra <b>RBV</b> (<i>Return Beam Vidicon</i>), considérée comme l'instrument principal, et un <b>MSS</b> (<i>Multispectral Scanner</i>) à 4 bandes, 80 m de résolution, embarqué presque à titre secondaire</dd>
+    <dt>Surprise</dt><dd class="ok">Le MSS, l'instrument « secondaire », s'est révélé <b>très supérieur</b> et a défini le standard de l'imagerie spatiale pour les décennies suivantes</dd>
+    <dt>Héritage</dt><dd>La série se poursuit sans interruption depuis 1972 — <b>la plus longue archive continue d'observation de la Terre</b></dd>
+  </dl>
+</div>
+
+<div class="encadre">
+  <span class="titre">2008 : la décision qui a tout changé</span>
+  Pendant trente-six ans, les images Landsat furent vendues, jusqu'à plusieurs centaines de
+  dollars la scène. En <b>2008</b>, les États-Unis ont décidé d'ouvrir <b>gratuitement</b>
+  l'intégralité de l'archive. L'effet fut spectaculaire : le nombre d'images distribuées est
+  passé de quelques dizaines de milliers par an à plusieurs <b>millions</b>, et des champs
+  entiers de recherche — suivi de la déforestation, cartographie mondiale des surfaces en
+  eau, mesure de l'étalement urbain — sont devenus possibles du jour au lendemain. C'est le
+  précédent qui a directement inspiré la politique de données ouvertes du programme européen
+  Copernicus.
+</div>
+
+<h3 id="europe">11. SPOT et Meteosat : la réponse européenne</h3>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Les deux grands systèmes européens d'observation <span class="badge eur">Europe</span></caption>
+<tr><th>Système</th><th>Première mise en orbite</th><th>Orbite</th><th>Apport spécifique</th></tr>
+<tr><td><b>Meteosat-1</b><br>ESA puis EUMETSAT</td><td class="num">23 novembre 1977</td><td>Géostationnaire, à 0° de longitude</td><td>Image complète du disque terrestre à cadence rapide, centrée sur l'Europe et l'Afrique. Base des bulletins météo télévisés européens</td></tr>
+<tr><td class="ok"><b>SPOT 1</b><br>CNES</td><td class="num">22 février 1986, par Ariane 1</td><td>Héliosynchrone</td><td>10 m de résolution en panchromatique, 20 m en multispectral. Surtout : un <b>miroir orientable</b> permettant la visée latérale</td></tr>
+</table>
+</div>
+
+<div class="encadre">
+  <span class="titre">L'innovation du miroir orientable</span>
+  La vraie rupture de SPOT n'est pas sa résolution mais sa capacité à <b>viser sur le côté</b>
+  de sa trajectoire. Deux conséquences majeures en découlent. D'abord la <b>revisite rapide</b>
+  : au lieu d'attendre que l'orbite ramène le satellite exactement au-dessus d'une zone, on
+  peut la photographier de biais depuis une trace voisine — décisif pour suivre une
+  catastrophe. Ensuite la <b>stéréoscopie</b> : en photographiant le même lieu sous deux
+  angles différents à quelques jours d'intervalle, on en tire un <b>modèle numérique de
+  terrain</b>. La cartographie du relief par satellite est née là. Le CNES avait en outre créé
+  dès 1982 la société <b>Spot Image</b> pour commercialiser les données — premier opérateur
+  commercial d'imagerie spatiale au monde. Voir <a href="europe.html">Europe</a>.
+</div>
+
+<h3 id="gnss">12. Les quatre constellations de navigation</h3>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Les systèmes globaux de navigation par satellite (GNSS)</caption>
+<tr><th>Système</th><th>Opérateur</th><th>Altitude</th><th>Inclinaison</th><th>Jalons</th></tr>
+<tr><td><b>GPS</b> (NAVSTAR)<br><span class="badge usa">États-Unis</span></td><td>US Space Force</td><td class="num">20 180 km</td><td class="num">55°</td><td>Premier satellite Block I en <b>1978</b> ; capacité opérationnelle complète en <b>1995</b> ; 24 satellites nominaux répartis en 6 plans</td></tr>
+<tr><td><b>GLONASS</b><br><span class="badge urss">Russie</span></td><td>Roscosmos / Forces spatiales</td><td class="num">19 100 km</td><td class="num">64,8°</td><td>Premiers tirs en <b>1982</b>, constellation complète en 1995, effondrement dans les années 1990, reconstitution achevée en <b>2011</b></td></tr>
+<tr><td><b>Galileo</b><br><span class="badge eur">Union européenne</span></td><td>EUSPA et ESA</td><td class="num">23 222 km</td><td class="num">56°</td><td>Services initiaux déclarés le <b>15 décembre 2016</b> ; seul GNSS placé sous <b>contrôle civil</b></td></tr>
+<tr><td><b>Beidou</b> (北斗)<br><span class="badge chn">Chine</span></td><td>CNSA</td><td class="num">MEO, GEO et IGSO</td><td class="num">55°</td><td>Couverture mondiale déclarée en <b>juin 2020</b> avec l'achèvement de Beidou-3. Architecture hybride, unique parmi les GNSS</td></tr>
+</table>
+</div>
+
+<div class="alerte">
+  <span class="titre">2 mai 2000 : le jour où le GPS civil est devenu précis</span>
+  Jusqu'à cette date, le signal GPS destiné aux civils était <b>volontairement dégradé</b> par
+  un dispositif appelé <i>Selective Availability</i> : une erreur pseudo-aléatoire injectée
+  dans les données, qui limitait la précision civile à une centaine de mètres, tandis que
+  l'armée américaine disposait du signal exact. Le <b>2 mai 2000</b>, le président Clinton a
+  ordonné la désactivation immédiate du brouillage. La précision civile est passée du jour au
+  lendemain de <b>~100 m à ~10 m</b>. Toute la navigation routière grand public, l'agriculture
+  de précision et la géolocalisation des téléphones découlent directement de cette décision
+  politique — sans qu'aucun satellite n'ait été modifié.
+</div>
+
+<div class="encadre">
+  <span class="titre">Le GNSS est aussi une horloge</span>
+  On oublie que ces constellations diffusent surtout du <b>temps</b>. Chaque satellite embarque
+  des horloges atomiques, et le récepteur calcule sa position en comparant des instants
+  d'émission. Le sous-produit est une <b>référence temporelle mondiale gratuite</b> au
+  milliardième de seconde, dont dépendent aujourd'hui la synchronisation des réseaux de
+  téléphonie mobile, l'horodatage des transactions financières et surtout la stabilité des
+  <b>réseaux électriques</b>. Une panne prolongée du GNSS serait bien plus grave par ses
+  effets sur l'horloge que par la perte de la navigation. C'est d'ailleurs la raison
+  principale pour laquelle l'Europe a construit Galileo : ne pas dépendre d'un signal
+  militaire étranger qui peut être dégradé sur décision unilatérale.
+</div>
+
+<h3 id="services">13. Copernicus, Argos et Cospas-Sarsat</h3>
+
+<div class="fiche">
+  <h4>Fiche — Copernicus et les Sentinel <span class="badge eur">Union européenne</span></h4>
+  <dl>
+    <dt>Pilotage</dt><dd>Commission européenne, en partenariat avec l'ESA, EUMETSAT, le CEPMMT, le Centre commun de recherche, l'Agence européenne pour l'environnement, l'EMSA, Frontex, le SatCen et Mercator Océan</dd>
+    <dt>Début du programme</dt><dd>2014</dd>
+    <dt>Premier lancement</dt><dd><b>Sentinel-1A</b>, le 3 avril 2014</dd>
+    <dt>Politique de données</dt><dd class="ok"><b>Ouvertes, gratuites et complètes</b> — modèle directement inspiré de l'ouverture de Landsat en 2008</dd>
+    <dt>Missions</dt><dd>Sentinel-1 (radar tous temps), Sentinel-2 (imagerie optique), Sentinel-3 (océans et surfaces), Sentinel-5P (composition atmosphérique), et suivants</dd>
+    <dt>Usages</dt><dd>Suivi du climat, gestion des catastrophes, surveillance maritime, agriculture, qualité de l'air, sécurité civile</dd>
+  </dl>
+</div>
+
+<div class="fiche">
+  <h4>Fiche — Cospas-Sarsat, le sauvetage par satellite</h4>
+  <dl>
+    <dt>Nature</dt><dd>Organisation intergouvernementale à but non lucratif, fondée sur un traité</dd>
+    <dt>Origine du nom</dt><dd>Contraction du russe <i>Kospas</i> (« système spatial de recherche des navires en détresse ») et de l'anglais <i>Sarsat</i> (<i>Search And Rescue Satellite-Aided Tracking</i>)</dd>
+    <dt>Mémorandums fondateurs</dt><dd>23 novembre 1979, puis 5 octobre 1984</dd>
+    <dt>Accord définitif</dt><dd><b>1<sup>er</sup> juillet 1988</b></dd>
+    <dt>Membres</dt><dd><b>45</b> États et agences participants</dd>
+    <dt>Siège</dt><dd>Montréal, Québec</dd>
+    <dt>Principe</dt><dd>Détection et localisation des balises de détresse émettant sur <b>406 MHz</b>, à bord de navires, d'aéronefs et de particuliers</dd>
+    <dt>Particularité politique</dt><dd class="ok">Programme <b>soviéto-américain conçu en pleine guerre froide</b> et resté opérationnel sans interruption depuis</dd>
+  </dl>
+</div>
+
+<p>Le système <b>Argos</b>, opéré depuis 1978 par le CNES avec la NASA et la NOAA, relève
+d'une logique voisine mais civile et scientifique : de minuscules balises fixées à des
+animaux, des bouées océanographiques ou des stations isolées émettent vers des satellites en
+orbite polaire, qui les localisent par effet Doppler et relaient leurs mesures. C'est grâce à
+Argos que l'on connaît les routes migratoires des albatros, des tortues marines et des ours
+blancs — un cas rare où la technique spatiale a créé une discipline scientifique
+entière.</p>
+
+<hr class="sep">
+
+<h3 id="bilan">14. Ce que les satellites ont changé</h3>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Chronologie des premières fonctions</caption>
+<tr><th>Année</th><th>Satellite</th><th>Première</th><th>Descendance actuelle</th></tr>
+<tr><td class="num">1958</td><td>SCORE <span class="badge usa">É.-U.</span></td><td>Voix humaine transmise depuis l'espace</td><td>Toute la télécommunication spatiale</td></tr>
+<tr><td class="num">1960</td><td>TIROS-1 <span class="badge usa">É.-U.</span></td><td>Image télévisée de la Terre ; météorologie spatiale</td><td>Meteosat, GOES, Himawari</td></tr>
+<tr><td class="num">1960</td><td>Echo 1 <span class="badge usa">É.-U.</span></td><td>Relais passif intercontinental</td><td class="ko">Voie sans issue</td></tr>
+<tr><td class="num">1960</td><td>Transit 1B <span class="badge usa">É.-U.</span></td><td>Positionnement par satellite</td><td>GPS, GLONASS, Galileo, Beidou</td></tr>
+<tr><td class="num">1962</td><td>Telstar 1 <span class="badge usa">É.-U.</span></td><td>Télévision en direct entre continents</td><td>Diffusion télévisée mondiale</td></tr>
+<tr><td class="num">1964</td><td>Syncom 3 <span class="badge usa">É.-U.</span></td><td>Premier satellite géostationnaire</td><td>Toute la flotte GEO</td></tr>
+<tr><td class="num">1965</td><td>Intelsat I <span class="badge usa">É.-U.</span></td><td>Premier satellite commercial en GEO</td><td>L'industrie spatiale commerciale</td></tr>
+<tr><td class="num">1965</td><td>Molnia 1 <span class="badge urss">URSS</span></td><td>Couverture des hautes latitudes</td><td>Orbites elliptiques modernes</td></tr>
+<tr><td class="num">1972</td><td>Landsat 1 <span class="badge usa">É.-U.</span></td><td>Observation multispectrale systématique</td><td>Sentinel, SPOT, Pléiades</td></tr>
+<tr><td class="num">1977</td><td>Meteosat-1 <span class="badge eur">Europe</span></td><td>Météorologie géostationnaire européenne</td><td>Meteosat Third Generation</td></tr>
+<tr><td class="num">1986</td><td>SPOT 1 <span class="badge eur">Europe</span></td><td>Visée latérale et stéréoscopie</td><td>Modèles numériques de terrain</td></tr>
+<tr><td class="num">2014</td><td>Sentinel-1A <span class="badge eur">Europe</span></td><td>Observation ouverte et gratuite à grande échelle</td><td>Politique publique du climat</td></tr>
+</table>
+</div>
+
+<div class="note">
+  Une bascule mérite d'être signalée : jusque dans les années 1990, l'essentiel des satellites
+  applicatifs étaient <b>publics ou para-publics</b>. Aujourd'hui, la très grande majorité des
+  objets actifs en orbite appartiennent à des <b>mégaconstellations privées</b> de
+  télécommunications en orbite basse, qui ont fait basculer l'équilibre du GEO vers le LEO —
+  un renversement traité dans <a href="newspace.html">NewSpace</a>.
+</div>
+
+<div class="stat-ligne">
+  <div class="stat"><span class="val">1945</span><span class="lib">l'article de Clarke</span></div>
+  <div class="stat"><span class="val">35 786</span><span class="lib">km, l'orbite géostationnaire</span></div>
+  <div class="stat"><span class="val">240</span><span class="lib">circuits d'Early Bird contre 36 par câble</span></div>
+  <div class="stat"><span class="val">63,4°</span><span class="lib">l'angle critique de Molnia</span></div>
+  <div class="stat"><span class="val">164</span><span class="lib">satellites Molnia lancés</span></div>
+</div>
+
+<div class="note">
+  <b>Pour aller plus loin :</b> les lanceurs qui ont mis tout cela en orbite dans
+  <a href="lanceurs.html">Lanceurs</a> ; les contraintes de site dans
+  <a href="cosmodromes.html">Cosmodromes</a> ; le versant européen dans
+  <a href="europe.html">Europe</a> ; et les constellations contemporaines dans
+  <a href="newspace.html">NewSpace</a>.
+</div>
+
+<div class="sources">
+  <b>Pour approfondir :</b>
+  <ul>
+    <li>Arthur C. Clarke, « Extra-Terrestrial Relays — Can Rocket Stations Give World-wide Radio Coverage? », <i>Wireless World</i>, octobre 1945, p. 305-308.</li>
+    <li>Andrew J. Butrica (dir.), <i>Beyond the Ionosphere: Fifty Years of Satellite Communication</i>, NASA SP-4217 — histoire de référence des télécommunications spatiales.</li>
+    <li>David J. Whalen, <i>The Origins of Satellite Communications, 1945-1965</i>, Smithsonian Institution Press, 2002.</li>
+    <li>NSSDCA (NASA Space Science Data Coordinated Archive) — fiches SCORE (1958-006A), TIROS-1 (1960-002B), Telstar 1 (1962-029A), Intelsat I (1965-028A), Landsat 1 (1972-058A) : source des masses et paramètres orbitaux cités.</li>
+    <li>Bradford W. Parkinson et James J. Spilker, <i>Global Positioning System: Theory and Applications</i>, AIAA, 1996.</li>
+    <li>Johns Hopkins Applied Physics Laboratory, <i>Transit: The Navy Navigation Satellite System</i>, et les articles de W. Guier et G. Weiffenbach sur la détermination d'orbite par effet Doppler.</li>
+    <li>NOAA / NASA, <i>TIROS: The Nation's First Weather Satellite</i> — dossier historique du programme.</li>
+    <li>USGS et NASA, <i>Landsat Science</i> — historique de la série et étude d'impact de l'ouverture des données de 2008.</li>
+    <li>CNES, dossiers historiques SPOT et Argos ; EUMETSAT, historique du programme Meteosat.</li>
+    <li>Commission européenne et ESA, portail <i>Copernicus</i> — description des missions Sentinel et de la politique de données ouvertes.</li>
+    <li>Programme international Cospas-Sarsat, <i>System Data</i> et rapports annuels — statistiques de détection et de sauvetage.</li>
+    <li>Union internationale des télécommunications, règlement des radiocommunications — attribution des positions orbitales géostationnaires.</li>
+    <li>Anatoly Zak, <i>RussianSpaceWeb</i> — dossier sur la famille Molnia et l'orbite du même nom.</li>
+  </ul>
+</div>
+
+<div class="nav-pages">
+  <a href="sondes.html">&laquo; Sondes</a>
+  <a href="mercury-gemini.html">Mercury/Gemini &raquo;</a>
+</div>
+
+</div><!-- /contenu -->
+
+<div class="pied">
+  NEW HORIZON — encyclopédie de la conquête spatiale<br>
+  <span class="maj">Dernière mise à jour : juillet 2026</span> — 24 pages, 100 % rétro, 0 % cookie<br>
+  Images : NASA / ESA / Roscosmos / JAXA / CNSA via Wikimedia Commons — domaine public ou licences libres<br>
+  <a href="../index.html">Accueil du site</a> · <a href="index.html">Sommaire</a> · <a href="chronologie.html">Chronologie</a> · <a href="donnees.html">Données techniques</a>
+</div>
+
+</div><!-- /page -->
+<script src="../scripts/visitor-counter.js"></script>
+</body>
+</html>

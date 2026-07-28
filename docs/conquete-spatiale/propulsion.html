@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>La propulsion spatiale — NEW HORIZON</title>
+<meta name="description" content="L'équation de Tsiolkovski, le budget Δv, l'étagement, les ergols, les quatre cycles moteur, la propulsion nucléaire NERVA et RD-0410, les moteurs ioniques et les voiles solaires.">
+<link rel="shortcut icon" type="image/x-icon" href="https://raw.githubusercontent.com/zomboky/zomboky.github.io/master/docs/assets/icons/ours.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+
+<div class="bandeau">
+  <h1>NEW <span class="rouge">HORIZON</span></h1>
+  <p class="sous-titre">L'encyclopédie de la conquête spatiale &middot; 1232 &rarr; 2026 &middot; toutes les nations</p>
+  <div class="filets"></div>
+</div>
+
+<div class="menu">
+  <a href="index.html">Accueil</a>
+  <span class="menu-ep">I &middot; Avant le spatial (…→1957)</span>
+  <a href="avant-espace.html">Avant l'espace</a>
+  <a href="pionniers.html">Pionniers</a>
+  <a class="actif" href="propulsion.html">Propulsion</a>
+  <a href="animaux.html">Animaux</a>
+  <a href="cosmodromes.html">Cosmodromes</a>
+  <span class="menu-ep">II &middot; L'ouverture de l'espace (1957→1969)</span>
+  <a href="spoutnik.html">Spoutnik</a>
+  <a href="lanceurs.html">Lanceurs</a>
+  <a href="sondes.html">Sondes</a>
+  <a href="satellites.html">Satellites</a>
+  <a href="mercury-gemini.html">Mercury/Gemini</a>
+  <a href="apollo.html">Apollo</a>
+  <a href="lune-sovietique.html">Lune URSS</a>
+  <a href="europe.html">Europe</a>
+  <span class="menu-ep">III &middot; Stations et navettes (1970→2000)</span>
+  <a href="chine.html">Chine</a>
+  <a href="nations.html">Nations</a>
+  <a href="stations.html">Stations</a>
+  <a href="navettes.html">Navettes</a>
+  <span class="menu-ep">IV &middot; L'espace contemporain (2000→2026)</span>
+  <a href="newspace.html">NewSpace</a>
+  <a href="artemis.html">Artemis</a>
+  <span class="menu-ep">Annexes</span>
+  <a href="accidents.html">Accidents</a>
+  <a href="hommes.html">Équipages</a>
+  <a href="donnees.html">Données</a>
+  <a href="chronologie.html">Chronologie</a>
+</div>
+
+<div class="bandeau-defilant">
+  <marquee behavior="scroll" direction="left" scrollamount="4">
+    ★ BIENVENUE DANS LE CENTRE DE CONTRÔLE ★ 324 lancements orbitaux en 2025, record absolu ★ Artemis II a emmené 4 astronautes autour de la Lune le 1<sup>er</sup> avril 2026 ★ 700+ humains ont volé dans l'espace depuis Gagarine ★ Voyager 1 est à plus de 25 milliards de km ★ Bonne visite !
+  </marquee>
+</div>
+
+<div class="ariane">Vous êtes ici : <a href="index.html">Accueil</a> &rsaquo; <b>Propulsion</b></div>
+
+<div class="contenu">
+
+<h2>La propulsion : pourquoi partir coûte si cher</h2>
+
+<p>Tout le reste de cette encyclopédie découle d'une seule équation, publiée en 1903 par un
+instituteur de province. Elle dit une chose désagréable : pour aller vite, il faut emporter
+énormément d'ergols, et emporter des ergols ralentit. Cette page explique cette tyrannie,
+les moyens inventés pour la contourner, et pourquoi une fusée reste, en 2026, un objet
+constitué à 90 % de carburant.</p>
+
+<div class="sommaire">
+  <span class="titre">Sur cette page</span>
+  <ol>
+    <li><a href="#tsiolkovski">L'équation de Tsiolkovski, démontrée</a></li>
+    <li><a href="#isp">L'impulsion spécifique : la mesure qui compte</a></li>
+    <li><a href="#deltav">Le budget Δv : le prix de chaque destination</a></li>
+    <li><a href="#etagement">Pourquoi il faut absolument étager</a></li>
+    <li><a href="#poudre">La poudre : simple, brutale, irrévocable</a></li>
+    <li><a href="#liquides">Les ergols liquides : les grandes familles</a></li>
+    <li><a href="#hypergols">Les hypergols et leur prix humain</a></li>
+    <li><a href="#cryo">L'hydrogène liquide : le meilleur et le pire</a></li>
+    <li><a href="#cycles">Les quatre cycles moteur</a></li>
+    <li><a href="#nucleaire">La propulsion nucléaire thermique</a></li>
+    <li><a href="#electrique">La propulsion électrique</a></li>
+    <li><a href="#voiles">Les voiles solaires</a></li>
+    <li><a href="#comparatif">Tableau comparatif général</a></li>
+  </ol>
+</div>
+
+<h3 id="tsiolkovski">1. L'équation de Tsiolkovski, démontrée</h3>
+
+<p>Une fusée avance en jetant de la masse derrière elle. Considérons un engin de masse
+<span class="mono">m</span> qui éjecte une masse <span class="mono">dm</span> à la vitesse
+<span class="mono">v<sub>e</sub></span> par rapport à lui-même. La conservation de la quantité
+de mouvement impose, dans le vide et sans champ de gravité :</p>
+
+<div class="mono">
+  m · dv = −v<sub>e</sub> · dm
+</div>
+
+<p>En divisant par <span class="mono">m</span> et en intégrant depuis la masse initiale
+<span class="mono">m₀</span> (fusée pleine) jusqu'à la masse finale
+<span class="mono">m<sub>f</sub></span> (fusée vide), on obtient :</p>
+
+<div class="mono">
+  Δv = v<sub>e</sub> · ln( m₀ / m<sub>f</sub> ) = I<sub>sp</sub> · g₀ · ln( m₀ / m<sub>f</sub> )
+</div>
+
+<p>Le rapport <span class="mono">m₀/m<sub>f</sub></span> s'appelle le <b>rapport de masse</b>.
+Le point cruel est le <b>logarithme</b> : il écrase tout. Doubler la quantité d'ergols
+n'apporte pas deux fois plus de vitesse, mais seulement <span class="mono">v<sub>e</sub> ·
+ln 2</span>, soit 0,69 fois la vitesse d'éjection — quelle que soit la taille de la fusée.</p>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Ce que coûte chaque tranche de Δv (avec une vitesse d'éjection de 3 000 m/s, typique du LOX/RP-1)</caption>
+<tr><th>Δv visé</th><th>Rapport de masse requis</th><th>Part d'ergols dans la masse totale</th><th>Ce que cela représente</th></tr>
+<tr><td class="num">1 000 m/s</td><td class="num">1,40</td><td class="num">28 %</td><td class="ok">Confortable</td></tr>
+<tr><td class="num">3 000 m/s</td><td class="num">2,72</td><td class="num">63 %</td><td class="ok">Un étage ordinaire</td></tr>
+<tr><td class="num">6 000 m/s</td><td class="num">7,39</td><td class="num">86 %</td><td class="part">Difficile mais faisable</td></tr>
+<tr><td class="num">9 400 m/s</td><td class="num">23,0</td><td class="num">95,7 %</td><td class="ko">Mise en orbite en un seul étage : structure impossible</td></tr>
+<tr><td class="num">16 000 m/s</td><td class="num">205</td><td class="num">99,5 %</td><td class="ko">Mission lunaire monoétage : totalement exclu</td></tr>
+</table>
+</div>
+
+<div class="encadre">
+  <span class="titre">Le mur des 95 %</span>
+  Une structure de fusée — réservoirs, moteurs, câblage, calculateurs — ne peut pas
+  raisonnablement descendre sous <b>5 à 10 % de la masse totale</b> avec des matériaux réels.
+  Or atteindre l'orbite depuis le sol demande environ 9 400 m/s, ce qui exigerait
+  95,7 % d'ergols avec du kérosène. C'est exactement à la frontière du possible : d'où
+  l'obsession, dans toute l'histoire du lanceur, pour deux leviers seulement — augmenter
+  <span class="mono">v<sub>e</sub></span>, ou <b>jeter la structure devenue inutile en cours
+  de route</b>.
+</div>
+
+<h3 id="isp">2. L'impulsion spécifique : la mesure qui compte</h3>
+
+<p>L'<b>impulsion spécifique</b> <span class="mono">I<sub>sp</sub></span> mesure l'efficacité
+d'un système propulsif. Exprimée en secondes, elle vaut la vitesse d'éjection divisée par
+<span class="mono">g₀</span> = 9,80665 m/s². Physiquement, c'est <b>la durée pendant laquelle
+un kilogramme d'ergol peut produire un kilogramme-force de poussée</b>.</p>
+
+<div class="note">
+  L'unité « seconde » déroute souvent. Elle vient d'une convention historique qui divise une
+  vitesse par une accélération. Retenir simplement : <b>Isp élevée = ergol économe</b>. Pour
+  passer en vitesse d'éjection, multiplier par 9,81 — une Isp de 450 s correspond à
+  4 415 m/s.
+</div>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Impulsions spécifiques comparées, du plus brutal au plus économe</caption>
+<tr><th>Système</th><th>Ergols</th><th>I<sub>sp</sub> (vide)</th><th>Poussée typique</th><th>Emploi</th></tr>
+<tr><td>Poudre (APCP)</td><td>Perchlorate d'ammonium + aluminium + PBHT</td><td class="num">~ 268 s</td><td class="num">Très élevée</td><td>Boosters, missiles</td></tr>
+<tr><td>F-1 <span class="badge usa">É.-U.</span></td><td>LOX / RP-1</td><td class="num">304 s</td><td class="num">7 770 kN</td><td>Saturn V, 1<sup>er</sup> étage</td></tr>
+<tr><td>Viking <span class="badge eur">Europe</span></td><td>N₂O₄ / UH25</td><td class="num">~ 278 s</td><td class="num">678 kN</td><td>Ariane 1 à 4</td></tr>
+<tr><td>RD-180 <span class="badge urss">Russie</span></td><td>LOX / RP-1</td><td class="num">338 s</td><td class="num">4 152 kN</td><td>Atlas V</td></tr>
+<tr><td>Raptor <span class="badge priv">SpaceX</span></td><td>LOX / méthane</td><td class="num">~ 363 s</td><td class="num">~ 2 300 kN</td><td>Starship</td></tr>
+<tr><td class="ok">RS-25 <span class="badge usa">É.-U.</span></td><td>LOX / LH₂</td><td class="num">452,3 s</td><td class="num">2 279 kN</td><td>Navette, SLS</td></tr>
+<tr><td class="ok">RL10 <span class="badge usa">É.-U.</span></td><td>LOX / LH₂</td><td class="num">~ 465 s</td><td class="num">110 kN</td><td>Centaur, DCSS</td></tr>
+<tr><td>NERVA XE Prime <span class="badge usa">É.-U.</span></td><td>LH₂ chauffé par fission</td><td class="num">841 s</td><td class="num">247 kN</td><td>Jamais volé</td></tr>
+<tr><td>RD-0410 <span class="badge urss">URSS</span></td><td>LH₂ chauffé par fission</td><td class="num">910 s</td><td class="num">35,2 kN</td><td>Jamais volé</td></tr>
+<tr><td>Propulseur à effet Hall</td><td>Xénon ionisé</td><td class="num">1 500 à 2 000 s</td><td class="num">~ 0,08 N</td><td>Maintien à poste, transferts</td></tr>
+<tr><td class="ok">NSTAR (Deep Space 1)</td><td>Xénon ionisé</td><td class="num">~ 3 100 s</td><td class="num">0,092 N</td><td>Sondes</td></tr>
+<tr><td class="ok">NEXT</td><td>Xénon ionisé</td><td class="num">~ 4 190 s</td><td class="num">0,236 N</td><td>DART, sondes</td></tr>
+<tr><td class="ok">Voile solaire</td><td class="ok">Aucun</td><td class="ok">Infinie</td><td class="ko">~ 1,12 mN pour 196 m² à 1 UA</td><td>Démonstrateurs</td></tr>
+</table>
+</div>
+
+<h3 id="deltav">3. Le budget Δv : le prix de chaque destination</h3>
+
+<p>Chaque manœuvre spatiale a un tarif en Δv, indépendant du véhicule employé. Additionner
+ces tarifs donne le <b>budget de mission</b>, dont découle mécaniquement la taille du
+lanceur.</p>
+
+<div class="schema">
+<svg viewBox="0 0 900 400" role="img" aria-label="Échelle des budgets de variation de vitesse nécessaires pour atteindre différentes destinations">
+  <rect width="900" height="400" fill="#000"/>
+
+  <g font-family="Courier New, monospace" font-size="11" fill="#ffcc00">
+    <text x="20" y="24">CARTE DU Δv — CUMUL DEPUIS LE SOL TERRESTRE (km/s)</text>
+  </g>
+
+  <!-- axe -->
+  <g stroke="#888" stroke-width="1" font-family="Courier New, monospace" font-size="10" fill="#cccccc">
+    <line x1="150" y1="360" x2="860" y2="360"/>
+    <line x1="150" y1="355" x2="150" y2="365"/>
+    <line x1="292" y1="355" x2="292" y2="365"/>
+    <line x1="434" y1="355" x2="434" y2="365"/>
+    <line x1="576" y1="355" x2="576" y2="365"/>
+    <line x1="718" y1="355" x2="718" y2="365"/>
+    <line x1="860" y1="355" x2="860" y2="365"/>
+    <text x="150" y="378" text-anchor="middle">0</text>
+    <text x="292" y="378" text-anchor="middle">4</text>
+    <text x="434" y="378" text-anchor="middle">8</text>
+    <text x="576" y="378" text-anchor="middle">12</text>
+    <text x="718" y="378" text-anchor="middle">16</text>
+    <text x="860" y="378" text-anchor="middle">20</text>
+  </g>
+
+  <!-- barres : x = 150 + km/s * 35.5 -->
+  <g font-family="Arial, sans-serif" font-size="11">
+    <!-- LEO 9.4 -->
+    <text x="142" y="60" text-anchor="end" fill="#ffffff">Orbite basse (LEO)</text>
+    <rect x="150" y="48" width="334" height="18" fill="#00334a" stroke="#00ccff" stroke-width="2"/>
+    <text x="492" y="61" fill="#00ff88" font-family="Courier New, monospace" font-size="10">9,4</text>
+
+    <!-- GTO 11.8 -->
+    <text x="142" y="96" text-anchor="end" fill="#ffffff">Transfert géostationnaire</text>
+    <rect x="150" y="84" width="419" height="18" fill="#00334a" stroke="#00ccff" stroke-width="2"/>
+    <text x="577" y="97" fill="#00ff88" font-family="Courier New, monospace" font-size="10">11,8</text>
+
+    <!-- GEO 13.3 -->
+    <text x="142" y="132" text-anchor="end" fill="#ffffff">Orbite géostationnaire</text>
+    <rect x="150" y="120" width="472" height="18" fill="#00334a" stroke="#00ccff" stroke-width="2"/>
+    <text x="630" y="133" fill="#00ff88" font-family="Courier New, monospace" font-size="10">13,3</text>
+
+    <!-- TLI 12.5 -->
+    <text x="142" y="168" text-anchor="end" fill="#ffffff">Injection translunaire</text>
+    <rect x="150" y="156" width="444" height="18" fill="#003a2a" stroke="#00cc66" stroke-width="2"/>
+    <text x="602" y="169" fill="#00ff88" font-family="Courier New, monospace" font-size="10">12,5</text>
+
+    <!-- orbite lunaire 13.3 -->
+    <text x="142" y="204" text-anchor="end" fill="#ffffff">Orbite lunaire</text>
+    <rect x="150" y="192" width="472" height="18" fill="#003a2a" stroke="#00cc66" stroke-width="2"/>
+    <text x="630" y="205" fill="#00ff88" font-family="Courier New, monospace" font-size="10">13,3</text>
+
+    <!-- surface lunaire 15.1 -->
+    <text x="142" y="240" text-anchor="end" fill="#ffffff">Surface de la Lune</text>
+    <rect x="150" y="228" width="536" height="18" fill="#003a2a" stroke="#00cc66" stroke-width="2"/>
+    <text x="694" y="241" fill="#00ff88" font-family="Courier New, monospace" font-size="10">15,1</text>
+
+    <!-- transfert Mars 13.0 -->
+    <text x="142" y="276" text-anchor="end" fill="#ffffff">Transfert vers Mars</text>
+    <rect x="150" y="264" width="462" height="18" fill="#3a1a00" stroke="#ff9900" stroke-width="2"/>
+    <text x="620" y="277" fill="#ffcc66" font-family="Courier New, monospace" font-size="10">13,0</text>
+
+    <!-- sortie systeme solaire 16.6 -->
+    <text x="142" y="312" text-anchor="end" fill="#ffffff">Échappement du Soleil</text>
+    <rect x="150" y="300" width="589" height="18" fill="#3a1a00" stroke="#ff9900" stroke-width="2"/>
+    <text x="747" y="313" fill="#ffcc66" font-family="Courier New, monospace" font-size="10">16,6</text>
+  </g>
+
+  <!-- repere 9.4 -->
+  <g stroke="#ff4444" stroke-width="1" stroke-dasharray="4 4">
+    <line x1="484" y1="40" x2="484" y2="352"/>
+  </g>
+  <text x="488" y="340" font-family="Courier New, monospace" font-size="10" fill="#ff6666">le sol → LEO consomme déjà 9,4</text>
+</svg>
+<div class="legende">Le premier tronçon — quitter le sol et se mettre en orbite basse — coûte à lui seul plus de la moitié du budget de n'importe quelle mission. Une fois en orbite basse, on est « à mi-chemin de partout ». Valeurs indicatives, incluant les pertes gravitationnelles et aérodynamiques pour le premier segment.</div>
+</div>
+
+<div class="encadre">
+  <span class="titre">Les pertes : ce que l'équation ne dit pas</span>
+  La vitesse orbitale à 200 km est de <b>7 800 m/s</b>, mais un lanceur doit fournir environ
+  <b>9 400 m/s</b>. La différence, environ 1 600 m/s, se répartit entre :
+  les <b>pertes gravitationnelles</b> (1 200 à 1 500 m/s — pendant l'ascension verticale, une
+  partie de la poussée ne sert qu'à ne pas retomber),
+  les <b>pertes aérodynamiques</b> (100 à 300 m/s de traînée),
+  et les <b>pertes de pression de tuyère</b> au niveau de la mer. C'est aussi pourquoi on
+  bascule très tôt vers l'horizontale — la fameuse manœuvre de <i>gravity turn</i>.
+</div>
+
+<h3 id="etagement">4. Pourquoi il faut absolument étager</h3>
+
+<p>L'idée est chez Tsiolkovski dès 1903 : puisque la structure vide pénalise le rapport de
+masse, il faut <b>s'en débarrasser dès qu'elle est vide</b>. Chaque étage largué remet le
+compteur du logarithme à zéro pour l'étage suivant, qui repart avec un rapport de masse
+favorable.</p>
+
+<div class="schema">
+<svg viewBox="0 0 900 320" role="img" aria-label="Comparaison entre une fusée à un seul étage et une fusée à trois étages pour la même charge utile">
+  <rect width="900" height="320" fill="#000"/>
+
+  <g font-family="Courier New, monospace" font-size="11" fill="#ffcc00">
+    <text x="20" y="24">MÊME MISSION (Δv = 9 400 m/s), MÊME CHARGE UTILE — DEUX ARCHITECTURES</text>
+  </g>
+
+  <!-- MONOETAGE -->
+  <g transform="translate(70,50)">
+    <text x="0" y="0" font-family="Arial, sans-serif" font-size="12" fill="#ffffff">Un seul étage</text>
+    <!-- reservoir -->
+    <rect x="0" y="14" width="90" height="200" fill="#00202e" stroke="#00ccff" stroke-width="2"/>
+    <!-- structure morte hachurée en bas -->
+    <rect x="0" y="176" width="90" height="38" fill="#3a0000" stroke="#ff4444" stroke-width="2"/>
+    <!-- charge utile -->
+    <rect x="30" y="0" width="30" height="14" fill="#00ff88" stroke="#00ff88"/>
+    <g font-family="Courier New, monospace" font-size="10" fill="#cfe3ff">
+      <text x="100" y="40">ergols : 95,7 %</text>
+      <text x="100" y="56" fill="#ff6666">structure : 4,3 % max</text>
+      <text x="100" y="72" fill="#00ff88">charge utile : ~ 0 %</text>
+    </g>
+    <g font-family="Arial, sans-serif" font-size="11" fill="#ff6666">
+      <text x="100" y="104">Aucun matériau réel ne tient</text>
+      <text x="100" y="120">un réservoir + moteurs + avionique</text>
+      <text x="100" y="136">sous 4,3 % de la masse totale.</text>
+      <text x="100" y="158" fill="#ff4444">→ charge utile négative</text>
+    </g>
+  </g>
+
+  <!-- separateur -->
+  <line x1="450" y1="50" x2="450" y2="290" stroke="#444" stroke-width="1"/>
+
+  <!-- TROIS ETAGES -->
+  <g transform="translate(490,50)">
+    <text x="0" y="0" font-family="Arial, sans-serif" font-size="12" fill="#ffffff">Trois étages</text>
+    <!-- etage 1 -->
+    <rect x="0" y="140" width="90" height="74" fill="#00202e" stroke="#00ccff" stroke-width="2"/>
+    <text x="45" y="182" font-family="Courier New, monospace" font-size="10" fill="#ffcc00" text-anchor="middle">ét. 1</text>
+    <!-- etage 2 -->
+    <rect x="12" y="80" width="66" height="60" fill="#00202e" stroke="#00ccff" stroke-width="2"/>
+    <text x="45" y="114" font-family="Courier New, monospace" font-size="10" fill="#ffcc00" text-anchor="middle">ét. 2</text>
+    <!-- etage 3 -->
+    <rect x="22" y="34" width="46" height="46" fill="#00202e" stroke="#00ccff" stroke-width="2"/>
+    <text x="45" y="62" font-family="Courier New, monospace" font-size="10" fill="#ffcc00" text-anchor="middle">ét. 3</text>
+    <!-- charge utile -->
+    <rect x="32" y="14" width="26" height="20" fill="#00ff88" stroke="#00ff88"/>
+    <path d="M32 14 L45 0 L58 14 Z" fill="#00ff88"/>
+
+    <!-- fleches de largage -->
+    <g stroke="#ff9900" stroke-width="1.5" fill="#ff9900">
+      <line x1="94" y1="177" x2="130" y2="177"/><path d="M130 173 L138 177 L130 181 Z"/>
+      <line x1="82" y1="110" x2="130" y2="110"/><path d="M130 106 L138 110 L130 114 Z"/>
+    </g>
+    <g font-family="Courier New, monospace" font-size="10" fill="#ffcc66">
+      <text x="144" y="181">largué à 2,6 km/s</text>
+      <text x="144" y="114">largué à 6,8 km/s</text>
+    </g>
+
+    <g font-family="Arial, sans-serif" font-size="11" fill="#cfe3ff">
+      <text x="144" y="40">Chaque largage supprime une</text>
+      <text x="144" y="56">structure devenue inutile :</text>
+      <text x="144" y="72">le rapport de masse de l'étage</text>
+      <text x="144" y="88">suivant repart à son avantage.</text>
+    </g>
+    <text x="144" y="212" font-family="Arial, sans-serif" font-size="11" fill="#00ff88">→ charge utile ≈ 3 à 4 % de la masse initiale</text>
+  </g>
+</svg>
+<div class="legende">L'étagement ne réduit pas le Δv à fournir : il redistribue le rapport de masse entre plusieurs véhicules successifs, dont chacun reste dans le domaine du constructible. C'est la seule raison pour laquelle l'orbite est accessible.</div>
+</div>
+
+<div class="note">
+  Le nombre optimal d'étages est un compromis. Chaque étage supplémentaire ajoute des
+  moteurs, des interfaces et un mécanisme de séparation — autant de masse morte et de points
+  de défaillance. En pratique, l'optimum se situe entre <b>deux et quatre étages</b>. Le
+  vaisseau lunaire imaginé par la BIS en 1939 en prévoyait six, ce qui était déjà excessif —
+  voir <a href="avant-espace.html">Avant l'espace</a>.
+</div>
+
+<h3 id="poudre">5. La poudre : simple, brutale, irrévocable</h3>
+
+<p>Un propulseur à poudre est un tube rempli d'un bloc solide qui contient à la fois le
+combustible et l'oxydant. Il n'a ni pompe, ni vanne, ni réservoir, ni conduite. Sa
+composition moderne classique — dite <b>APCP</b> — associe du perchlorate d'ammonium
+(oxydant, ~70 %), de la poudre d'aluminium (combustible, ~16 %) et un liant polybutadiène
+qui sert aussi de carburant.</p>
+
+<div class="fiche">
+  <h4>Fiche technique — propulseur d'appoint à poudre de la navette (SRB)</h4>
+  <dl>
+    <dt>Longueur</dt><dd>45,5 m — plus long qu'un Boeing 737</dd>
+    <dt>Diamètre</dt><dd>3,71 m</dd>
+    <dt>Masse au décollage</dt><dd>590 t chacun, dont <b>500 t de poudre</b></dd>
+    <dt>Poussée au décollage</dt><dd>12 500 kN chacun — les deux propulseurs fournissaient <b>71 %</b> de la poussée totale au décollage</dd>
+    <dt>Composition de la poudre</dt><dd>Perchlorate d'ammonium 69,6 %, aluminium 16 %, liant PBAN 12,04 %, oxyde de fer 0,4 % (catalyseur), agent de réticulation 1,96 %</dd>
+    <dt>Durée de combustion</dt><dd>127 secondes, non modulable, non interruptible</dd>
+    <dt>Géométrie du bloc</dt><dd>Canal central en étoile à 11 branches dans le segment avant — c'est la <b>forme du trou</b>, et non un réglage, qui impose la courbe de poussée dans le temps</dd>
+    <dt>Récupération</dt><dd>Par parachutes, amerrissage puis remise à neuf — les seuls propulseurs à poudre réutilisés de l'histoire</dd>
+  </dl>
+</div>
+
+<p>Ce dernier point mérite d'être souligné : n'ayant ni vanne ni régulateur, un moteur à
+poudre ne peut voir sa poussée modulée qu'en <b>sculptant la géométrie du canal central</b>
+avant le tir. Une section en étoile offre beaucoup de surface de combustion au début, puis
+de moins en moins à mesure que le bloc se consume. Toute la loi de poussée est donc figée à
+la fabrication, des mois avant le lancement.</p>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Poudre contre liquide : le compromis fondamental</caption>
+<tr><th>Critère</th><th>Propulseur à poudre</th><th>Moteur à ergols liquides</th></tr>
+<tr><td>Impulsion spécifique</td><td class="ko">Faible (~ 268 s)</td><td class="ok">Élevée (300 à 465 s)</td></tr>
+<tr><td>Poussée par unité de masse</td><td class="ok">Très élevée</td><td class="part">Moyenne</td></tr>
+<tr><td>Densité (donc volume des réservoirs)</td><td class="ok">Excellente</td><td class="part">Variable, catastrophique pour LH₂</td></tr>
+<tr><td>Complexité mécanique</td><td class="ok">Quasi nulle</td><td class="ko">Turbopompes à 30 000 tr/min</td></tr>
+<tr><td>Stockage prolongé</td><td class="ok">Des années, prêt au tir</td><td class="ko">Remplissage juste avant le tir (sauf hypergols)</td></tr>
+<tr><td>Modulation de poussée</td><td class="ko">Impossible</td><td class="ok">Possible</td></tr>
+<tr><td>Arrêt en vol</td><td class="ko"><b>Impossible</b> — une fois allumé, il brûle jusqu'au bout</td><td class="ok">Une vanne suffit</td></tr>
+<tr><td>Réallumage</td><td class="ko">Impossible</td><td class="ok">Courant</td></tr>
+</table>
+</div>
+
+<div class="alerte">
+  <span class="titre">L'impossibilité d'arrêter : une conséquence mortelle</span>
+  Cette propriété n'est pas une abstraction. Lors de l'accident de <i>Challenger</i>, le
+  28 janvier 1986, les deux propulseurs d'appoint à poudre <b>ont continué de fonctionner
+  normalement</b> après la désintégration de l'orbiteur, poursuivant leur course jusqu'à ce
+  que l'officier de sécurité les détruise à distance. C'est également la raison pour laquelle
+  les lanceurs à poudre sont restés le standard des <b>missiles balistiques</b> — on veut
+  qu'ils partent vite et sans préparatifs — et pourquoi le vol habité a longtemps rechigné à
+  les employer. Voir <a href="accidents.html">Accidents</a> et <a href="navettes.html">Navettes</a>.
+</div>
+
+<h3 id="liquides">6. Les ergols liquides : les grandes familles</h3>
+
+<figure class="fig-droite">
+  <img src="https://commons.wikimedia.org/wiki/Special:FilePath/F-1_rocket_engine.jpg?width=360" alt="Moteur-fusée F-1 de la Saturn V">
+  <figcaption>Le F-1, moteur du premier étage de la Saturn V : 7 770 kN dans le vide, un cycle à générateur de gaz, LOX/RP-1. Le plus puissant moteur-fusée à chambre unique jamais mis en service.<br><span class="credit">NASA / domaine public</span></figcaption>
+</figure>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Les grands couples d'ergols liquides</caption>
+<tr><th>Couple</th><th>I<sub>sp</sub> vide</th><th>Densité moyenne</th><th>Températures de stockage</th><th>Avantages</th><th>Inconvénients</th></tr>
+<tr><td><b>LOX / RP-1</b><br>kérosène raffiné</td><td class="num">300-338 s</td><td class="num">~ 1,03</td><td>LOX à −183 °C ; RP-1 ambiant</td><td>Dense, donc petits réservoirs ; peu coûteux ; bien maîtrisé</td><td>Cokéfaction des circuits de refroidissement ; suies</td></tr>
+<tr><td><b>LOX / LH₂</b></td><td class="num">440-465 s</td><td class="num">~ 0,28</td><td>−183 °C et −253 °C</td><td>La meilleure I<sub>sp</sub> chimique en service</td><td>Réservoirs énormes ; fuites ; fragilisation des aciers ; coût</td></tr>
+<tr><td><b>LOX / méthane</b></td><td class="num">~ 363 s</td><td class="num">~ 0,82</td><td>−183 °C et −162 °C</td><td>Propre, réutilisable, températures voisines ; synthétisable sur Mars</td><td>Arrivé tardivement en service</td></tr>
+<tr><td><b>N₂O₄ / UDMH</b><br>hypergols</td><td class="num">280-320 s</td><td class="num">~ 1,18</td><td>Ambiante</td><td>Stockables des années ; allumage spontané ; ultra-fiables</td><td class="ko">Toxiques et cancérogènes</td></tr>
+<tr><td><b>H₂O₂ / kérosène</b></td><td class="num">~ 300 s</td><td class="num">~ 1,29</td><td>Ambiante</td><td>Peu toxique</td><td>Décomposition spontanée du peroxyde ; rare</td></tr>
+</table>
+</div>
+
+<div class="encadre">
+  <span class="titre">Pourquoi la densité compte autant que l'Isp</span>
+  L'hydrogène liquide a une densité de <b>70,8 kg/m³</b> — quatorze fois moins que l'eau. Pour
+  embarquer la même masse d'ergols qu'un étage au kérosène, un étage à hydrogène a besoin
+  d'un réservoir <b>environ trois fois plus volumineux</b>. Or un réservoir plus gros, c'est
+  plus de surface, donc plus de masse structurelle et plus de traînée. C'est pourquoi
+  l'hydrogène, malgré son Isp imbattable, est presque toujours réservé aux <b>étages
+  supérieurs</b>, là où l'Isp prime, tandis que le premier étage préfère un ergol dense.
+  La Saturn V illustre parfaitement ce partage : kérosène au premier étage, hydrogène aux
+  deuxième et troisième.
+</div>
+
+<h3 id="hypergols">7. Les hypergols et leur prix humain</h3>
+
+<p>Deux ergols sont dits <b>hypergoliques</b> lorsqu'ils s'enflamment spontanément au
+contact, sans allumeur. Le couple dominant associe le <b>peroxyde d'azote</b> (N₂O₄,
+oxydant) et la <b>diméthylhydrazine asymétrique</b> (UDMH, de formule (CH₃)₂N−NH₂). Dans le
+jargon soviétique, on les appelle respectivement <i>amyl</i> et <i>heptyl</i>.</p>
+
+<div class="fiche">
+  <h4>Fiche — le couple N₂O₄ / UDMH</h4>
+  <dl>
+    <dt>Délai d'allumage</dt><dd>Quelques millisecondes, sans aucun dispositif d'allumage</dd>
+    <dt>Conservation</dt><dd>Liquides à température ambiante — un missile ou une sonde peut rester chargé pendant des années</dd>
+    <dt>Nombre ONU de l'UDMH</dt><dd>1163</dd>
+    <dt>Toxicité de l'UDMH</dt><dd>Cancérogène probable ; absorbé par la peau ; atteintes hépatiques et du système nerveux central</dd>
+    <dt>Toxicité du N₂O₄</dt><dd>Vapeurs brun-rouge ; provoque un œdème pulmonaire retardé, parfois plusieurs heures après une exposition jugée bénigne</dd>
+    <dt>Variante Aerozine 50</dt><dd>Mélange 50/50 d'UDMH et d'hydrazine — employé par le Titan II, le module de service et le module lunaire d'Apollo</dd>
+    <dt>Utilisateurs majeurs</dt><dd>Proton, Titan II, Longue Marche 2/3/4, Ariane 1 à 4 (variante UH25), systèmes de contrôle d'attitude de presque tous les vaisseaux</dd>
+  </dl>
+</div>
+
+<div class="alerte">
+  <span class="titre">Le coût sanitaire et environnemental</span>
+  Les hypergols ont un bilan lourd. Les premiers étages de Proton retombent depuis des
+  décennies dans des <b>zones de chute au Kazakhstan et en Sibérie</b>, où les résidus
+  d'heptyl sont un sujet de contentieux récurrent entre la Russie et le Kazakhstan. Lors du
+  retour d'<b>Apollo-Soyouz</b> en juillet 1975, une vanne restée ouverte a aspiré des vapeurs
+  de N₂O₄ dans la cabine : les trois astronautes américains ont été hospitalisés deux semaines
+  pour œdème pulmonaire, et l'un d'eux a frôlé la mort. Enfin, la <b>catastrophe de Nedelin</b>
+  du 24 octobre 1960 — l'explosion au sol d'un missile R-16 à hypergols, qui a tué plusieurs
+  dizaines de personnes — reste le pire accident de l'histoire de l'astronautique.
+  Voir <a href="accidents.html">Accidents</a>.
+</div>
+
+<h3 id="cryo">8. L'hydrogène liquide : le meilleur et le pire</h3>
+
+<figure class="fig-gauche">
+  <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Shuttle_Main_Engine_Test_Firing.jpg?width=360" alt="Essai au banc d'un moteur principal de la navette spatiale">
+  <figcaption>Essai au banc d'un RS-25. La flamme LOX/LH₂ est presque invisible : elle ne produit que de la vapeur d'eau, sans particules de suie incandescentes.<br><span class="credit">NASA / domaine public</span></figcaption>
+</figure>
+
+<p>L'hydrogène liquide est l'ergol de la performance maximale et des ennuis maximaux.</p>
+
+<div class="fiche">
+  <h4>Fiche — l'hydrogène liquide (LH₂) comme ergol</h4>
+  <dl>
+    <dt>Température d'ébullition</dt><dd>−252,9 °C, soit 20,3 K — à 20 degrés du zéro absolu</dd>
+    <dt>Masse volumique</dt><dd>70,8 kg/m³ — quatorze fois moins dense que l'eau</dd>
+    <dt>Gain en I<sub>sp</sub></dt><dd>De l'ordre de <b>+35 %</b> par rapport au kérosène</dd>
+    <dt>Produit de combustion</dt><dd>Vapeur d'eau exclusivement — flamme quasi invisible</dd>
+    <dt>Étanchéité</dt><dd>La molécule H₂ est si petite qu'elle traverse des joints étanches à tous les autres fluides</dd>
+    <dt>Fragilisation</dt><dd>L'hydrogène diffuse dans les aciers et les rend cassants — impose des alliages spécifiques</dd>
+    <dt>Ébullition permanente</dt><dd>Le réservoir se vide tout seul (<i>boil-off</i>) ; il faut remplir en continu jusqu'au décollage</dd>
+    <dt>Isolation</dt><dd>Impose une protection thermique externe épaisse — c'est elle qui donne au réservoir de la navette sa couleur orange</dd>
+  </dl>
+</div>
+
+<div class="alerte">
+  <span class="titre">L'hydrogène a fait rater des lancements pendant soixante ans</span>
+  La difficulté n'est pas théorique. En 2022, le programme <b>Artemis I</b> a subi
+  <b>trois reports</b> successifs dus à des fuites d'hydrogène au niveau du raccord de
+  remplissage rapide — un problème identique à celui qui avait affecté la navette pendant
+  trente ans. La <b>navette Columbia</b>, en 1981, avait déjà retardé son premier vol pour des
+  raisons voisines. L'hydrogène est le seul ergol dont la manipulation soit restée un
+  problème ouvert du début de l'ère spatiale jusqu'à aujourd'hui, et c'est un des arguments
+  majeurs qui ont fait basculer les concepteurs récents vers le <b>méthane</b>.
+</div>
+
+<h3 id="cycles">9. Les quatre cycles moteur</h3>
+
+<p>Alimenter une chambre de combustion à 200 bars exige des turbopompes, et il faut bien
+entraîner ces turbines avec quelque chose. La manière dont on s'y prend définit le
+<b>cycle</b> du moteur, et c'est le choix architectural le plus lourd de conséquences.</p>
+
+<div class="schema">
+<svg viewBox="0 0 900 420" role="img" aria-label="Schéma comparé des quatre cycles de moteur-fusée : générateur de gaz, expander, combustion étagée et flux intégral">
+  <rect width="900" height="420" fill="#000"/>
+
+  <g font-family="Courier New, monospace" font-size="11" fill="#ffcc00">
+    <text x="20" y="22">LES QUATRE CYCLES — CE QUI ENTRAÎNE LA TURBOPOMPE</text>
+  </g>
+
+  <!-- ================= 1. GENERATEUR DE GAZ ================= -->
+  <g transform="translate(30,45)">
+    <text x="0" y="0" font-family="Arial, sans-serif" font-size="12" fill="#ffffff">1 · Générateur de gaz (ouvert)</text>
+    <rect x="0" y="10" width="400" height="150" fill="#0a0a0a" stroke="#333" stroke-width="1"/>
+    <!-- reservoirs -->
+    <rect x="14" y="24" width="42" height="24" fill="#00202e" stroke="#00ccff" stroke-width="1.5"/>
+    <text x="35" y="40" font-family="Courier New, monospace" font-size="9" fill="#66ccff" text-anchor="middle">LOX</text>
+    <rect x="14" y="60" width="42" height="24" fill="#2a1400" stroke="#ff9900" stroke-width="1.5"/>
+    <text x="35" y="76" font-family="Courier New, monospace" font-size="9" fill="#ffcc66" text-anchor="middle">FUEL</text>
+    <!-- turbopompe -->
+    <circle cx="110" cy="54" r="18" fill="#001a33" stroke="#3399ff" stroke-width="1.5"/>
+    <text x="110" y="58" font-family="Courier New, monospace" font-size="9" fill="#99ccff" text-anchor="middle">TP</text>
+    <!-- generateur -->
+    <rect x="96" y="100" width="52" height="24" fill="#2a0000" stroke="#ff4444" stroke-width="1.5"/>
+    <text x="122" y="116" font-family="Courier New, monospace" font-size="9" fill="#ff8888" text-anchor="middle">GG</text>
+    <!-- chambre -->
+    <path d="M250 34 L300 34 L300 62 L318 84 L282 84 L268 62 L250 62 Z" fill="#001a2a" stroke="#00ccff" stroke-width="1.5"/>
+    <text x="275" y="52" font-family="Courier New, monospace" font-size="9" fill="#66ccff" text-anchor="middle">CC</text>
+    <!-- flux -->
+    <g stroke="#00ccff" stroke-width="1.5" fill="none">
+      <path d="M56 36 L92 44"/><path d="M56 72 L92 64"/>
+      <path d="M128 50 L250 44"/>
+    </g>
+    <!-- prelevement vers GG -->
+    <g stroke="#ff6600" stroke-width="1.5" fill="none">
+      <path d="M110 72 L110 100"/>
+    </g>
+    <!-- echappement perdu -->
+    <g stroke="#ff4444" stroke-width="1.5" fill="none" stroke-dasharray="4 3">
+      <path d="M148 112 L210 112"/>
+    </g>
+    <path d="M210 108 L220 112 L210 116 Z" fill="#ff4444"/>
+    <text x="226" y="116" font-family="Courier New, monospace" font-size="9" fill="#ff6666">rejeté</text>
+    <text x="226" y="128" font-family="Courier New, monospace" font-size="9" fill="#ff6666">1 à 3 % perdus</text>
+    <text x="14" y="150" font-family="Arial, sans-serif" font-size="10" fill="#cfe3ff">F-1, Merlin, Vulcain 2, J-2 — simple, robuste, un peu gaspilleur.</text>
+  </g>
+
+  <!-- ================= 2. EXPANDER ================= -->
+  <g transform="translate(465,45)">
+    <text x="0" y="0" font-family="Arial, sans-serif" font-size="12" fill="#ffffff">2 · Expander (fermé)</text>
+    <rect x="0" y="10" width="400" height="150" fill="#0a0a0a" stroke="#333" stroke-width="1"/>
+    <rect x="14" y="24" width="42" height="24" fill="#00202e" stroke="#00ccff" stroke-width="1.5"/>
+    <text x="35" y="40" font-family="Courier New, monospace" font-size="9" fill="#66ccff" text-anchor="middle">LOX</text>
+    <rect x="14" y="60" width="42" height="24" fill="#2a1400" stroke="#ff9900" stroke-width="1.5"/>
+    <text x="35" y="76" font-family="Courier New, monospace" font-size="9" fill="#ffcc66" text-anchor="middle">LH2</text>
+    <circle cx="110" cy="54" r="18" fill="#001a33" stroke="#3399ff" stroke-width="1.5"/>
+    <text x="110" y="58" font-family="Courier New, monospace" font-size="9" fill="#99ccff" text-anchor="middle">TP</text>
+    <path d="M250 34 L300 34 L300 62 L318 84 L282 84 L268 62 L250 62 Z" fill="#001a2a" stroke="#00ccff" stroke-width="1.5"/>
+    <text x="275" y="52" font-family="Courier New, monospace" font-size="9" fill="#66ccff" text-anchor="middle">CC</text>
+    <g stroke="#00ccff" stroke-width="1.5" fill="none">
+      <path d="M56 36 L92 44"/><path d="M128 50 L250 44"/>
+    </g>
+    <!-- circuit de refroidissement : le fuel longe la paroi puis va a la turbine -->
+    <g stroke="#ff9900" stroke-width="1.5" fill="none">
+      <path d="M56 72 L80 72 L80 126 L260 126 L260 88"/>
+      <path d="M260 88 L268 62"/>
+    </g>
+    <g stroke="#ffcc00" stroke-width="1.5" fill="none">
+      <path d="M170 126 L170 74 L94 66"/>
+    </g>
+    <path d="M100 62 L90 66 L100 70 Z" fill="#ffcc00"/>
+    <text x="176" y="112" font-family="Courier New, monospace" font-size="9" fill="#ffcc66">chauffé par la paroi</text>
+    <text x="14" y="150" font-family="Arial, sans-serif" font-size="10" fill="#cfe3ff">RL10, Vinci — aucune perte, mais plafonné à ~3 000 kN (loi carré-cube).</text>
+  </g>
+
+  <!-- ================= 3. COMBUSTION ETAGEE ================= -->
+  <g transform="translate(30,225)">
+    <text x="0" y="0" font-family="Arial, sans-serif" font-size="12" fill="#ffffff">3 · Combustion étagée (fermé)</text>
+    <rect x="0" y="10" width="400" height="150" fill="#0a0a0a" stroke="#333" stroke-width="1"/>
+    <rect x="14" y="24" width="42" height="24" fill="#00202e" stroke="#00ccff" stroke-width="1.5"/>
+    <text x="35" y="40" font-family="Courier New, monospace" font-size="9" fill="#66ccff" text-anchor="middle">LOX</text>
+    <rect x="14" y="60" width="42" height="24" fill="#2a1400" stroke="#ff9900" stroke-width="1.5"/>
+    <text x="35" y="76" font-family="Courier New, monospace" font-size="9" fill="#ffcc66" text-anchor="middle">FUEL</text>
+    <circle cx="110" cy="54" r="18" fill="#001a33" stroke="#3399ff" stroke-width="1.5"/>
+    <text x="110" y="58" font-family="Courier New, monospace" font-size="9" fill="#99ccff" text-anchor="middle">TP</text>
+    <!-- prebruleur -->
+    <rect x="150" y="88" width="60" height="26" fill="#331a00" stroke="#ffaa00" stroke-width="1.5"/>
+    <text x="180" y="105" font-family="Courier New, monospace" font-size="9" fill="#ffcc66" text-anchor="middle">prébrûleur</text>
+    <path d="M250 34 L300 34 L300 62 L318 84 L282 84 L268 62 L250 62 Z" fill="#001a2a" stroke="#00ccff" stroke-width="1.5"/>
+    <text x="275" y="52" font-family="Courier New, monospace" font-size="9" fill="#66ccff" text-anchor="middle">CC</text>
+    <g stroke="#00ccff" stroke-width="1.5" fill="none">
+      <path d="M56 36 L92 44"/><path d="M56 72 L92 64"/>
+    </g>
+    <g stroke="#ffaa00" stroke-width="1.5" fill="none">
+      <path d="M110 72 L110 101 L150 101"/>
+      <path d="M210 101 L232 101 L232 60 L250 52"/>
+    </g>
+    <path d="M244 48 L252 52 L244 56 Z" fill="#ffaa00"/>
+    <text x="150" y="132" font-family="Courier New, monospace" font-size="9" fill="#ffcc66">tout repasse dans la chambre</text>
+    <text x="14" y="150" font-family="Arial, sans-serif" font-size="10" fill="#cfe3ff">RD-170/180, RS-25, NK-33 — rien de perdu, mais gaz brûlants sous 500 bars.</text>
+  </g>
+
+  <!-- ================= 4. FLUX INTEGRAL ================= -->
+  <g transform="translate(465,225)">
+    <text x="0" y="0" font-family="Arial, sans-serif" font-size="12" fill="#ffffff">4 · Flux intégral (fermé, double)</text>
+    <rect x="0" y="10" width="400" height="150" fill="#0a0a0a" stroke="#333" stroke-width="1"/>
+    <rect x="14" y="24" width="42" height="24" fill="#00202e" stroke="#00ccff" stroke-width="1.5"/>
+    <text x="35" y="40" font-family="Courier New, monospace" font-size="9" fill="#66ccff" text-anchor="middle">LOX</text>
+    <rect x="14" y="60" width="42" height="24" fill="#2a1400" stroke="#ff9900" stroke-width="1.5"/>
+    <text x="35" y="76" font-family="Courier New, monospace" font-size="9" fill="#ffcc66" text-anchor="middle">FUEL</text>
+    <circle cx="100" cy="32" r="15" fill="#001a33" stroke="#3399ff" stroke-width="1.5"/>
+    <text x="100" y="36" font-family="Courier New, monospace" font-size="8" fill="#99ccff" text-anchor="middle">TP-O</text>
+    <circle cx="100" cy="78" r="15" fill="#001a33" stroke="#3399ff" stroke-width="1.5"/>
+    <text x="100" y="82" font-family="Courier New, monospace" font-size="8" fill="#99ccff" text-anchor="middle">TP-F</text>
+    <!-- deux prebruleurs -->
+    <rect x="146" y="18" width="66" height="24" fill="#00223a" stroke="#33aaff" stroke-width="1.5"/>
+    <text x="179" y="34" font-family="Courier New, monospace" font-size="8" fill="#88ccff" text-anchor="middle">PB riche O₂</text>
+    <rect x="146" y="66" width="66" height="24" fill="#331a00" stroke="#ffaa00" stroke-width="1.5"/>
+    <text x="179" y="82" font-family="Courier New, monospace" font-size="8" fill="#ffcc66" text-anchor="middle">PB riche fuel</text>
+    <path d="M262 30 L312 30 L312 58 L330 80 L294 80 L280 58 L262 58 Z" fill="#001a2a" stroke="#00ccff" stroke-width="1.5"/>
+    <text x="287" y="48" font-family="Courier New, monospace" font-size="9" fill="#66ccff" text-anchor="middle">CC</text>
+    <g stroke="#00ccff" stroke-width="1.5" fill="none">
+      <path d="M56 32 L85 32"/><path d="M115 30 L146 30"/><path d="M212 30 L262 38"/>
+    </g>
+    <g stroke="#ffaa00" stroke-width="1.5" fill="none">
+      <path d="M56 74 L85 76"/><path d="M115 78 L146 78"/><path d="M212 78 L250 78 L250 52 L262 48"/>
+    </g>
+    <text x="14" y="126" font-family="Courier New, monospace" font-size="9" fill="#00ff88">100 % des ergols traversent une turbine</text>
+    <text x="14" y="150" font-family="Arial, sans-serif" font-size="10" fill="#cfe3ff">Raptor — le seul à voler. RD-270 testé au sol en 1967-1969, jamais lancé.</text>
+  </g>
+</svg>
+<div class="legende">Le critère décisif est de savoir si les gaz qui ont entraîné la turbine finissent dans la chambre principale (cycle fermé, rien de perdu) ou dehors (cycle ouvert, 1 à 3 % d'ergols sacrifiés). Schémas de principe, très simplifiés.</div>
+</div>
+
+<div class="fiche">
+  <h4>Fiche — origine et paternité de la combustion étagée</h4>
+  <dl>
+    <dt>Principe proposé</dt><dd>Par <b>Alexeï Isaev</b> en <b>1949</b>, sous le nom de <i>замкнутая схема</i> (« schéma fermé »)</dd>
+    <dt>Premier moteur réalisé</dt><dd>Le <b>S1.5400</b> (indice 11D33), conçu par Melnikov, ancien assistant d'Isaev — étage supérieur du lanceur Molnia</dd>
+    <dt>Développement parallèle</dt><dd>Dès 1959, <b>Nikolaï Kouznetsov</b> travaille sur le NK-9 pour le missile orbital GR-1 de Korolev</dd>
+    <dt>Descendance</dt><dd>NK-15 puis <b>NK-33</b>, moteurs de la fusée lunaire N1</dd>
+    <dt>Avance soviétique</dt><dd>Considérable : les États-Unis n'ont produit leur premier moteur à combustion étagée qu'avec le <b>RS-25</b> de la navette, dans les années 1970</dd>
+    <dt>Spécialité russe</dt><dd>La combustion étagée <b>riche en oxygène</b> (RD-170, RD-180), longtemps jugée impraticable en Occident faute d'alliages résistant à l'oxygène chaud sous pression</dd>
+  </dl>
+</div>
+
+<h3 id="nucleaire">10. La propulsion nucléaire thermique</h3>
+
+<figure class="fig-droite">
+  <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Nerva_-_nuclear_rocket_engine.jpg?width=360" alt="Moteur-fusée nucléaire NERVA">
+  <figcaption>Le moteur nucléaire thermique NERVA. L'hydrogène traverse un cœur de réacteur à 2 500 K, sans combustion.<br><span class="credit">NASA / domaine public</span></figcaption>
+</figure>
+
+<p>L'idée est simple et redoutablement efficace : au lieu de <i>brûler</i> l'ergol, on le fait
+passer dans un <b>cœur de réacteur nucléaire</b> qui le chauffe. On utilise alors de
+l'hydrogène pur, dont la masse moléculaire est la plus basse possible (2 g/mol contre 18 pour
+la vapeur d'eau issue d'une combustion LOX/LH₂). Or la vitesse d'éjection croît quand la
+masse moléculaire baisse : d'où un <b>doublement de l'Isp</b> à température égale.</p>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>NERVA contre RD-0410 : les deux moteurs nucléaires réellement construits</caption>
+<tr><th>Caractéristique</th><th>NERVA XE Prime <span class="badge usa">É.-U.</span></th><th>RD-0410 <span class="badge urss">URSS</span></th></tr>
+<tr><td>Maître d'œuvre</td><td>Los Alamos Scientific Laboratory</td><td>KBKhA, Voronej</td></tr>
+<tr><td>Période</td><td>Réacteur opérationnel 1968-1969</td><td>1965 aux années 1980</td></tr>
+<tr><td>Lieu d'essai</td><td>Jackass Flats, Nevada</td><td>Polygone de Semipalatinsk</td></tr>
+<tr><td>Ergol</td><td>Hydrogène liquide</td><td>Hydrogène liquide</td></tr>
+<tr><td>Combustible nucléaire</td><td>Uranium hautement enrichi, modérateur graphite</td><td>Carbure d'uranium / carbure de tungstène, modérateur hydrure de zirconium</td></tr>
+<tr><td>Puissance thermique</td><td class="num">1 137 MW</td><td class="num">196 MW</td></tr>
+<tr><td>Poussée dans le vide</td><td class="num">246 663 N</td><td class="num">35,2 kN</td></tr>
+<tr><td class="ok">I<sub>sp</sub> vide</td><td class="num">841 s</td><td class="num">910 s</td></tr>
+<tr><td>Vitesse d'éjection</td><td class="num">8 250 m/s</td><td class="num">8 920 m/s</td></tr>
+<tr><td>Durée de fonctionnement</td><td class="num">1 680 s</td><td class="num">3 600 s</td></tr>
+<tr><td>Redémarrages démontrés</td><td class="num">24</td><td class="num">10 démarrages</td></tr>
+<tr><td>Masse</td><td class="num">18 144 kg</td><td class="num">2 000 kg</td></tr>
+<tr><td>Dimensions</td><td class="num">6,9 m × 2,59 m</td><td class="num">3,5 m × 1,6 m</td></tr>
+<tr><td>Destination prévue</td><td>Étage supérieur, mission martienne von Braun</td><td>Projet de mission habitée « Kourtchatov Mars 1994 »</td></tr>
+<tr><td>Sort</td><td class="ko">Programme annulé en 1973</td><td class="ko">Jamais volé</td></tr>
+</table>
+</div>
+
+<div class="encadre">
+  <span class="titre">Un détail d'ingénierie révélateur</span>
+  Dans le RD-0410, l'hydrogène refroidit d'abord le modérateur — ce qui maintient les neutrons
+  à basse énergie et donc une section efficace de fission élevée — avant d'être chauffé au
+  contact direct des barreaux de combustible. Mais l'hydrogène chaud attaque chimiquement les
+  carbures. La solution soviétique : ajouter <b>environ 1 % d'hexane</b> à l'hydrogène après
+  son passage dans le modérateur, pour bloquer la réaction. C'est ce genre d'astuce qui
+  sépare un concept d'un moteur qui tourne 3 600 secondes au banc.
+</div>
+
+<div class="alerte">
+  <span class="titre">Pourquoi aucun n'a volé</span>
+  Les deux programmes ont produit des moteurs qui fonctionnaient. Ce qui les a tués n'est pas
+  technique : c'est l'abandon des missions martiennes après Apollo, le coût, et surtout le
+  <b>refus politique de faire décoller un réacteur nucléaire depuis le sol</b> — un échec au
+  lancement disperserait du combustible fissile. Le compromis retenu depuis consiste à
+  n'allumer un moteur nucléaire qu'<b>une fois en orbite</b>, ce qui suppose de le mettre en
+  orbite par des moyens chimiques, donc d'en payer deux fois le prix.
+</div>
+
+<h3 id="electrique">11. La propulsion électrique</h3>
+
+<p>Un moteur ionique ionise un gaz — presque toujours du <b>xénon</b>, lourd et facile à
+ioniser — puis accélère les ions dans un champ électrique avant de les neutraliser en
+sortie. La vitesse d'éjection atteint 30 000 à 40 000 m/s, dix fois celle d'un moteur
+chimique. Le prix à payer est une poussée <b>dérisoire</b> : quelques dizaines à quelques
+centaines de millinewtons.</p>
+
+<div class="citation">
+  La poussée d'un moteur ionique équivaut à peu près au poids d'une feuille de papier posée
+  sur la main. Mais il peut la maintenir pendant des années.
+  <span class="source">Formule employée par le JPL pour présenter le moteur NSTAR de Deep Space 1</span>
+</div>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Les jalons de la propulsion électrique</caption>
+<tr><th>Mission</th><th>Date</th><th>Résultat</th></tr>
+<tr><td><b>SERT-1</b> <span class="badge usa">NASA Lewis</span></td><td class="num">20 juillet 1964</td><td>Lancé par une Scout X-4 depuis Wallops, apogée 4 002 km. Le propulseur à bombardement électronique (type Kaufman) fonctionne <b>31 min 16 s</b> : première mise en œuvre d'un moteur ionique dans l'espace, et preuve que le neutraliseur fonctionne. Le second propulseur embarqué échoue.</td></tr>
+<tr><td><b>SERT-II</b> <span class="badge usa">É.-U.</span></td><td class="num">3 février 1970</td><td>Orbite polaire à 1 000 km. Deux propulseurs au <b>mercure</b> cumulent <b>2 011 h</b> et <b>3 781 h</b> de fonctionnement, avec jusqu'à 300 redémarrages.</td></tr>
+<tr><td><b>Deep Space 1</b> <span class="badge usa">NASA/JPL</span></td><td class="num">24 octobre 1998</td><td>Première sonde propulsée principalement à l'ionique. 486 kg au lancement, 373 kg à sec — soit <b>81 kg de xénon</b> pour toute la mission. Survole l'astéroïde <b>9969 Braille</b> à 26 km le 29 juillet 1999, puis la comète <b>19P/Borrelly</b> à 2 171 km le 22 septembre 2001. Désactivée le 18 décembre 2001.</td></tr>
+<tr><td class="ok"><b>Dawn</b> <span class="badge usa">NASA/JPL</span></td><td class="num">27 septembre 2007</td><td>1 217,7 kg au lancement, 747,1 kg à sec — <b>425 kg de xénon</b>. Puissance disponible : 10 kW à 1 UA, seulement 1,3 kW à 3 UA. <b>Première sonde à se mettre en orbite autour de deux corps extraterrestres successifs</b> : Vesta puis Cérès — manœuvre impossible en propulsion chimique. Dernier contact le 30 octobre 2018, après 11 ans de mission.</td></tr>
+<tr><td><b>Propulseurs à effet Hall</b> <span class="badge urss">origine soviétique</span></td><td class="num">Années 1970 →</td><td>Architecture différente : les ions sont accélérés dans un plasma confiné par un champ magnétique. I<sub>sp</sub> plus faible (1 500-2 000 s) mais poussée et densité de puissance meilleures. C'est aujourd'hui le standard du <b>maintien à poste</b> des satellites de télécommunications et de la propulsion des mégaconstellations.</td></tr>
+</table>
+</div>
+
+<div class="encadre">
+  <span class="titre">Le calcul qui rend l'ionique irrésistible</span>
+  Reprenons Tsiolkovski. Pour un Δv de 10 km/s : avec un moteur chimique à 450 s d'Isp, le
+  rapport de masse vaut <b>9,7</b> — il faut emporter près de neuf fois la masse sèche en
+  ergols. Avec un moteur ionique à 3 100 s, il tombe à <b>1,39</b> : les ergols ne
+  représentent plus que <b>28 %</b> de la masse totale. Dawn l'illustre : 425 kg de xénon ont
+  suffi pour freiner autour de Vesta, en repartir, et se satelliser autour de Cérès. Aucune
+  sonde chimique n'aurait pu le faire, à aucun prix.
+</div>
+
+<h3 id="voiles">12. Les voiles solaires</h3>
+
+<figure class="fig-gauche">
+  <img src="https://commons.wikimedia.org/wiki/Special:FilePath/IKAROS_solar_sail.jpg?width=360" alt="Vue d'artiste de la voile solaire IKAROS de la JAXA">
+  <figcaption>IKAROS, première voile solaire à fonctionner dans l'espace interplanétaire : 196 m² de membrane pour 310 kg d'engin.<br><span class="credit">JAXA / Wikimedia Commons</span></figcaption>
+</figure>
+
+<p>Une voile solaire n'emporte aucun ergol. Elle exploite la <b>pression de radiation</b> :
+les photons du Soleil, réfléchis par une membrane, transfèrent leur quantité de mouvement.
+La poussée est infime — de l'ordre de <b>9 µN par mètre carré</b> à une unité astronomique —
+mais elle est gratuite, permanente, et l'impulsion spécifique est, formellement, infinie.</p>
+
+<div class="fiche">
+  <h4>Fiche — IKAROS (JAXA) <span class="badge jpn">Japon</span></h4>
+  <dl>
+    <dt>Nom complet</dt><dd><i>Interplanetary Kite-craft Accelerated by Radiation Of the Sun</i></dd>
+    <dt>Lancement</dt><dd>20 mai 2010 à 21 h 58 UTC, par une H-IIA 202 depuis Tanegashima, en passager de la sonde vénusienne <i>Akatsuki</i></dd>
+    <dt>Masse</dt><dd>310 kg</dd>
+    <dt>Voile</dt><dd>14 m × 14 m, soit <b>196 m²</b>, déployée par rotation</dd>
+    <dt>Particularité</dt><dd>La membrane porte des cellules solaires à couche mince et des éléments à cristaux liquides permettant de <b>piloter</b> la voile en modifiant localement sa réflectivité — sans aucune pièce mobile</dd>
+    <dt>Survol de Vénus</dt><dd>8 décembre 2010, à 80 800 km</dd>
+    <dt>Résultat</dt><dd class="ok">Première démonstration réussie de voile solaire dans l'espace interplanétaire</dd>
+    <dt>Fin de mission</dt><dd>Dernier contact le 21 mai 2015 ; retrait officiel prononcé le 15 mai 2025</dd>
+  </dl>
+</div>
+
+<div class="fiche">
+  <h4>Fiche — LightSail (The Planetary Society) <span class="badge priv">Privé / associatif</span></h4>
+  <dl>
+    <dt>Prédécesseur</dt><dd><i>Cosmos 1</i>, détruit lors de l'échec de son lancement en 2005</dd>
+    <dt>Format</dt><dd>CubeSat 3U : 30 × 10 × 10 cm replié</dd>
+    <dt>Voile déployée</dt><dd><b>32 m²</b></dd>
+    <dt>LightSail 1</dt><dd>Lancé le 20 mai 2015 par une Atlas V ; démonstration de déploiement uniquement, sans navigation solaire ; rentré le 14 juin 2015 après 25 jours</dd>
+    <dt>LightSail 2</dt><dd>Lancé le 25 juin 2019 par une Falcon Heavy ; <b>première démonstration de navigation solaire contrôlée en orbite terrestre</b> — modification mesurable de l'orbite par la seule pression de radiation ; rentré le 17 novembre 2022 après 3 ans et 5 mois</dd>
+    <dt>Financement</dt><dd>Souscription auprès des membres de l'association — une filiation directe avec les sociétés d'amateurs des années 1930</dd>
+  </dl>
+</div>
+
+<hr class="sep">
+
+<h3 id="comparatif">13. Tableau comparatif général</h3>
+
+<div class="tableau-wrap">
+<table class="tech">
+<caption>Les cinq familles de propulsion : quand utiliser quoi</caption>
+<tr><th>Famille</th><th>I<sub>sp</sub></th><th>Poussée</th><th>Peut décoller du sol ?</th><th>Emploi optimal</th><th>Statut 2026</th></tr>
+<tr><td><b>Poudre</b></td><td class="num">~ 268 s</td><td class="ok">Énorme</td><td class="ok">Oui</td><td>Décollage, boosters, missiles</td><td class="ok">Courant</td></tr>
+<tr><td><b>Chimique liquide</b></td><td class="num">300-465 s</td><td class="ok">Élevée</td><td class="ok">Oui</td><td>Tout le vol atmosphérique et l'injection orbitale</td><td class="ok">Standard universel</td></tr>
+<tr><td><b>Nucléaire thermique</b></td><td class="num">841-910 s</td><td class="part">Moyenne</td><td class="ko">Non (interdit politiquement)</td><td>Transferts interplanétaires rapides</td><td class="ko">Aucun vol à ce jour</td></tr>
+<tr><td><b>Électrique</b></td><td class="num">1 500-4 200 s</td><td class="ko">Millinewtons</td><td class="ko">Non</td><td>Maintien à poste, transferts lents, sondes</td><td class="ok">Massivement déployé</td></tr>
+<tr><td><b>Voile solaire</b></td><td class="ok">Infinie</td><td class="ko">Micronewtons</td><td class="ko">Non</td><td>Missions longues sans contrainte de date</td><td class="part">Démonstrateurs réussis</td></tr>
+</table>
+</div>
+
+<div class="stat-ligne">
+  <div class="stat"><span class="val">9,4</span><span class="lib">km/s du sol à l'orbite</span></div>
+  <div class="stat"><span class="val">95,7 %</span><span class="lib">d'ergols en monoétage</span></div>
+  <div class="stat"><span class="val">465 s</span><span class="lib">record chimique (RL10)</span></div>
+  <div class="stat"><span class="val">910 s</span><span class="lib">record nucléaire (RD-0410)</span></div>
+  <div class="stat"><span class="val">425 kg</span><span class="lib">de xénon pour toute la mission Dawn</span></div>
+</div>
+
+<div class="note">
+  <b>Pour aller plus loin :</b> les lanceurs qui appliquent ces principes sont détaillés dans
+  <a href="lanceurs.html">Lanceurs</a> ; les moteurs de la Saturn V dans
+  <a href="apollo.html">Apollo</a> ; les données chiffrées comparées dans
+  <a href="donnees.html">Données</a>.
+</div>
+
+<div class="sources">
+  <b>Pour approfondir :</b>
+  <ul>
+    <li>George P. Sutton et Oscar Biblarz, <i>Rocket Propulsion Elements</i>, Wiley — l'ouvrage de référence, réédité depuis 1949.</li>
+    <li>George P. Sutton, <i>History of Liquid Propellant Rocket Engines</i>, AIAA, 2006 — notamment les chapitres sur les bureaux d'études soviétiques.</li>
+    <li>K. Tsiolkovski, <i>Исследование мировых пространств реактивными приборами</i>, 1903 — texte fondateur, traduit dans les recueils de la NASA.</li>
+    <li>R. H. Goddard, <i>A Method of Reaching Extreme Altitudes</i>, Smithsonian Miscellaneous Collections vol. 71 n<sup>o</sup> 2, 1919.</li>
+    <li>NASA Glenn Research Center, <i>Beginner's Guide to Rockets</i> et <i>Ion Propulsion</i> — fiches pédagogiques et données d'essai.</li>
+    <li>J. S. Sovey, V. K. Rawlin, M. J. Patterson, « Ion Propulsion Development Projects in U.S.: Space Electric Rocket Test 1 to Deep Space 1 », <i>Journal of Propulsion and Power</i>, vol. 17 n<sup>o</sup> 3, mai-juin 2001, p. 517-526.</li>
+    <li>R. J. Cybulski <i>et al.</i>, <i>Results from SERT I Ion Rocket Flight Test</i>, NASA TN D-2718, 1965 (NTRS).</li>
+    <li>D. S. Finseth, <i>Overview of Rover Engine Tests — Final Report</i>, NASA, 1991 — source des paramètres du NERVA XE Prime.</li>
+    <li>KBKhA (Voronej), documentation technique du moteur nucléaire RD-0410 / RD-0411.</li>
+    <li>NASA / JPL, dossiers de presse de <i>Deep Space 1</i> (1998) et de <i>Dawn</i> (2007 et 2015) — source des masses d'ergols citées.</li>
+    <li>JAXA, pages de mission IKAROS ; The Planetary Society, rapports de mission LightSail 1 et 2.</li>
+    <li>Astronautix et <i>Encyclopedia Astronautica</i> pour les fiches moteurs comparées (F-1, RD-170/180, NK-33, Viking).</li>
+  </ul>
+</div>
+
+<div class="nav-pages">
+  <a href="pionniers.html">&laquo; Pionniers</a>
+  <a href="animaux.html">Animaux &raquo;</a>
+</div>
+
+</div><!-- /contenu -->
+
+<div class="pied">
+  NEW HORIZON — encyclopédie de la conquête spatiale<br>
+  <span class="maj">Dernière mise à jour : juillet 2026</span> — 24 pages, 100 % rétro, 0 % cookie<br>
+  Images : NASA / ESA / Roscosmos / JAXA / CNSA via Wikimedia Commons — domaine public ou licences libres<br>
+  <a href="../index.html">Accueil du site</a> · <a href="index.html">Sommaire</a> · <a href="chronologie.html">Chronologie</a> · <a href="donnees.html">Données techniques</a>
+</div>
+
+</div><!-- /page -->
+<script src="../scripts/visitor-counter.js"></script>
+</body>
+</html>
