@@ -98,6 +98,17 @@ func _run() -> void:
 		forest.get_child_count() > 0 and forest.get_child_count() < 40
 		and forest.get_child(0) is MultiMeshInstance3D)
 	_check("aucun arbre n'est un corps physique", _count_bodies(main) == 0)
+	# Un MultiMesh vide, ou dont l'AABB est restée à l'origine, se voit comme une
+	# forêt invisible — et rien d'autre ne le signalerait.
+	# Une essence est rendue par autant de MultiMesh que son modèle a de surfaces,
+	# et chacun porte toutes les instances de CETTE essence. La somme sur les
+	# quatre essences doit redonner les 3 000 arbres.
+	var instanced := _sum_first_surface_instances(forest)
+	print("Instances de forêt (première surface de chaque essence) : %d" % instanced)
+	_check("les MultiMesh de forêt totalisent 3 000 instances", instanced == Forest.TREE_COUNT)
+	var extent := _forest_extent(forest)
+	print("Étendue du semis en X : %.0f u (semis limité à ±%.0f)" % [extent, Forest.TREE_SPREAD])
+	_check("la forêt s'étend sur l'arène jouable", extent > Forest.TREE_SPREAD)
 	_check("les massifs décoratifs cernent l'arène", mountains.get_child_count() > 0)
 	_check("les nuages sont instanciés par palier d'opacité", clouds.get_child_count() >= 9)
 	_check("le village a posé des bâtiments", village.get_child_count() > Village.CAMPFIRE_POOL_SIZE)
@@ -134,6 +145,38 @@ static func _all_trees_hit(forest: Forest) -> bool:
 		if not forest.point_inside_tree(forest.tree_leaf_point(i)):
 			return false
 	return true
+
+
+## Somme des instances, en ne comptant qu'une fois chaque essence : plusieurs
+## `MultiMeshInstance3D` d'une même essence répètent le même jeu d'instances, un
+## par surface du modèle.
+static func _sum_first_surface_instances(root: Node) -> int:
+	var total := 0
+	var seen: Dictionary = {}
+	for child in root.get_children():
+		if child is MultiMeshInstance3D:
+			var key: Variant = (child as MultiMeshInstance3D).get_meta("part_local")
+			if seen.has(key):
+				continue
+			seen[key] = true
+			total += (child as MultiMeshInstance3D).multimesh.instance_count
+	return total
+
+
+## Étendue horizontale du semis, lue sur les colliders de la forêt.
+##
+## Ni `get_aabb()` ni `get_instance_transform()` ne conviennent : les données d'un
+## `MultiMesh` vivent dans le serveur de rendu, qui est un bouchon en mode headless
+## et renvoie des transforms identité. Les colliders, eux, appartiennent au script
+## et sont de toute façon ce qui fait autorité pour le jeu.
+static func _forest_extent(forest: Forest) -> float:
+	var min_x := INF
+	var max_x := -INF
+	for i in forest.tree_count():
+		var x := forest.tree_leaf_point(i).x
+		min_x = minf(min_x, x)
+		max_x = maxf(max_x, x)
+	return max_x - min_x
 
 
 ## Compte les corps physiques de la scène. Il doit y en avoir zéro : ni terrain,

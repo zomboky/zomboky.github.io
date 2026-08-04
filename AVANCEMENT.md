@@ -343,12 +343,18 @@ frame — ce que le JS fait effectivement. Chaque arbre est inscrit dans les cel
 son feuillage touche, donc une interrogation ne regarde qu'une cellule. Le test est
 **identique**, seul le nombre de candidats change.
 
-**Recette** — `tests/test_world.gd`, 28/28 (17 du lot 3 + 11 du lot 4) :
+**Recette** — `tests/test_world.gd`, 30/30 (17 du lot 3 + 13 du lot 4) :
 3 000 arbres, rendu en 10 `MultiMeshInstance3D` et non en nœuds individuels,
 **zéro `CollisionObject3D` dans toute la scène**, massifs et nuages instanciés,
-pool de 7 lumières, et **chacun des 3 000 arbres détecté au cœur de son feuillage**
-(c'est ce qui valide l'indexation de la grille : mal construite, elle renverrait
-« rien » sans que rien d'autre ne le signale).
+pool de 7 lumières, somme des instances de `MultiMesh` égale à 3 000, étendue du semis
+conforme, et **chacun des 3 000 arbres détecté au cœur de son feuillage** (c'est ce qui
+valide l'indexation de la grille : mal construite, elle renverrait « rien » sans que rien
+d'autre ne le signale).
+
+**Piège rencontré :** en mode headless, `MultiMesh.get_instance_transform()` et
+`MultiMeshInstance3D.get_aabb()` renvoient des valeurs vides — ces données vivent dans le
+serveur de rendu, qui est un bouchon. Les assertions de placement passent donc par les
+colliders de la forêt, qui appartiennent au script et font de toute façon autorité.
 
 **Coûts mesurés :** semis de la forêt 507 ms, du village 17 ms.
 `.pck` 2,63 → **3,98 Mo** (les modèles de décor : 10 GLB + `cabin.obj`).
