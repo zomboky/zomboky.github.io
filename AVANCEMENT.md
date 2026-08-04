@@ -9,6 +9,62 @@
 
 ---
 
+## ⏩ REPRENDRE LE TRAVAIL (conteneur neuf, session coupée)
+
+> **Ici et nulle part ailleurs** : à lire en premier pour repartir sans rien redécouvrir.
+> Cette section est mise à jour à chaque étape, pas seulement en fin de lot.
+
+### État à l'instant T
+
+**Prochaine action :** *(voir « Tableau de bord » ci-dessous — le premier lot ⬜ ou 🟡)*
+**En cours :** Lot 1 — hibou + caméra.
+
+### 1. Remonter l'environnement (~2 min, aucun accès réseau requis pour Godot)
+
+```bash
+./godot-tool/setup.sh                     # décompresse ./godot-tool/godot (Godot 4.5)
+cd godot/hibou3d && ../../godot-tool/godot --headless --import
+```
+
+### 2. Templates d'export web — **à réinstaller à chaque conteneur** (non versionnés, ~1,3 Go à télécharger)
+
+```bash
+mkdir -p /tmp/tpl && cd /tmp/tpl
+curl -sSL -o t.tpz https://github.com/godotengine/godot/releases/download/4.5-stable/Godot_v4.5-stable_export_templates.tpz
+unzip -o -q t.tpz 'templates/web_nothreads_*.zip'
+mkdir -p ~/.local/share/godot/export_templates/4.5.stable
+cp templates/web_nothreads_*.zip ~/.local/share/godot/export_templates/4.5.stable/
+rm -f t.tpz                                # 1,3 Go : à supprimer, le disque du conteneur est limité
+```
+
+Sans eux, seul l'export web échoue ; tout le reste (import, tests headless, harnais de
+parité) fonctionne.
+
+### 3. Commandes utiles
+
+```bash
+cd godot/hibou3d
+../../godot-tool/godot --headless --import                                  # réimporter les assets
+../../godot-tool/godot --headless --script res://tools/<script>.gd           # lancer un outil/harnais
+../../godot-tool/godot --headless --export-release "Web" build/web/index.html
+```
+
+Test du build dans un vrai navigateur (Chromium + Playwright sont préinstallés,
+`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`, binaire
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`) : servir `build/web/` avec
+`npx http-server -p 8099 -s --cors`, puis charger la page. **Ne pas lancer
+`playwright install`.** Le rendu passe par SwiftShader : les FPS mesurés dans le
+conteneur ne veulent rien dire, seule la bonne exécution compte.
+
+### 4. Règles de travail sur ce portage
+
+- **Un lot = un commit** sur `claude/hibou3d-godot-port-o1yuew`, avec sa recette exécutée.
+- **Aucun lot ne commence avant que le précédent soit recetté** (PLAN_GODOT.md §8).
+- Ce fichier est mis à jour **dans le même commit** que le lot qu'il décrit.
+- Parité d'abord : toute idée d'amélioration part au lot 13, sans exception (§11).
+
+---
+
 ## Décisions tranchées (§12 du plan)
 
 | # | Question | Décision | Date |
