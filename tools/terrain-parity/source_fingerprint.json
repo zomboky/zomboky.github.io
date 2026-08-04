@@ -1,0 +1,17 @@
+{
+  "note": "Empreinte de le terrain procédural dans docs/hibou-3d.html au moment de la transcription vers tools/terrain-parity/terrain_reference.mjs. Régénérer avec --update APRÈS avoir repris la transcription, jamais pour faire taire l'alerte.",
+  "markers": [
+    "function hashNoise(ix, iz) {",
+    "function valueNoise(x, z) {",
+    "function fbm(x, z, octaves = 5) {",
+    "function ridged(x, z, octaves = 3) {",
+    "function fillMountainPeaks() {",
+    "function fillRiverPaths() {",
+    "function riverCarve(x, z) {",
+    "function terrainHeight(x, z) {",
+    "function effectiveGroundY(x, z) {",
+    "function forestDensity(x, z) {"
+  ],
+  "lines": 123,
+  "sha256": "c22771cb8e9f78f5a0d4fc89a73fac623e25c0baec3b49897f021cf07cc9c8b3"
+}

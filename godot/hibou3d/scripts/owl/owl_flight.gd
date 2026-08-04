@@ -34,6 +34,9 @@ var _speed_ratio := 0.0
 
 func _ready() -> void:
 	model.rng = Rng.new(randi())
+	# Le vol interroge la fonction de terrain, pas un maillage : hauteur de sol
+	# exacte en O(1), sans raycast ni corps physique (décision A, §4.2).
+	model.ground_height = Terrain.effective_ground_y
 	model.reset()
 	_sync_owl()
 	# `_ready()` remonte des enfants vers le parent : celui du hibou n'a donc pas
@@ -44,6 +47,10 @@ func _ready() -> void:
 
 func _on_owl_ready() -> void:
 	model.ground_clear = _owl.ground_clear
+	# Anti-clipping caméra contre le relief. Le test des arbres viendra avec la
+	# forêt au lot 4 ; `point_in_tree` reste vide d'ici là et n'est pas appelé.
+	_owl.camera.ground_height = Terrain.effective_ground_y
+	_owl.camera.clipping_enabled = true
 
 
 func _unhandled_input(event: InputEvent) -> void:

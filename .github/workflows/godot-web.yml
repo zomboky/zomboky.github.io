@@ -8,13 +8,13 @@ on:
   push:
     paths:
       - 'godot/hibou3d/**'
-      - 'tools/flight-parity/**'
+      - 'tools/**'
       - 'docs/hibou-3d.html'
       - '.github/workflows/godot-web.yml'
   pull_request:
     paths:
       - 'godot/hibou3d/**'
-      - 'tools/flight-parity/**'
+      - 'tools/**'
       - 'docs/hibou-3d.html'
   workflow_dispatch:
 
@@ -92,8 +92,17 @@ jobs:
           path: ${{ env.PROJECT_DIR }}/build/web
           if-no-files-found: error
 
-  flight-parity:
-    # Recette bloquante du lot 2 (PLAN_GODOT.md §9.2) : le modèle de vol porté
+  parity:
+    # Recettes de parité contre le jeu Three.js d'origine.
+    #
+    # Lot 2 — modèle de vol : recette BLOQUANTE (§9.2). La trajectoire portée doit
+    # suivre l'originale à moins de 1 % sur 30 s. C'est le coeur du feeling du jeu,
+    # et l'IA du bot comme le multijoueur en dépendent.
+    #
+    # Lot 3 — terrain : le hash `sin() * 43758` amplifie le moindre écart d'ULP en
+    # un relief entièrement différent (§5.4).
+    #
+    # Ancien nom du job : flight-parity (PLAN_GODOT.md §9.2) : le modèle de vol porté
     # doit suivre la trajectoire de l'original à moins de 1 % sur 30 s. C'est le
     # cœur du feeling du jeu, et l'IA du bot comme le multijoueur en dépendent.
     runs-on: ubuntu-latest
@@ -122,21 +131,33 @@ jobs:
           mv ~/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot-bin/godot
           chmod +x ~/godot-bin/godot
 
-      - name: La transcription JavaScript est-elle toujours à jour ?
-        run: node tools/flight-parity/check_drift.mjs
-
-      - name: Trace de référence (JavaScript)
-        run: node tools/flight-parity/run_js.mjs
-
-      - name: Trace du portage (Godot)
-        working-directory: ${{ env.PROJECT_DIR }}
+      - name: Les transcriptions JavaScript sont-elles toujours à jour ?
         run: |
-          ~/godot-bin/godot --headless --import || true
-          ~/godot-bin/godot --headless --script res://tools/flight_parity.gd
+          node tools/flight-parity/check_drift.mjs
+          node tools/terrain-parity/check_drift.mjs
 
-      - name: Verdict de parité
-        run: node tools/flight-parity/compare.mjs
+      - name: Importer les assets
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: ~/godot-bin/godot --headless --import || true
+
+      - name: Parité du modèle de vol (lot 2)
+        run: |
+          node tools/flight-parity/run_js.mjs
+          (cd "$PROJECT_DIR" && ~/godot-bin/godot --headless --script res://tools/flight_parity.gd)
+          node tools/flight-parity/compare.mjs
+
+      - name: Parité du terrain (lot 3)
+        run: |
+          node tools/terrain-parity/run_js.mjs
+          (cd "$PROJECT_DIR" && ~/godot-bin/godot --headless --script res://tools/terrain_parity.gd)
+          node tools/terrain-parity/compare.mjs
 
       - name: Recette du hibou et de la caméra (lot 1)
         working-directory: ${{ env.PROJECT_DIR }}
         run: ~/godot-bin/godot --headless --script res://tests/test_owl.gd
+
+      - name: Recette du terrain et de l'eau (lot 3)
+        # Lancé comme une exécution normale du projet, pas via --script : en mode
+        # --script, Godot remplace la SceneTree et n'instancie aucun autoload.
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: ~/godot-bin/godot --headless res://tests/test_world.tscn

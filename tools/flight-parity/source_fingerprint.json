@@ -1,6 +1,8 @@
 {
-  "note": "Empreinte du corps de updateFlight() dans docs/hibou-3d.html au moment de la transcription vers tools/flight-parity/flight_reference.mjs. Régénérer avec --update APRÈS avoir repris la transcription, jamais pour faire taire l'alerte.",
-  "marker": "function updateFlight(dt) {",
+  "note": "Empreinte de le modèle de vol (updateFlight) dans docs/hibou-3d.html au moment de la transcription vers tools/flight-parity/flight_reference.mjs. Régénérer avec --update APRÈS avoir repris la transcription, jamais pour faire taire l'alerte.",
+  "markers": [
+    "function updateFlight(dt) {"
+  ],
   "lines": 217,
   "sha256": "0e2b7dfd20b51becfa95a108f01920e2d43de34145b973c42ef9d9be69e94bff"
 }

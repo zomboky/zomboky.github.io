@@ -17,7 +17,7 @@
 ### État à l'instant T
 
 **Prochaine action :** *(voir « Tableau de bord » ci-dessous — le premier lot ⬜ ou 🟡)*
-**En cours :** Lot 3 — terrain analytique + eau (§9, lot 3).
+**En cours :** Lot 4 — décor instancié (forêt, montagnes, nuages, hameaux).
 
 ### 1. Remonter l'environnement (~2 min, aucun accès réseau requis pour Godot)
 
@@ -86,7 +86,7 @@ conteneur ne veulent rien dire, seule la bonne exécution compte.
 | 0 | Socle : projet, Compatibility, export web, CI | ✅ recetté | `.wasm` 36,3 Mo brut / **8,8 Mo gzip** |
 | 1 | Hibou + caméra | ✅ recetté | 11/11 vérifications, `tests/test_owl.gd` |
 | 2 | Modèle de vol ⭐ | ✅ recetté | écart **0,43 %** sur 818 u ; décrochage à ±50 ms |
-| 3 | Terrain analytique + eau ⭐ | ⬜ à faire | |
+| 3 | Terrain analytique + eau ⭐ | ✅ recetté | parité **1e-9 u** ; **le repli hash entier n'est pas nécessaire** |
 | 4 | Décor instancié | ⬜ à faire | |
 | 5 | Ciel, jour/nuit, lumières | ⬜ à faire | |
 | 6 | HUD + écrans | ⬜ à faire | |
@@ -216,6 +216,70 @@ transcription — sans quoi la recette de parité deviendrait un tampon de compl
 recette du lot 1). Le verdict sort en code 1 : le plan interdit de passer au lot 3 avec
 un modèle « presque » porté, dont dépendent l'IA du bot (lot 10b) et le multijoueur (lot 11).
 
+### Lot 3 — Terrain analytique + eau ⭐ ✅ (2026-08-04)
+
+Fait dans l'ordre strict imposé par le plan : **le harnais de parité d'abord**, tout le
+reste ensuite.
+
+**1. Parité du terrain — le risque §5.4 est levé**
+
+`hashNoise` amplifie `sin()` par 43 758,5453 : un écart de quelques ULP entre deux
+implémentations ne donne pas « à peu près » le même relief, il en donne un tout autre.
+10 000 points échantillonnés de chaque côté :
+
+| Mesure | Écart max |
+|---|---|
+| Altitude (relief de -21,5 à +489,0 u) | **1,0 × 10⁻⁹ u** |
+| Masque de forêt | 3,6 × 10⁻¹² |
+| Pics de montagne | 2,8 × 10⁻¹⁴ |
+| Tracé et forme des rivières | **0 — exact** (mulberry32 est entier) |
+
+→ **Le repli sur un hash entier (§5.4 point 2) n'est pas nécessaire.** `docs/hibou-3d.html`
+n'a pas à être modifié. Reste à vérifier au lot 12 : natif ↔ **WebAssembly**, l'autre
+divergence redoutée, qui est désormais la seule qui compte (voir `tools/terrain-parity/README.md`).
+
+**2. Livré**
+- `autoload/terrain.gd` — les dix fonctions pures : `hash_noise`, `value_noise`, `fbm`,
+  `ridged`, `fill_mountain_peaks`, `fill_river_paths`, `river_carve`, `terrain_height`,
+  `effective_ground_y`, `forest_density`, plus `regenerate_seed()` / `restore_canonical()`.
+  **Tout en `float` scalaire** (écart n°3), et les points de rivière en `PackedFloat64Array`
+  et non `PackedVector2Array` — ce dernier aurait tronqué le tracé à 32 bits.
+- `scripts/world/terrain_mesh.gd` — maillage **non indexé**, couleur et normale par facette,
+  diagonale `(a,b,d)/(b,c,d)` identique à celle de `PlaneGeometry`, palette et tramage repris.
+- `resources/shaders/water.gdshader` — l'ondulation passe du CPU au GPU. `updateWater()`
+  recalculait des milliers de sommets **par frame** puis reconstruisait les normales ;
+  le shader les dérive en forme fermée. Coût CPU par frame : **zéro**.
+- `scenes/world/world.tscn`, câblage du vol et de l'anti-clipping caméra sur la fonction.
+
+**3. Performance de génération — le plan avait raison de s'en méfier**
+
+Le plan (§9 lot 3) demandait de mesurer et de découper au-delà d'1 s. Mesuré :
+
+| Étape | Natif | WebAssembly |
+|---|---|---|
+| Version initiale, d'un bloc | 2 798 ms | non mesuré (inacceptable) |
+| Après optimisations, d'un bloc | 1 924 ms | — |
+| **Découpée sur plusieurs frames** | 1 973 ms | **4 428 ms, sans figer l'onglet** |
+
+Deux optimisations, toutes deux **exactes** (parité re-vérifiée à l'identique, 1,035 × 10⁻⁹) :
+- **Boîte englobante par rivière.** Au-delà de la portée du chenal, `smoothstep` vaut
+  exactement 1 et la contribution est exactement nulle : sauter ces points n'approxime
+  rien. `river_carve` : 12,9 µs → 1,1 µs par appel.
+- **Cache plat des pics** (`PackedFloat64Array` au lieu d'un `Array[Dictionary]`) : quatre
+  recherches de dictionnaire par pic et par appel disparaissent.
+
+→ `terrain_height()` : 40 µs → 26 µs. La construction reste découpée
+(`rebuild_async()`, signal `build_progress`), que le lot 6 branchera sur l'écran de chargement.
+
+**4. Recette** — `tests/test_world.gd`, 17/17 : couverture et amplitude du relief, maillage
+non indexé et coloré, **maillage conforme à la fonction à 1,5 × 10⁻⁵ u près**, zone de départ
+aplanie, muraille dressée, eau au bon niveau et pilotée par shader, vol et caméra branchés
+sur la fonction, régénération solo puis **restauration canonique au bit près**.
+Recette visuelle en navigateur : relief low-poly à facettes franches, lacs bleus dans les
+creux, hibou en vol au-dessus.
+
+**Coût web :** `.pck` 2,60 → **2,63 Mo** (le terrain est du code, pas des données).
+
 ---
 
 ## Écarts constatés par rapport au plan
@@ -224,4 +288,5 @@ un modèle « presque » porté, dont dépendent l'IA du bot (lot 10b) et le mul
 |---|---|---|
 | 1 | **Le modèle du hibou n'est pas `barnowl.glb`.** Le jeu charge `modele-hibou/OwlWings_animation.glb` (**3,26 Mo**, avec son clip d'animation d'ailes). `docs/models/barnowl.glb` (9,4 Mo) est présent mais **jamais référencé** par `MODEL_URLS`. | Le §10.1 « rebudget de barnowl.glb » vise le mauvais fichier. Le vrai poste est `OwlWings_animation.glb` (3,26 Mo), et le budget total des modèles descend de 12,4 à ~6,3 Mo utiles. Allège le lot 12. |
 | 2 | Le plancher web transféré est de ~9 Mo (gzip), pas 20–40 Mo. | Risque 🔴 « poids du runtime » du §11 → rétrogradé à 🟡. |
+| 4 | **Les autoloads n'existent pas en mode `--script`.** Godot y remplace la `SceneTree`, donc aucun autoload n'est instancié — `Terrain` est introuvable à la compilation *comme* à l'exécution. | Les tests qui touchent une scène se lancent comme une **exécution normale du projet** (`godot --headless res://tests/test_world.tscn`). Les harnais sans autoload (parité du vol, parité du terrain, recette du hibou) restent en `--script`. |
 | 3 | **`Vector3`, `Quaternion` et `Basis` sont en flottants 32 bits** dans une compilation standard de Godot, alors que le `number` de JavaScript et le `float` scalaire de GDScript sont des 64 bits. Mesuré : `Vector3.x = 0.10000000149…` contre `0.10000000000…`. Le §5.4 ne redoutait que les écarts d'ULP sur `sin()` ; la vraie source de divergence est structurelle et bien plus grosse. | C'est l'origine des 0,43 % d'écart du lot 2 : il naît dès le premier pas (~4×10⁻⁷ u) puis se propage par intégration, mais reste **borné** parce que le modèle est dissipatif. **Conséquence directe pour le lot 3 : `terrain_height(x, z)` doit prendre et rendre des `float` scalaires et ne jamais faire transiter une coordonnée par un `Vector3`**, sous peine de tronquer le relief à 32 bits. Recompiler Godot en double précision n'est pas justifié (build custom, mémoire, templates web) pour 0,43 % sur 800 u de vol. |

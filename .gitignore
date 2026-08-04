@@ -4,4 +4,4 @@ __pycache__/
 
 # Exports Godot (produits par la CI, jamais versionnés)
 godot/hibou3d/build/
-tools/flight-parity/out/
+tools/*/out/

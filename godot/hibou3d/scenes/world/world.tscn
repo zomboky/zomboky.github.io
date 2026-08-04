@@ -1,0 +1,23 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/terrain_mesh.gd" id="1_terrain"]
+[ext_resource type="Shader" path="res://resources/shaders/water.gdshader" id="2_water"]
+
+[sub_resource type="ShaderMaterial" id="WaterMat_1"]
+render_priority = 0
+shader = ExtResource("2_water")
+
+[sub_resource type="PlaneMesh" id="WaterPlane_1"]
+size = Vector2(4500, 4500)
+subdivide_width = 47
+subdivide_depth = 47
+
+[node name="World" type="Node3D"]
+
+[node name="Terrain" type="MeshInstance3D" parent="."]
+script = ExtResource("1_terrain")
+
+[node name="Water" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -3, 0)
+mesh = SubResource("WaterPlane_1")
+surface_material_override/0 = SubResource("WaterMat_1")

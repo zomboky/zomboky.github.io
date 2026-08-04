@@ -16,6 +16,13 @@ run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.5", "GL Compatibility")
 config/icon="res://icon.svg"
 
+[autoload]
+
+; Fonctions pures du terrain (bruit, pics, rivières, hauteur de sol). Autoload et
+; non ressource : tout le jeu — maillage, collisions, placement des arbres, des
+; ours et de la caméra — interroge la même fonction (PLAN_GODOT.md §4.4).
+Terrain="*res://autoload/terrain.gd"
+
 [display]
 
 window/size/viewport_width=1280
