@@ -165,3 +165,7 @@ jobs:
       - name: Recette du cycle jour/nuit (lot 5)
         working-directory: ${{ env.PROJECT_DIR }}
         run: ~/godot-bin/godot --headless --script res://tests/test_sky.gd
+
+      - name: Recette de la machine à états (lot 6)
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: ~/godot-bin/godot --headless --script res://tests/test_game_state.gd

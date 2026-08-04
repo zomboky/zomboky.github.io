@@ -23,6 +23,12 @@ config/icon="res://icon.svg"
 ; ours et de la caméra — interroge la même fonction (PLAN_GODOT.md §4.4).
 Terrain="*res://autoload/terrain.gd"
 
+; Machine à états (S.START..S.QUICK_SELECT) et état de manche solo (score, nid,
+; combo, vies, bonus) — remplace le reste des globales de la closure JS. Autoload
+; (et non nœud de scène) pour que le HUD et les écrans, ailleurs dans l'arbre, le
+; lisent sans dépendre de `Main` (PLAN_GODOT.md §4.4, §9 lot 6).
+GameState="*res://autoload/game_state.gd"
+
 [display]
 
 window/size/viewport_width=1280
@@ -126,12 +132,19 @@ dev_esp={
 "events": Array[InputEvent]([Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":0,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":4194334,"physical_keycode":0,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
 ])
 }
+toggle_settings={
+"deadzone": 0.2,
+"events": Array[InputEvent]([Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":0,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":79,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+])
+}
 
 [physics]
 
 ; Le vol et la logique de jeu tournent en _physics_process à pas fixe (PLAN_GODOT.md §5.5).
 ; 60 Hz est aussi la valeur par défaut de Godot : explicite ici pour qu'une future
 ; montée de version ne change pas silencieusement la dynamique du vol.
+; ⚠️ ProjectSettings.save() (tools/gen_input_map.gd) supprime cette section car sa
+; valeur coïncide avec le défaut moteur : à restaurer à la main après régénération.
 common/physics_ticks_per_second=60
 
 [rendering]

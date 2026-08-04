@@ -1,0 +1,36 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/screens.gd" id="1_screens"]
+[ext_resource type="PackedScene" path="res://scenes/ui/screen_start.tscn" id="2_start"]
+[ext_resource type="PackedScene" path="res://scenes/ui/screen_paused.tscn" id="3_paused"]
+[ext_resource type="PackedScene" path="res://scenes/ui/screen_over.tscn" id="4_over"]
+[ext_resource type="PackedScene" path="res://scenes/ui/screen_settings.tscn" id="5_settings"]
+
+[node name="Screens" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_screens")
+
+[node name="ScreenStart" parent="." instance=ExtResource("2_start")]
+unique_name_in_owner = true
+layout_mode = 1
+
+[node name="ScreenPaused" parent="." instance=ExtResource("3_paused")]
+unique_name_in_owner = true
+layout_mode = 1
+visible = false
+
+[node name="ScreenOver" parent="." instance=ExtResource("4_over")]
+unique_name_in_owner = true
+layout_mode = 1
+visible = false
+
+[node name="ScreenSettings" parent="." instance=ExtResource("5_settings")]
+unique_name_in_owner = true
+layout_mode = 1
+visible = false

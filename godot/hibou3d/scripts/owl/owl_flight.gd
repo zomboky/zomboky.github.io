@@ -66,12 +66,12 @@ func _on_owl_ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		_mouse_motion += (event as InputEventMouseMotion).relative
-	elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+	elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed and controls_enabled:
 		# Le pointer-lock web est géré nativement par Godot ; comme dans le
-		# navigateur, il exige un geste utilisateur pour être demandé.
+		# navigateur, il exige un geste utilisateur pour être demandé. La
+		# transition PLAY ↔ PAUSED elle-même est décidée par `screens.gd`
+		# (lot 6) : ce script ne fait que réclamer le curseur.
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-	elif event.is_action_pressed("pause"):
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
 func _physics_process(delta: float) -> void:

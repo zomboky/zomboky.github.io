@@ -28,6 +28,7 @@ const ACTIONS := {
 	"fire":               { "keys": [], "special": [], "mouse": [MOUSE_BUTTON_LEFT] },
 	"look_back":          { "keys": [], "special": [], "mouse": [MOUSE_BUTTON_RIGHT] },
 	"pause":              { "keys": [], "special": [KEY_ESCAPE] },
+	"toggle_settings":    { "keys": [KEY_O], "special": [] },
 	"use_slot_1":         { "keys": [], "special": [KEY_1] },
 	"use_slot_2":         { "keys": [], "special": [KEY_2] },
 	"use_slot_3":         { "keys": [], "special": [KEY_3] },

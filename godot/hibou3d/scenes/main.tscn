@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/debug_overlay.gd" id="1_debug"]
 [ext_resource type="Script" path="res://scripts/main.gd" id="4_main"]
@@ -6,6 +6,8 @@
 [ext_resource type="PackedScene" path="res://scenes/world/world.tscn" id="3_world"]
 [ext_resource type="Script" path="res://scripts/world/sky.gd" id="5_sky"]
 [ext_resource type="Shader" path="res://resources/shaders/sky.gdshader" id="6_sky_shader"]
+[ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="7_hud"]
+[ext_resource type="PackedScene" path="res://scenes/ui/screens.tscn" id="8_screens"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_sky"]
 shader = ExtResource("6_sky_shader")
@@ -56,11 +58,20 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 16, 0)
 [node name="UI" type="CanvasLayer" parent="."]
 
 [node name="DebugOverlay" type="Label" parent="UI"]
+# Coin bas-gauche : le panneau score du HUD (lot 6) occupe désormais le coin
+# haut-gauche (12,12 → 242,112), là où ce témoin de recette du lot 0 vivait.
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
 offset_left = 12.0
-offset_top = 8.0
+offset_top = -82.0
 offset_right = 380.0
-offset_bottom = 90.0
+offset_bottom = -8.0
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 4
 text = "…"
 script = ExtResource("1_debug")
+
+[node name="Hud" parent="UI" instance=ExtResource("7_hud")]
+
+[node name="Screens" parent="UI" instance=ExtResource("8_screens")]

@@ -1,0 +1,49 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/screen_start.gd" id="1_start"]
+
+[node name="ScreenStart" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_start")
+
+[node name="SoloButton" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 460.0
+offset_top = 480.0
+offset_right = 544.0
+offset_bottom = 524.0
+text = "SOLO"
+
+[node name="MultiButton" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 552.0
+offset_top = 480.0
+offset_right = 636.0
+offset_bottom = 524.0
+text = "MULTI"
+
+[node name="CampaignButton" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 644.0
+offset_top = 480.0
+offset_right = 728.0
+offset_bottom = 524.0
+text = "CAMPAGNE"
+
+[node name="QuickIaButton" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 0
+offset_left = 736.0
+offset_top = 480.0
+offset_right = 820.0
+offset_bottom = 524.0
+text = "VS IA"

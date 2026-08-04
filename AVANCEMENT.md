@@ -17,7 +17,7 @@
 ### État à l'instant T
 
 **Prochaine action :** *(voir « Tableau de bord » ci-dessous — le premier lot ⬜ ou 🟡)*
-**En cours :** Lot 6 — HUD + écrans.
+**En cours :** Lot 7 — Gameplay solo.
 
 ### 1. Remonter l'environnement (~2 min, aucun accès réseau requis pour Godot)
 
@@ -77,16 +77,16 @@ conteneur ne veulent rien dire, seule la bonne exécution compte.
 | Entrées clavier/souris/tactile | 2084-2465 | ✅ lot 1 (tactile hors périmètre) |
 | **Modèle de vol** | 2466-2806 | ✅ lot 2 |
 | Textures emoji (canvas) | 2807-2843 | ⏭ lot 7 |
-| Cadeau bonus, loot box | 2844-3001 | ⏭ lot 7 |
-| Branches, nid, score, combo | 3002-3117 | ⏭ lot 7 |
+| Cadeau bonus, loot box | 2844-3001 | ⏭ lot 7 (l'écran roulette du §9 lot 6 est reporté avec elle, voir Écarts) |
+| Branches, nid, score, combo | 3002-3117 | ⚠️ conteneurs d'état portés (lot 6, `GameState`) ; boucle de jeu **lot 7** |
 | Rase-mottes | 3118-3145 | ⏭ lot 7 |
 | Ours (IA de meute) | 3146-3388 | ⏭ lot 7 |
 | Combat MP (canon, balles, dégâts) | 3389-4221 | ⏭ lot 10a |
 | IA du bot (4 difficultés) | 4222-4686 | ⏭ lot 10b |
 | Campagne (6 niveaux) | 3477-3600, 4687-4955 | ⏭ lot 10c |
 | Cinématiques | 3602-3705 | ⏭ lot 10d |
-| HUD + écrans (~1 000 lignes) | 4956-6010 | ⏭ lot 6 |
-| Boucle principale, init, reset | 6011-6296 | ⏭ lot 6/7 |
+| HUD + écrans (~1 000 lignes) | 4956-6010 | ✅ lot 6 (instruments de vol, Start/Paused/Réglages/Over ; MP/campagne/loot hors périmètre) |
+| Boucle principale, init, reset | 6011-6296 | ⚠️ machine à états portée (lot 6) ; `beginGame()`/reset complets **lot 7** |
 | Multijoueur | `docs/scripts/hibou3d-multiplayer.js` | ⏭ lot 11 |
 
 ### 5. Règles de travail sur ce portage
@@ -122,7 +122,7 @@ conteneur ne veulent rien dire, seule la bonne exécution compte.
 | 3 | Terrain analytique + eau ⭐ | ✅ recetté | parité **1e-9 u** ; **le repli hash entier n'est pas nécessaire** |
 | 4 | Décor instancié | ✅ recetté | 3 000 arbres, **0 corps physique**, 10 nœuds de rendu |
 | 5 | Ciel, jour/nuit, lumières | ✅ recetté | horloge murale, pas de session ; `SkySystem.compute()` pur, 7/7 |
-| 6 | HUD + écrans | ⬜ à faire | |
+| 6 | HUD + écrans | ✅ recetté | `GameState` (12 états), instruments de vol, Start/Paused/Réglages/Over |
 | 7 | Gameplay solo | ⬜ à faire | |
 | 8 | Événements du monde | ⬜ à faire | |
 | 9 | Effets | ⬜ à faire | |
@@ -410,6 +410,98 @@ démarrage — pas de fichier supplémentaire à charger).
 
 ---
 
+### Lot 6 — HUD, écrans, machine à états ✅ (2026-08-04)
+
+**Livré**
+- `autoload/game_state.gd` (**`GameState`**) : `enum State` à 12 valeurs, **dans le même
+  ordre** que `const S = {...}` (docs/hibou-3d.html ligne 92) — vérifié valeur par valeur
+  par la recette. Champs de manche solo (`score`, `nest`, `combo`, `combo_timer`, `lives`,
+  `best`, `buffs`, `over_reason`, `mouse_sensitivity`), signaux `state_changed(previous,
+  current)` et `score_changed`, `change_state()`, `reset_round()` (le sous-ensemble de
+  `beginGame()` que ce lot peut tester : score/nid/combo/vies/bonus, pas la régénération du
+  monde — lot 7).
+- `scripts/ui/hud_draw.gd` (**`HudDraw`**) : port 1:1 de `rrect`/`retroBtn`/`scanlines`/
+  `drawSpeedFX`, en fonctions **statiques** prenant le `CanvasItem` receveur en premier
+  paramètre (Godot n'a pas de contexte de dessin global comme `hctx`). Centralise aussi les
+  polices partagées et le filet de secours emoji (voir Écart n°9).
+- `scripts/ui/hud.gd` + `scenes/ui/hud.tscn` : port 1:1 de `drawHUD()` solo (score, vies,
+  bonus actifs, combo, barre de nid), des instruments de vol (vitesse/altitude/poussée/
+  vario, lus sur `OwlFlight.model`), de l'alerte décrochage clignotante et de la vignette de
+  vitesse. Le multijoueur (`drawMPStatusBox`, `drawScoreboard`, `drawCrosshair`,
+  `drawInventoryBar`), la boussole d'objectifs (cadeau/branches) et les bandeaux lune/
+  tempête/pluie **ne sont pas câblés** : leurs données (combat lot 10a/11, gameplay lot 7,
+  météo lot 8) n'existent pas encore. Rien n'est bricolé en attendant — `main.gd` les
+  branchera quand ces lots arriveront, sans retoucher `hud.gd`.
+- `scripts/ui/screen_start.gd`, `screen_paused.gd`, `screen_settings.gd`, `screen_over.gd`
+  + leurs scènes, orchestrés par `scripts/ui/screens.gd` : port de `drawStart()`,
+  `drawPaused()`, `drawSettings()`, `drawOver()`. Décision C du plan (§4.2) : les menus
+  deviennent des `Control`/`Button`/`HSlider` réels au lieu de rectangles hit-testés à la
+  main (`startSoloBtnRect`, `getSliderHitArea()`, `handleSliderDrag()` disparaissent).
+  Seul **SOLO** est câblé à une vraie transition ; Multijoueur/Campagne/Combat vs IA restent
+  visibles (mise en page à 4 boutons conservée) mais `disabled = true` (lots 10-11, voir
+  Écart n°10).
+- `main.gd` : `_begin_game()` (reset de manche + redécollage, le sous-ensemble testable de
+  `beginGame()`) et `_on_crashed_into_ground()` (port de `onGroundCrash()`, branché sur le
+  signal `OwlFlight.crashed_into_ground` déjà préparé au lot 2) donnent au lot 6 un aller-
+  retour Start → Play → Over **câblé de bout en bout**, pas juste des écrans statiques
+  — la transition Over n'a toutefois pas été observée en recette visuelle, voir plus bas.
+- `tools/gen_input_map.gd` : action `toggle_settings` (touche **O**) ajoutée aux 18
+  actions du lot 0.
+- Polices : `VT323-Regular.ttf` et `PressStart2P-Regular.ttf` (Google Fonts, SIL OFL,
+  chargées par CDN dans le jeu JS — un export Godot ne peut pas dépendre du réseau) +
+  `NotoEmoji-Regular.ttf` en filet de secours pour les émoji (Écart n°9).
+
+**Trois décisions de portage**
+1. **La pause n'est plus pilotée par la perte du pointer-lock.** Le JS déclenche PAUSED via
+   l'évènement navigateur `pointerlockchange` (Échap navigateur = perte native du
+   verrouillage, écoutée passivement) ; aucune touche « pause » n'existe côté clavier
+   applicatif. Godot ne reçoit pas cet évènement webplatform-spécifique de façon fiable :
+   l'action `pause` (Échap, déjà dans l'`InputMap` du lot 0) bascule **explicitement**
+   PLAY ↔ PAUSED. Le comportement perçu (Échap met en pause, un clic ou une touche reprend)
+   est identique ; le mécanisme diffère (Écart n°11).
+2. **`retroBtn` n'est pas porté pour les vrais `Button`.** Le relief biseauté clair/sombre
+   du canvas 2D n'a pas d'équivalent 1:1 en `StyleBoxFlat` (bordure d'une seule couleur).
+   `HudDraw.style_button()` garde le code couleur par mode et un retour visuel pressé/
+   survolé/désactivé, sans le biseau (Écart n°12). `rrect`/`retroBtn`/`scanlines` restent
+   portés à l'identique pour tout ce qui reste en `_draw()` (HUD, chrome des écrans).
+3. **`drawSpeedFX` n'a pas de dégradé radial natif.** `CanvasItem` n'expose pas
+   l'équivalent de `createRadialGradient` ; un `GradientTexture2D` étiré sur un rectangle
+   1280×720 non carré déformerait le cercle en ellipse. Approximé par 16 anneaux
+   concentriques à alpha interpolé — effet équivalent, pas pixel-identique (non pertinent
+   pour un effet de juice, contrairement au terrain ou au vol).
+
+**Piège rencontré — émoji et polices Godot.** VT323/Press Start 2P ne couvrent aucun émoji
+(🦉 ❤️ ⚡…) : dans un `<canvas>` de navigateur, un glyphe manquant bascule automatiquement
+sur une police système ; un `Font` Godot ne le fait **jamais** tout seul. Sans filet de
+secours, chaque émoji du HUD/des écrans s'affichait en tofu (repéré à l'écran par Rémi lors
+de la recette visuelle). Fixé en deux temps : `NotoEmoji-Regular.ttf` (contours
+**monochromes**, pas Noto Color Emoji — ~15× plus lourd pour des bitmaps couleur) posé en
+`fallbacks` sur les deux polices (une fois, via `HudDraw._static_init()`, Godot 4.4+) ; les
+quelques glyphes hors du bloc Unicode Emoji que Noto Emoji ne couvre pas non plus (flèches
+`←`/`→`, triangles `▲`/`▼`) remplacés par de l'ASCII (`<-`/`->`, `^`/`v`) plutôt que d'ajouter
+une troisième police pour deux caractères. Voir Écart n°9.
+
+**Recette** — `tests/test_game_state.gd`, 31/31, **pur** (script direct, `GameState` est un
+autoload donc indisponible en `--script`, Écart n°4 — le test instancie la classe elle-même) :
+les 12 valeurs de l'enum dans l'ordre exact du JS, état initial, `change_state`/
+`state_changed` (ancien **et** nouvel état transmis), `score`/`score_changed`,
+`reset_round()` (remet la manche à zéro sans toucher `state`/`best`/`mouse_sensitivity`).
+Recette visuelle en navigateur (captures `canvas.toDataURL()` — voir Écart n°14 sur
+`page.screenshot()`) : navigation complète **Start → clic SOLO → Play → Échap → Paused →
+O → Réglages → glisser le curseur → clic extérieur → Paused → clic → Play** ; HUD lisible
+en 1280×720, aucune erreur console sur tout le parcours. La transition Play → Over
+(`_on_crashed_into_ground()`) n'a **pas** été déclenchée en conditions réelles — une
+plongée pilotée au clavier n'a pas suffi à toucher le sol dans la fenêtre de capture — mais
+repose sur le signal `OwlFlight.crashed_into_ground`, déjà exercé par le harnais de parité
+du lot 2, et sur les mêmes primitives de dessin que Start/Paused/Réglages, déjà vérifiées à
+l'écran. Régression : lots 1 (11/11), 3+4 (30/30), 5 (7/7) toujours au vert.
+
+**Coût web :** `.pck` 4,18 → **5,50 Mo** (+1,32 Mo : VT323 0,15 + Press Start 2P 0,12 +
+Noto Emoji 1,98 Mo bruts, avant compression réseau — poste dominé par le filet de secours
+emoji, seule police du lot dont la couverture Unicode le justifie).
+
+---
+
 ## Écarts constatés par rapport au plan
 
 | # | Constat | Impact |
@@ -422,3 +514,9 @@ démarrage — pas de fichier supplémentaire à charger).
 | 6 | **`sky.gdshader` n'est pas un portage direct de `makeSky()`.** Le jeu d'origine sème 1 600 `THREE.Points` individuels sur une texture canvas plaquée en fond de scène. Un shader de ciel Godot (`shader_type sky;`) n'a pas d'équivalent à « une texture 2D derrière la scène » : le dégradé est reconstruit par l'élévation du rayon de vue (`EYEDIR.y`) et les étoiles par une grille de cellules hachées sur la sphère céleste, chacune avec sa phase de scintillement propre. | Équivalent visuel, pas byte-identique : aucune des 1 600 positions/couleurs d'étoiles du jeu d'origine n'est reproduite au pixel près — non pertinent dans un dôme procédural. Pas de parité chiffrée prévue pour ce point, contrairement au terrain ou au vol (lot 5 n'est pas marqué ⭐ bloquant). |
 | 7 | **`moon.glb` n'existe pas** dans les assets fournis, comme `barnowl.glb` (écart n°1) : le §9 du plan le nomme mais aucun fichier de ce nom n'est livré. | Repli sur le même mécanisme que le jeu d'origine sans `models.moon` : sphère + texture de cratères procédurale générée au démarrage (`_make_moon_texture()`). Coût nul en poids de `.pck` (aucun fichier chargé), léger coût CPU au premier `_ready()` (512×512 px, une fois). |
 | 8 | **`HemisphereLight` (`fillLight`) n'est pas porté.** Godot n'a pas de nœud d'éclairage à deux couleurs ciel/sol séparées de l'ambiante principale. | Reflet du sol dans l'ambiante non reproduit — effet mineur, déjà couvert en pratique par `Environment.ambient_light_color` + le fog. Pas de contournement construit (pas de fausse lumière hémisphérique bricolée) : l'effort n'est pas proportionné à un effet aussi discret. |
+| 9 | **VT323/Press Start 2P ne couvrent aucun émoji**, et un `Font` Godot ne bascule jamais tout seul sur une police système pour un glyphe manquant (contrairement à un `<canvas>` de navigateur) — repéré à l'écran par Rémi lors de la recette visuelle du lot 6 (tofu partout : 🦉, ❤️, ⚡…). | Corrigé par un filet de secours `NotoEmoji-Regular.ttf` (contours **monochromes** — Noto Color Emoji, en bitmaps couleur, aurait pesé ~15× plus) posé une fois sur les deux polices (`HudDraw._static_init()`). Les glyphes encore hors de sa couverture (`←`/`→`, `▲`/`▼` — Formes géométriques/Flèches, pas Emoji) sont remplacés par de l'ASCII (`<-`/`->`, `^`/`v`) ; deux icônes decoratives de fin de ligne (🎁/🌿 dans le texte d'aide) restent en tofu à très petite taille — non gênant pour la lisibilité, à reprendre si besoin lors du calibrage visuel du lot 12. |
+| 10 | **Multijoueur/Campagne/Combat vs IA ne sont pas câblés sur l'écran Start.** Les quatre boutons de `drawStart()` sont recréés (mise en page identique), mais trois n'ont ni écran ni système derrière eux avant les lots 10-11. | `disabled = true` sur les trois : visibles (parité de mise en page), non cliquables (honnête sur ce qui marche). Le raccourci clavier `[M]` du JS n'est pas affiché, pour ne pas promettre un raccourci mort. |
+| 11 | **La pause n'est plus pilotée par la perte du pointer-lock** (`pointerlockchange`, un évènement web-spécifique que Godot ne relaie pas de façon fiable en export), mais par un basculement explicite de l'action `pause` (Échap). | Comportement perçu identique (Échap met en pause, clic/touche reprend, vérifié en recette visuelle) ; seul le mécanisme diffère. Documenté plutôt que reproduit à l'identique — reproduire fidèlement un évènement de plateforme absent serait un contournement plus fragile que la solution native Godot. |
+| 12 | **`retroBtn` (relief biseauté clair/sombre) n'est pas porté pour les vrais `Button`** des écrans (décision C, §4.2) : `StyleBoxFlat` n'a qu'une seule couleur de bordure. `HudDraw.style_button()` garde la couleur par mode et les états pressé/survolé/désactivé, sans le biseau. | Écart visuel mineur, assumé — `rrect`/`retroBtn`/`scanlines` restent portés à l'identique partout où le rendu reste en `_draw()` (HUD, chrome des écrans), qui est la majorité de la surface rétro à l'écran. |
+| 13 | **L'écran Cadeau/Loot box (`drawLootbox()`) n'est pas porté.** Contrairement au HUD ou aux menus, ce n'est pas un écran de navigation : son seul déclencheur est le ramassage d'un cadeau en jeu (`giftItem`, lot 7), et son animation (défilement, `rollLoot()`, application des bonus) est de la logique de jeu, pas de la présentation. | Reporté au lot 7 en bloc avec le système de cadeau dont il dépend — un aperçu statique sans déclencheur réel aurait été du code mort, contraire à l'esprit du lot (§4.2 décision C vise des écrans **navigables**, celui-ci ne l'est pas). `GameState.State.LOOT` existe déjà dans l'énumération (valeur 4, ordre JS), prêt à être branché. |
+| 14 | **`page.screenshot()` de Playwright reste indéfiniment bloqué** (« waiting for fonts to load ») sur l'export web dès que la scène 3D est chargée (`document.fonts.ready` ne se résout jamais sur cette page — aucun `@font-face` DOM, donc pas lié aux polices ajoutées ce lot). `Page.captureScreenshot` en CDP brut bloque pareillement. | Ce n'est **ni** un bug du jeu **ni** un vrai blocage : `canvas.toDataURL()` exécuté **dans** la page (`page.evaluate`) aboutit toujours, juste lentement (~30-90 s par image sous SwiftShader avec cette scène — forêt + terrain + shader de ciel + HUD), le temps que le rendu logiciel produise une frame lisible. Pour toute recette visuelle des lots suivants : lire les pixels par `canvas.toDataURL()` plutôt que `page.screenshot()`/CDP, et prévoir des délais généreux (60-90 s) entre chaque capture. |
