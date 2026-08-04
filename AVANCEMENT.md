@@ -17,7 +17,7 @@
 ### État à l'instant T
 
 **Prochaine action :** *(voir « Tableau de bord » ci-dessous — le premier lot ⬜ ou 🟡)*
-**En cours :** Lot 1 — hibou + caméra.
+**En cours :** Lot 2 — modèle de vol (le lot critique du portage, §9.2).
 
 ### 1. Remonter l'environnement (~2 min, aucun accès réseau requis pour Godot)
 
@@ -84,7 +84,7 @@ conteneur ne veulent rien dire, seule la bonne exécution compte.
 | Lot | Titre | État | Note |
 |---|---|---|---|
 | 0 | Socle : projet, Compatibility, export web, CI | ✅ recetté | `.wasm` 36,3 Mo brut / **8,8 Mo gzip** |
-| 1 | Hibou + caméra | ⬜ à faire | |
+| 1 | Hibou + caméra | ✅ recetté | 11/11 vérifications, `tests/test_owl.gd` |
 | 2 | Modèle de vol ⭐ | ⬜ à faire | |
 | 3 | Terrain analytique + eau ⭐ | ⬜ à faire | |
 | 4 | Décor instancié | ⬜ à faire | |
@@ -144,6 +144,34 @@ plus une condition de viabilité**. À comparer : le jeu Three.js transfère ~34
 **Note de mesure :** les 6 FPS observés dans le test navigateur viennent de SwiftShader
 (rendu logiciel dans le conteneur CI), pas du moteur. Aucune conclusion de perf à tirer
 avant une mesure sur GPU réel.
+
+### Lot 1 — Hibou + caméra ✅ (2026-08-04)
+
+**Livré**
+- `assets/models/owl_wings.glb` — le vrai modèle du jeu (voir écart n°1), importé par l'éditeur.
+  **L'écran de chargement de 12 Mo disparaît** : plus de `GLTFLoader` à l'exécution.
+- `scripts/util/model_utils.gd` — port de `normalizeModel()` (§5.2). Godot n'ayant pas
+  d'équivalent de `Box3.setFromObject`, l'agrégat d'AABB est reconstruit à la main.
+  La hiérarchie à trois niveaux (`Visual` → `Spin` → `Inner`) est conservée : le wrapper
+  doit rester neutre pour que l'appelant puisse le tourner sans écraser la normalisation.
+- `scenes/owl/owl.tscn` + `scripts/owl/owl.gd` — normalisation sur l'**envergure** (2,6 u),
+  demi-tour du modèle (nez = -Z), assiette piquée de -0,25 rad, matériau plume double face
+  (le `.glb` n'embarque aucune matière), gabarit de collision mesuré sur l'AABB réelle,
+  `AnimationPlayer.speed_scale` piloté par la vitesse (0,25 → 3,2).
+- `scripts/owl/owl_camera.gd` — offset (0, 2, 6.5), champ dynamique 70 → 84°, vue arrière,
+  et l'échantillonnage anti-clipping **écrit mais désactivé** (pas encore d'arbres ni de relief).
+- `scripts/flight/flight_input.gd` — commandes découplées de leur source, réutilisables
+  par le bot (lot 10b) et par le harnais de parité (lot 2).
+- `scripts/owl/owl_flight.gd` — ⚠️ **provisoire**, rotation seule ; remplacé au lot 2.
+
+**Recette** — `tests/test_owl.gd`, 11/11 :
+envergure normalisée à 2,600 · gabarit 2,600 × 0,845 × 1,315 · nez vers -Z ·
+battement en lecture, borné à 0,25/3,2 · offset caméra · vue arrière (devant + demi-tour) ·
+champ à 84,0° à pleine vitesse.
+Recette visuelle dans Chromium : le hibou est rendu ailes déployées vu de l'arrière, et
+un appui sur roulis gauche **incline l'horizon** — la caméra hérite bien du roulis.
+
+**Coût web :** `.pck` 0,02 → **2,60 Mo** (le modèle du hibou). `.wasm` inchangé.
 
 ---
 

@@ -1,6 +1,7 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/debug_overlay.gd" id="1_debug"]
+[ext_resource type="PackedScene" path="res://scenes/owl/owl.tscn" id="2_owl"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_1"]
 sky_top_color = Color(0.05, 0.06, 0.19, 1)
@@ -22,7 +23,14 @@ fog_light_color = Color(0.047, 0.063, 0.188, 1)
 fog_depth_begin = 770.0
 fog_depth_end = 2240.0
 
-[sub_resource type="BoxMesh" id="Box_1"]
+[sub_resource type="PlaneMesh" id="Plane_1"]
+size = Vector2(400, 400)
+subdivide_width = 40
+subdivide_depth = 40
+
+[sub_resource type="StandardMaterial3D" id="Mat_1"]
+albedo_color = Color(0.086, 0.196, 0.122, 1)
+roughness = 1.0
 
 [node name="Main" type="Node3D"]
 
@@ -30,19 +38,20 @@ fog_depth_end = 2240.0
 environment = SubResource("Env_1")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.5, 0.866, 0, -0.866, 0.5, 0, 60, 0)
+transform = Transform3D(1, 0, 0, 0, 0.5, 0.866025, 0, -0.866025, 0.5, 0, 60, 0)
 light_energy = 0.9
 shadow_enabled = true
 directional_shadow_mode = 1
 
-[node name="Placeholder" type="MeshInstance3D" parent="."]
-mesh = SubResource("Box_1")
+[node name="World" type="Node3D" parent="."]
 
-[node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 4)
-fov = 70.0
-near = 0.1
-far = 3200.0
+[node name="PlaceholderGround" type="MeshInstance3D" parent="World"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -20, 0)
+mesh = SubResource("Plane_1")
+surface_material_override/0 = SubResource("Mat_1")
+
+[node name="Owl" parent="." instance=ExtResource("2_owl")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
 
 [node name="UI" type="CanvasLayer" parent="."]
 

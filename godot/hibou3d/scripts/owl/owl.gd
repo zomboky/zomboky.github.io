@@ -33,12 +33,20 @@ var ground_clear := 1.2
 var collide_radius := 0.3
 var hitbox := Vector3(2.6, 1.2, 1.6)
 
+@onready var camera: OwlCamera = %Camera3D
+
+@onready var _visual: Node3D = %Visual
+@onready var _spin: Node3D = %Spin
 @onready var _inner: Node3D = %Inner
 @onready var _model: Node3D = %Model
 @onready var _anim: AnimationPlayer = %Model/AnimationPlayer
 
 
 func _ready() -> void:
+	# Les trois niveaux de la normalisation (§5.2) sont pilotés ici et non dans la
+	# scène : les constantes ci-dessus restent la seule source de vérité.
+	_visual.rotation.x = MODEL_PITCH
+	_spin.rotation.y = MODEL_YAW
 	_apply_feather_material()
 	ModelUtils.normalize(_inner, _model, Vector3.AXIS_X, MODEL_WINGSPAN, false)
 	_measure_collision_bounds()

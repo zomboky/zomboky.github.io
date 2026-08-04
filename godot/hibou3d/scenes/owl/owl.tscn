@@ -1,0 +1,28 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/owl/owl.gd" id="1_owl"]
+[ext_resource type="PackedScene" path="res://assets/models/owl_wings.glb" id="2_model"]
+[ext_resource type="Script" path="res://scripts/owl/owl_camera.gd" id="3_camera"]
+[ext_resource type="Script" path="res://scripts/owl/owl_flight.gd" id="4_flight"]
+
+[node name="Owl" type="Node3D"]
+script = ExtResource("1_owl")
+
+[node name="Visual" type="Node3D" parent="."]
+unique_name_in_owner = true
+
+[node name="Spin" type="Node3D" parent="Visual"]
+unique_name_in_owner = true
+
+[node name="Inner" type="Node3D" parent="Visual/Spin"]
+unique_name_in_owner = true
+
+[node name="Model" parent="Visual/Spin/Inner" instance=ExtResource("2_model")]
+unique_name_in_owner = true
+
+[node name="Camera3D" type="Camera3D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("3_camera")
+
+[node name="Flight" type="Node" parent="."]
+script = ExtResource("4_flight")
