@@ -711,9 +711,10 @@ distinctes** (recette : Rémi bat `easy` sans effort et perd contre `expert`).
 ### Lot 11 — Multijoueur
 
 **Point clé : le protocole ne change pas.** `server/hibou3d-server/server.js` reste
-tel quel, ce qui veut dire que le client Godot et le client Three.js peuvent **cohabiter
-dans la même partie** si la parité de terrain (§5.4) et de conventions est tenue.
-C'est le meilleur test d'intégration possible — et à décider explicitement (§12).
+tel quel. Les parties sont **100 % Godot** — le client Three.js ne sera plus utilisé.
+Conséquence directe : la parité bit-à-bit du terrain (§5.4) n'est **plus critique**
+pour le multijoueur (elle l'était si les deux clients cohabitaient). Elle reste souhaitable
+pour la rejouabilité et l'exactitude, mais n'est pas bloquante pour le lancement.
 
 **Fait :** `Net` autoload avec `WebSocketPeer` (wss://`bear.servebeer.com`, reconnexion
 avec backoff), messages **à l'identique** : `hello`, `set-pseudo`, `away-status`,
@@ -728,8 +729,8 @@ Hiboux distants : interpolation + extrapolation plafonnée à 0,3 s, auras color
 (brown/purple/yellow/green), lobby (`Control`), scoreboard, `restoreCanonicalTerrain()`
 avant chaque manche.
 
-**Terminé quand :** deux clients Godot jouent ensemble ; **et** (si retenu) un client
-Godot et un client Three.js jouent ensemble sans divergence de terrain ni hibou enterré.
+**Terminé quand :** deux clients Godot jouent ensemble sans divergence, et la progression
+multijoueur persiste (`user://` avec flush explicite, voir §10.4).
 
 ---
 
@@ -839,7 +840,7 @@ brutalement, rouvrir, vérifier la progression.
 
 | Risque | Gravité | Mitigation |
 |---|---|---|
-| **Divergence du hash de terrain** (JS vs GDScript vs WASM) | 🔴 Critique — casse le multijoueur | Harnais de parité **en premier** au lot 3 ; repli sur un hash entier appliqué **aux deux jeux** (§5.4) |
+| **Divergence du hash de terrain** (GDScript vs WASM) | 🟡 Moyen — affecte rejouabilité, pas critique pour MP | Harnais de parité Godot desktop ↔ WASM au lot 3 ; si divergence, repli sur un hash entier |
 | **Poids du runtime WebAssembly** | 🔴 Critique — décide de la viabilité | Mesuré dès le **lot 0**, avant tout investissement ; template custom + rebudget assets |
 | **Modèle de vol qui « ne sent pas pareil »** | 🔴 Critique — c'est le jeu | Recette quantitative bloquante au lot 2 (§9.2) ; interdiction de passer au lot 3 sans elle |
 | Performance mobile en WASM | 🟠 Élevé | Profil `LOW_SPEC` + `scaling_3d_scale` dès le lot 12 ; tester sur un vrai téléphone, pas en émulation |
@@ -859,18 +860,16 @@ brutalement, rouvrir, vérifier la progression.
    en cours de portage change les perfs et le comportement de Compatibility.
 2. **Parité stricte ou relooking ?** Ce plan suppose **parité stricte** puis améliorations
    au lot 13. Si l'objectif est de repenser le jeu au passage, le découpage change beaucoup.
-3. **Multijoueur : cohabitation Three.js ↔ Godot ?** Si oui, la parité de terrain devient
-   **bloquante** (§5.4) et le protocole est gelé. Si non (parties séparées, ou nouveau
-   serveur), la contrainte de déterminisme s'allège énormément. **C'est la question qui a
-   le plus d'impact sur le coût total.**
-4. **Le jeu Three.js reste-t-il en ligne ?** Ce plan suppose que oui (`docs/hibou-3d.html`
-   inchangé). Sinon, prévoir une redirection et le devenir du verrou campagne.
-5. **Mobile : dans le périmètre du portage, ou plus tard ?** Le jeu actuel a un support
+3. ✅ **DÉCIDÉ : Godot seulement.** Pas de cohabitation Three.js ↔ Godot en multijoueur.
+   Le client Three.js reste en ligne (`docs/hibou-3d.html`), mais les parties multijoueur
+   seront **100 % Godot** après le portage. Conséquence : la parité bit-à-bit du terrain
+   n'est **plus critique** pour le multijoueur, seulement souhaitable pour la rejouabilité.
+4. **Mobile : dans le périmètre du portage, ou plus tard ?** Le jeu actuel a un support
    tactile complet ; le maintenir coûte le lot 12 en entier.
-6. **Mobile de référence** — quel appareil sert de cible de recette ?
-7. **itch.io** : page publique dès la première version jouable, ou non listée jusqu'à la
+5. **Mobile de référence** — quel appareil sert de cible de recette ?
+6. **itch.io** : page publique dès la première version jouable, ou non listée jusqu'à la
    parité complète ? (Recommandation : **non listée** jusqu'à la fin du lot 12.)
-8. **Audio (lot 13)** : sons libres de droits, ou création ? À anticiper, car c'est
+7. **Audio (lot 13)** : sons libres de droits, ou création ? À anticiper, car c'est
    probablement le plus gros gain de qualité perçue une fois la parité atteinte.
 
 ---
@@ -882,13 +881,18 @@ tout travail cosmétique :
 
 ```
 Lot 0  → réponse à « le poids web est-il acceptable ? »
-Lot 3  → réponse à « le terrain peut-il rester déterministe ? »   (harnais AVANT le reste)
 Lot 2  → réponse à « le vol a-t-il le même goût ? »
+Lot 3  → réponse à « le terrain est-il portable et cohérent ? »   (important mais non critique pour MP)
 ```
 
-Si ces trois réponses sont bonnes, le reste du portage est long mais **sans risque
-technique majeur** : c'est de la traduction méthodique, lot par lot.
-Si l'une des trois est mauvaise, on l'apprend en quelques jours plutôt qu'en quelques mois.
+**Note — Godot seulement (§12.3) :** Avec l'absence de cohabitation Three.js ↔ Godot,
+la parité bit-à-bit du terrain perd son caractère **critique pour le multijoueur**.
+Le lot 3 reste important pour la rejouabilité en solo et la stabilité, mais ne bloque plus
+le reste du projet si une légère divergence survient.
+
+Si les réponses aux lots 0 et 2 sont bonnes, le reste du portage est long mais **sans
+risque technique majeur** : c'est de la traduction méthodique, lot par lot.
+Si l'une des deux est mauvaise, on l'apprend en quelques jours plutôt qu'en quelques mois.
 
 ---
 
