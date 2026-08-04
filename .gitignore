@@ -1,3 +1,6 @@
 node_modules/
 skills/mach2/.cache/
 __pycache__/
+
+# Exports Godot (produits par la CI, jamais versionnés)
+godot/hibou3d/build/

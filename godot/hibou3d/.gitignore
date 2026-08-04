@@ -1,0 +1,4 @@
+# Cache d'import de l'éditeur : régénéré par `godot --headless --import`
+.godot/
+# Exports locaux
+build/

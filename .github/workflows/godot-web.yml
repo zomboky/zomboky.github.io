@@ -1,0 +1,89 @@
+name: Hibou 3D — build web (Godot)
+
+# Recette du lot 0 (PLAN_GODOT.md §9) : à chaque poussée touchant le projet Godot,
+# on rebuild l'export web et on publie l'artefact. Objectif secondaire mais important :
+# suivre le POIDS TRANSFÉRÉ lot par lot (§10.1), qui est le vrai risque du portage.
+
+on:
+  push:
+    paths:
+      - 'godot/hibou3d/**'
+      - '.github/workflows/godot-web.yml'
+  pull_request:
+    paths:
+      - 'godot/hibou3d/**'
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.5
+  PROJECT_DIR: godot/hibou3d
+
+jobs:
+  export-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot + templates d'export
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot-bin
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-web
+
+      - name: Installer Godot ${{ env.GODOT_VERSION }} et les templates web
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          mkdir -p ~/godot-bin ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+
+          curl -fsSL -o /tmp/godot.zip \
+            "$BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d ~/godot-bin
+          mv ~/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot-bin/godot
+          chmod +x ~/godot-bin/godot
+
+          # On n'extrait que les templates web : le .tpz complet pèse ~1,3 Go.
+          curl -fsSL -o /tmp/templates.tpz \
+            "$BASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q -j /tmp/templates.tpz \
+            'templates/web_nothreads_debug.zip' 'templates/web_nothreads_release.zip' \
+            -d ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          rm -f /tmp/templates.tpz /tmp/godot.zip
+
+      - name: Importer les assets
+        working-directory: ${{ env.PROJECT_DIR }}
+        # Premier import : Godot sort parfois en code != 0 tout en ayant importé
+        # correctement. L'échec réel est capturé par l'étape d'export ci-dessous.
+        run: ~/godot-bin/godot --headless --import || true
+
+      - name: Exporter le build web
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          mkdir -p build/web
+          ~/godot-bin/godot --headless --export-release "Web" build/web/index.html
+
+      - name: Mesurer le poids transféré
+        working-directory: ${{ env.PROJECT_DIR }}/build/web
+        run: |
+          echo "### Poids du build web" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Fichier | Brut | gzip -9 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          for f in index.wasm index.js index.pck; do
+            [ -f "$f" ] || continue
+            raw=$(stat -c%s "$f")
+            gz=$(gzip -9 -c "$f" | wc -c)
+            printf '| `%s` | %.1f Mo | %.1f Mo |\n' \
+              "$f" "$(echo "$raw/1048576" | bc -l)" "$(echo "$gz/1048576" | bc -l)" \
+              >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hibou3d-web
+          path: ${{ env.PROJECT_DIR }}/build/web
+          if-no-files-found: error
