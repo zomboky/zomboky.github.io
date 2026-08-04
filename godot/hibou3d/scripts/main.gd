@@ -12,6 +12,7 @@ extends Node3D
 @onready var owl: Owl = $Owl
 @onready var forest: Forest = $World/Forest
 @onready var village: Village = $World/Village
+@onready var sky: SkySystem = $Sky
 
 
 func _ready() -> void:
@@ -23,3 +24,6 @@ func _ready() -> void:
 	# Les lumières de feu de camp suivent le joueur : sept lumières pour une
 	# trentaine de foyers, réassignées aux plus proches.
 	village.player = owl
+	# La lumière céleste unique (soleil/lune) reste proche du joueur, comme
+	# `moonLight.position` dans le jeu d'origine.
+	sky.player = owl

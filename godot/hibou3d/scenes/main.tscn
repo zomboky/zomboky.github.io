@@ -1,25 +1,25 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/debug_overlay.gd" id="1_debug"]
 [ext_resource type="Script" path="res://scripts/main.gd" id="4_main"]
 [ext_resource type="PackedScene" path="res://scenes/owl/owl.tscn" id="2_owl"]
 [ext_resource type="PackedScene" path="res://scenes/world/world.tscn" id="3_world"]
+[ext_resource type="Script" path="res://scripts/world/sky.gd" id="5_sky"]
+[ext_resource type="Shader" path="res://resources/shaders/sky.gdshader" id="6_sky_shader"]
 
-[sub_resource type="ProceduralSkyMaterial" id="Sky_1"]
-sky_top_color = Color(0.05, 0.06, 0.19, 1)
-sky_horizon_color = Color(0.19, 0.21, 0.35, 1)
-ground_bottom_color = Color(0.04, 0.05, 0.09, 1)
-ground_horizon_color = Color(0.19, 0.21, 0.35, 1)
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_sky"]
+shader = ExtResource("6_sky_shader")
+shader_parameter/day_factor = 0.0
 
-[sub_resource type="Sky" id="Sky_2"]
-sky_material = SubResource("Sky_1")
+[sub_resource type="Sky" id="Sky_1"]
+sky_material = SubResource("ShaderMaterial_sky")
 
 [sub_resource type="Environment" id="Env_1"]
 background_mode = 2
-sky = SubResource("Sky_2")
-ambient_light_source = 3
-ambient_light_color = Color(0.5, 0.55, 0.7, 1)
-ambient_light_sky_contribution = 0.6
+sky = SubResource("Sky_1")
+ambient_light_source = 2
+ambient_light_color = Color(0.53333, 0.6, 1.0, 1)
+ambient_light_energy = 0.9
 fog_enabled = true
 fog_light_color = Color(0.047, 0.063, 0.188, 1)
 fog_depth_begin = 770.0
@@ -28,14 +28,24 @@ fog_depth_end = 2240.0
 [node name="Main" type="Node3D"]
 script = ExtResource("4_main")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="Sky" type="Node3D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("5_sky")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="Sky"]
 environment = SubResource("Env_1")
 
-[node name="Sun" type="DirectionalLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.5, 0.866025, 0, -0.866025, 0.5, 0, 60, 0)
-light_energy = 0.9
+[node name="CelestialLight" type="DirectionalLight3D" parent="Sky"]
+light_color = Color(1, 0.94902, 0.81569, 1)
+light_energy = 1.8
 shadow_enabled = true
+shadow_bias = 0.02
 directional_shadow_mode = 1
+directional_shadow_max_distance = 400.0
+
+[node name="SunMesh" type="MeshInstance3D" parent="Sky"]
+
+[node name="MoonMesh" type="MeshInstance3D" parent="Sky"]
 
 [node name="World" parent="." instance=ExtResource("3_world")]
 

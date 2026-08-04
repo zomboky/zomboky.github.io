@@ -17,7 +17,7 @@
 ### État à l'instant T
 
 **Prochaine action :** *(voir « Tableau de bord » ci-dessous — le premier lot ⬜ ou 🟡)*
-**En cours :** Lot 5 — ciel, cycle jour/nuit, lumières, brouillard.
+**En cours :** Lot 6 — HUD + écrans.
 
 ### 1. Remonter l'environnement (~2 min, aucun accès réseau requis pour Godot)
 
@@ -62,9 +62,9 @@ conteneur ne veulent rien dire, seule la bonne exécution compte.
 |---|---|---|
 | Constantes globales, `rnd`, `mulberry32` | 100-155 | ✅ lot 2 |
 | Renderer, scène, qualité adaptative | 157-229 | ⏭ lot 12 |
-| Cycle jour/nuit, ciel, lune, étoiles | 230-411 | ⏭ lot 5 |
+| Cycle jour/nuit, ciel, lune, étoiles | 230-411 | ✅ lot 5 |
 | Particules 3D (pool) | 412-566 | ⏭ lot 9 |
-| Volume ellipsoïde, grille de bordure | 579-631 | ⚠️ ellipsoïde porté (lot 2), grille au lot 5 |
+| Volume ellipsoïde, grille de bordure | 579-631 | ⚠️ ellipsoïde porté (lot 2) ; grille visuelle **reportée au lot 7** (avertissement de bord, pas un système de ciel — le §9 du plan ne la liste pas dans le lot 5) |
 | Chargement GLB, `normalizeModel` | 634-748 | ✅ lot 1 |
 | **Terrain, eau, montagnes décoratives** | 749-1138 | ✅ lot 3 (`makeMountainScenery` → lot 4) |
 | Nuages instanciés | 1139-1221 | ⏭ lot 4 |
@@ -121,7 +121,7 @@ conteneur ne veulent rien dire, seule la bonne exécution compte.
 | 2 | Modèle de vol ⭐ | ✅ recetté | écart **0,43 %** sur 818 u ; décrochage à ±50 ms |
 | 3 | Terrain analytique + eau ⭐ | ✅ recetté | parité **1e-9 u** ; **le repli hash entier n'est pas nécessaire** |
 | 4 | Décor instancié | ✅ recetté | 3 000 arbres, **0 corps physique**, 10 nœuds de rendu |
-| 5 | Ciel, jour/nuit, lumières | ⬜ à faire | |
+| 5 | Ciel, jour/nuit, lumières | ✅ recetté | horloge murale, pas de session ; `SkySystem.compute()` pur, 7/7 |
 | 6 | HUD + écrans | ⬜ à faire | |
 | 7 | Gameplay solo | ⬜ à faire | |
 | 8 | Événements du monde | ⬜ à faire | |
@@ -361,12 +361,64 @@ colliders de la forêt, qui appartiennent au script et font de toute façon auto
 
 ---
 
+### Lot 5 — Ciel, jour/nuit, lumières ✅ (2026-08-04)
+
+**La contrainte qui structure tout le lot :** « deux instances lancées à 1 minute
+d'intervalle affichent la même heure du jour » interdit tout ce qui ressemble à un temps de
+session (`Time.get_ticks_msec()`, un accumulateur `_process(delta)`…). Toute la logique de
+phase est donc isolée dans une fonction **pure**, `SkySystem.compute(unix_time)`, qui ne lit
+que `Time.get_unix_time_from_system()` — appelée deux fois au même instant, elle rend le
+même résultat bit à bit, ce qui *est* la preuve de synchro multijoueur gratuite (§9 recette,
+voir `tests/test_sky.gd`).
+
+**Livré**
+- `scripts/world/sky.gd` (**`SkySystem`**, pas `Sky` — nom déjà pris par la ressource
+  native `Environment.sky`) : port de `updateDayNightCycle()`. `_process()` n'est qu'une
+  couche fine autour de `compute()` qui pousse le résultat sur la lumière, le fog et le
+  matériau du ciel — même séparation pur/nœud que `FlightModel`/`OwlFlight` au lot 2.
+- `resources/shaders/sky.gdshader` (`shader_type sky;`) : dégradé nuit↔jour par élévation
+  du rayon de vue (`EYEDIR.y`) + étoiles procédurales (grille de cellules hachées sur la
+  sphère céleste, scintillement individuel par hachage de phase). Voir Écarts n°6 : ce n'est
+  **pas** un portage direct de `makeSky()` (1 600 `THREE.Points`), Godot n'a pas d'équivalent
+  à « une texture canvas plaquée derrière la scène ».
+- Une seule `DirectionalLight3D` (`CelestialLight`) joue les deux rôles, comme `moonLight` —
+  jamais deux lumières superposées à pleine intensité, en Compatibility l'exposition
+  s'effondrerait.
+- Soleil et lune : deux `MeshInstance3D` positionnées à `MOON_DISTANCE` = 2 400 u sur le même
+  arc, `disable_fog = true` (sans quoi le brouillard à 2 240 u les effacerait entièrement).
+  Pas de `moon.glb` livré (même famille de constat que l'écart n°1 sur le hibou) : comme le
+  jeu d'origine sans `models.moon`, repli sur une sphère à texture de cratères générée une
+  fois au démarrage (`_make_moon_texture()`, 55 taches radiales, mêmes bornes que
+  `makeMoonSurfaceTexture()`).
+- Ambiante et fog pilotés directement par `day_factor` (`Environment.ambient_light_color/
+  energy`, `fog_light_color`) — remplace `AmbientLight`. `HemisphereLight` (`fillLight`) n'a
+  pas d'équivalent Godot direct et n'est pas porté (Écart n°7) : son rôle (léger reflet du
+  sol dans l'ambiante) est mineur à côté de la lumière directionnelle et du fog déjà en place.
+- `moon_fill_progress` : champ câblé mais laissé à 0 — c'est le crochet que l'événement
+  pleine lune/lune de sang du lot 8 pilotera (`lerp(base, full, 0) == base`, donc aucun
+  effet tant qu'il n'est pas touché).
+
+**Recette** — `tests/test_sky.gd`, 7/7, **pur** (`--script`, aucune dépendance à `Terrain`) :
+déterminisme (deux appels au même instant → même direction solaire, même `day_factor`),
+bouclage exact après 480 s, lune diamétralement opposée au soleil, `day_factor` borné dans
+[0, 1] et atteignant ses deux extrêmes sur un cycle complet.
+Recette visuelle en navigateur : dégradé de ciel et ombre du hibou visibles, aucune erreur
+console, scène stable sur plusieurs frames consécutives.
+
+**Coût web :** `.pck` 3,98 → **4,18 Mo** (texture de cratères 512×512, générée au
+démarrage — pas de fichier supplémentaire à charger).
+
+---
+
 ## Écarts constatés par rapport au plan
 
 | # | Constat | Impact |
 |---|---|---|
 | 1 | **Le modèle du hibou n'est pas `barnowl.glb`.** Le jeu charge `modele-hibou/OwlWings_animation.glb` (**3,26 Mo**, avec son clip d'animation d'ailes). `docs/models/barnowl.glb` (9,4 Mo) est présent mais **jamais référencé** par `MODEL_URLS`. | Le §10.1 « rebudget de barnowl.glb » vise le mauvais fichier. Le vrai poste est `OwlWings_animation.glb` (3,26 Mo), et le budget total des modèles descend de 12,4 à ~6,3 Mo utiles. Allège le lot 12. |
 | 2 | Le plancher web transféré est de ~9 Mo (gzip), pas 20–40 Mo. | Risque 🔴 « poids du runtime » du §11 → rétrogradé à 🟡. |
-| 5 | **Godot importe un `.glb` en `PackedScene` mais un `.obj` en simple `Mesh`.** `cabin.obj` doit donc être enveloppé à la main dans un `MeshInstance3D`. Il est de plus livré sans `.mtl` (le jeu Three.js colorait ses pièces par nom : Roof / Cabin / Chimney / Door). | Les chalets reçoivent une teinte bois unique au lieu de quatre couleurs par pièce. Écart **visuel mineur, assumé** ; à reprendre au lot 5 si la calibration couleur le fait ressortir. |
+| 5 | **Godot importe un `.glb` en `PackedScene` mais un `.obj` en simple `Mesh`.** `cabin.obj` doit donc être enveloppé à la main dans un `MeshInstance3D`. Il est de plus livré sans `.mtl` (le jeu Three.js colorait ses pièces par nom : Roof / Cabin / Chimney / Door). | Les chalets reçoivent une teinte bois unique au lieu de quatre couleurs par pièce. Écart **visuel mineur, assumé** ; aucune calibration couleur globale n'est prévue au plan avant le lot 12, ce point y sera repris avec le reste. |
 | 4 | **Les autoloads n'existent pas en mode `--script`.** Godot y remplace la `SceneTree`, donc aucun autoload n'est instancié — `Terrain` est introuvable à la compilation *comme* à l'exécution. | Les tests qui touchent une scène se lancent comme une **exécution normale du projet** (`godot --headless res://tests/test_world.tscn`). Les harnais sans autoload (parité du vol, parité du terrain, recette du hibou) restent en `--script`. |
 | 3 | **`Vector3`, `Quaternion` et `Basis` sont en flottants 32 bits** dans une compilation standard de Godot, alors que le `number` de JavaScript et le `float` scalaire de GDScript sont des 64 bits. Mesuré : `Vector3.x = 0.10000000149…` contre `0.10000000000…`. Le §5.4 ne redoutait que les écarts d'ULP sur `sin()` ; la vraie source de divergence est structurelle et bien plus grosse. | C'est l'origine des 0,43 % d'écart du lot 2 : il naît dès le premier pas (~4×10⁻⁷ u) puis se propage par intégration, mais reste **borné** parce que le modèle est dissipatif. **Conséquence directe pour le lot 3 : `terrain_height(x, z)` doit prendre et rendre des `float` scalaires et ne jamais faire transiter une coordonnée par un `Vector3`**, sous peine de tronquer le relief à 32 bits. Recompiler Godot en double précision n'est pas justifié (build custom, mémoire, templates web) pour 0,43 % sur 800 u de vol. |
+| 6 | **`sky.gdshader` n'est pas un portage direct de `makeSky()`.** Le jeu d'origine sème 1 600 `THREE.Points` individuels sur une texture canvas plaquée en fond de scène. Un shader de ciel Godot (`shader_type sky;`) n'a pas d'équivalent à « une texture 2D derrière la scène » : le dégradé est reconstruit par l'élévation du rayon de vue (`EYEDIR.y`) et les étoiles par une grille de cellules hachées sur la sphère céleste, chacune avec sa phase de scintillement propre. | Équivalent visuel, pas byte-identique : aucune des 1 600 positions/couleurs d'étoiles du jeu d'origine n'est reproduite au pixel près — non pertinent dans un dôme procédural. Pas de parité chiffrée prévue pour ce point, contrairement au terrain ou au vol (lot 5 n'est pas marqué ⭐ bloquant). |
+| 7 | **`moon.glb` n'existe pas** dans les assets fournis, comme `barnowl.glb` (écart n°1) : le §9 du plan le nomme mais aucun fichier de ce nom n'est livré. | Repli sur le même mécanisme que le jeu d'origine sans `models.moon` : sphère + texture de cratères procédurale générée au démarrage (`_make_moon_texture()`). Coût nul en poids de `.pck` (aucun fichier chargé), léger coût CPU au premier `_ready()` (512×512 px, une fois). |
+| 8 | **`HemisphereLight` (`fillLight`) n'est pas porté.** Godot n'a pas de nœud d'éclairage à deux couleurs ciel/sol séparées de l'ambiante principale. | Reflet du sol dans l'ambiante non reproduit — effet mineur, déjà couvert en pratique par `Environment.ambient_light_color` + le fog. Pas de contournement construit (pas de fausse lumière hémisphérique bricolée) : l'effort n'est pas proportionné à un effet aussi discret. |
