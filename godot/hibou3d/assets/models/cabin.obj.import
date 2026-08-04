@@ -1,0 +1,25 @@
+[remap]
+
+importer="wavefront_obj"
+importer_version=1
+type="Mesh"
+uid="uid://bth2uvvro3b6t"
+path="res://.godot/imported/cabin.obj-fc5a976e750438c7cb65d7a39d4fa816.mesh"
+
+[deps]
+
+files=["res://.godot/imported/cabin.obj-fc5a976e750438c7cb65d7a39d4fa816.mesh"]
+
+source_file="res://assets/models/cabin.obj"
+dest_files=["res://.godot/imported/cabin.obj-fc5a976e750438c7cb65d7a39d4fa816.mesh", "res://.godot/imported/cabin.obj-fc5a976e750438c7cb65d7a39d4fa816.mesh"]
+
+[params]
+
+generate_tangents=true
+generate_lods=true
+generate_shadow_mesh=true
+generate_lightmap_uv2=false
+generate_lightmap_uv2_texel_size=0.2
+scale_mesh=Vector3(1, 1, 1)
+offset_mesh=Vector3(0, 0, 0)
+force_disable_mesh_compression=false

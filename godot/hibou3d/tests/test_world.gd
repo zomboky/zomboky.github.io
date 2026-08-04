@@ -1,5 +1,6 @@
 extends Node
-## Recette du lot 3 (PLAN_GODOT.md §9) : terrain et eau, montés dans la vraie scène.
+## Recette des lots 3 et 4 (PLAN_GODOT.md §9) : terrain, eau et décor instancié,
+## montés dans la vraie scène.
 ##
 ##   godot --headless --path godot/hibou3d res://tests/test_world.tscn
 ##
@@ -29,6 +30,10 @@ func _run() -> void:
 	var water: MeshInstance3D = main.get_node("World/Water")
 	var owl: Owl = main.get_node("Owl")
 	var flight: OwlFlight = owl.get_node("Flight")
+	var forest: Forest = main.get_node("World/Forest")
+	var village: Village = main.get_node("World/Village")
+	var mountains: Node3D = main.get_node("World/Mountains")
+	var clouds: Clouds = main.get_node("World/Clouds")
 
 	print("Scène complète montée en %d ms" % build_ms)
 	print("AABB du terrain : %s" % terrain_mesh.get_aabb())
@@ -82,12 +87,62 @@ func _run() -> void:
 	_check("les pics canoniques sont restaurés", Terrain.mountain_peaks.size() > 0)
 	_check("les graines de décor sont restaurées", not Terrain.world_regenerated)
 
+	# ── Lot 4 : décor instancié ───────────────────────────────────────────
+	print("")
+	print("Décor : %d arbres, %d nœuds de forêt, %d de montagnes, %d de nuages, %d de village" %
+		[forest.tree_count(), forest.get_child_count(), mountains.get_child_count(),
+		clouds.get_child_count(), village.get_child_count()])
+
+	_check("la forêt compte 3 000 arbres", forest.tree_count() == Forest.TREE_COUNT)
+	_check("la forêt est rendue en MultiMesh, pas en nœuds individuels",
+		forest.get_child_count() > 0 and forest.get_child_count() < 40
+		and forest.get_child(0) is MultiMeshInstance3D)
+	_check("aucun arbre n'est un corps physique", _count_bodies(main) == 0)
+	_check("les massifs décoratifs cernent l'arène", mountains.get_child_count() > 0)
+	_check("les nuages sont instanciés par palier d'opacité", clouds.get_child_count() >= 9)
+	_check("le village a posé des bâtiments", village.get_child_count() > Village.CAMPFIRE_POOL_SIZE)
+
+	# Le pool de lumières est une obligation du rendu Compatibility (§10.3) : une
+	# lumière par feu de camp ferait clignoter ou disparaître l'éclairage.
+	var lights := 0
+	for child in village.get_children():
+		if child is OmniLight3D:
+			lights += 1
+	_check("les feux de camp partagent un pool de 7 lumières",
+		lights == Village.CAMPFIRE_POOL_SIZE)
+
+	# Collision d'arbre : analytique, jamais un raycast.
+	_check("le vol teste les arbres", flight.tree_test.is_valid())
+	_check("la caméra teste les arbres", owl.camera.point_in_tree.is_valid())
+	_check("le ciel au-dessus de la clairière de départ est dégagé",
+		not forest.point_inside_tree(Vector3(0, 5, 0)))
+	_check("chaque arbre est détecté au cœur de son feuillage", _all_trees_hit(forest))
+
 	print("")
 	if _failures == 0:
-		print("Lot 3 : recette OK.")
+		print("Lots 3 et 4 : recette OK.")
 	else:
-		printerr("Lot 3 : %d vérification(s) en échec." % _failures)
+		printerr("Lots 3 et 4 : %d vérification(s) en échec." % _failures)
 	get_tree().quit(0 if _failures == 0 else 1)
+
+
+## Chaque arbre doit être détecté au cœur de son propre feuillage. C'est ce qui
+## vérifie la grille d'accélération : mal indexée, elle renverrait « rien » sans
+## que rien d'autre ne le signale.
+static func _all_trees_hit(forest: Forest) -> bool:
+	for i in forest.tree_count():
+		if not forest.point_inside_tree(forest.tree_leaf_point(i)):
+			return false
+	return true
+
+
+## Compte les corps physiques de la scène. Il doit y en avoir zéro : ni terrain,
+## ni arbres, ni hibou (décision A du §4.2).
+static func _count_bodies(root: Node) -> int:
+	var count := 1 if root is CollisionObject3D else 0
+	for child in root.get_children():
+		count += _count_bodies(child)
+	return count
 
 
 func _check(label: String, ok: bool) -> void:

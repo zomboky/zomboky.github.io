@@ -16,11 +16,20 @@ signal flight_updated(readout: FlightModel.Readout, speed_ratio: float)
 ## Émis quand le hibou touche le sol. La conséquence — game over en solo, respawn
 ## en multijoueur — est décidée par l'appelant, pas ici.
 signal crashed_into_ground()
+## Émis quand le hibou percute un arbre. Le vol casse net l'élan ; la perte de
+## score et de nid viendra avec les règles de jeu (lot 7).
+signal hit_tree()
+
+## Délai avant qu'un second choc d'arbre puisse compter, en pas de physique.
+## 45 frames à 60 Hz, comme le `TREE_HIT_COOLDOWN` du jeu d'origine.
+const TREE_HIT_COOLDOWN := 45
 
 ## Sensibilité souris du joueur (réglable au lot 6, écran Réglages).
 var mouse_sensitivity := 0.5
 ## Coupe le pilotage sans figer la scène : écrans de menu, cinématiques, mort.
 var controls_enabled := true
+## Test de présence dans un arbre, fourni par la forêt (lot 4). Vide, pas de collision.
+var tree_test: Callable = Callable()
 
 var model := FlightModel.new()
 
@@ -30,6 +39,7 @@ var model := FlightModel.new()
 ## la souris par évènements, le modèle la consomme une fois par pas.
 var _mouse_motion := Vector2.ZERO
 var _speed_ratio := 0.0
+var _tree_cooldown := 0
 
 
 func _ready() -> void:
@@ -77,6 +87,20 @@ func _physics_process(delta: float) -> void:
 	flight_updated.emit(model.readout, _speed_ratio)
 	if model.ground_crash:
 		crashed_into_ground.emit()
+	_check_tree_collision()
+
+
+func _check_tree_collision() -> void:
+	if _tree_cooldown > 0:
+		_tree_cooldown -= 1
+		return
+	if not tree_test.is_valid() or not tree_test.call(model.position):
+		return
+	# Le choc casse net l'élan : le VECTEUR vitesse, pas seulement son module.
+	model.velocity = Vector3.ZERO
+	model.speed = 0.0
+	_tree_cooldown = TREE_HIT_COOLDOWN
+	hit_tree.emit()
 
 
 func _process(delta: float) -> void:

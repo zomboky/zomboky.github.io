@@ -17,7 +17,7 @@
 ### État à l'instant T
 
 **Prochaine action :** *(voir « Tableau de bord » ci-dessous — le premier lot ⬜ ou 🟡)*
-**En cours :** Lot 4 — décor instancié (forêt, montagnes, nuages, hameaux).
+**En cours :** Lot 5 — ciel, cycle jour/nuit, lumières, brouillard.
 
 ### 1. Remonter l'environnement (~2 min, aucun accès réseau requis pour Godot)
 
@@ -120,7 +120,7 @@ conteneur ne veulent rien dire, seule la bonne exécution compte.
 | 1 | Hibou + caméra | ✅ recetté | 11/11 vérifications, `tests/test_owl.gd` |
 | 2 | Modèle de vol ⭐ | ✅ recetté | écart **0,43 %** sur 818 u ; décrochage à ±50 ms |
 | 3 | Terrain analytique + eau ⭐ | ✅ recetté | parité **1e-9 u** ; **le repli hash entier n'est pas nécessaire** |
-| 4 | Décor instancié | ⬜ à faire | |
+| 4 | Décor instancié | ✅ recetté | 3 000 arbres, **0 corps physique**, 10 nœuds de rendu |
 | 5 | Ciel, jour/nuit, lumières | ⬜ à faire | |
 | 6 | HUD + écrans | ⬜ à faire | |
 | 7 | Gameplay solo | ⬜ à faire | |
@@ -313,6 +313,46 @@ creux, hibou en vol au-dessus.
 
 **Coût web :** `.pck` 2,60 → **2,63 Mo** (le terrain est du code, pas des données).
 
+### Lot 4 — Décor instancié ✅ (2026-08-04)
+
+**Livré**
+- `scripts/util/multi_mesh_builder.gd` — port de `makeInstancedFromModel()`. Un modèle
+  importé est une hiérarchie de maillages, pas un maillage : on produit **un
+  `MultiMeshInstance3D` par (maillage × surface)**, en composant la transform d'instance
+  avec celle de la pièce dans le modèle.
+- `scripts/world/forest.gd` — 3 000 arbres, 4 essences, masque de bruit, exclusion des
+  lacs / de `TREE_LINE` / des pentes, tirage pondéré des essences. **Les court-circuits du
+  JS sont reproduits** : `treeRng()` du masque de forêt n'est consommé que si la densité
+  est sous le seuil, et un tirage de trop décalerait toute la forêt.
+- `scripts/world/mountain_scenery.gd`, `clouds.gd` (dérive + recyclage en bord de carte,
+  paliers d'opacité en groupes distincts), `village.gd` (hameaux, isolés, feux de camp).
+- `scripts/main.gd` — le point unique où le monde et le hibou sont branchés l'un sur l'autre.
+- Anti-clipping caméra et collision d'arbre du hibou, tous deux analytiques.
+
+**Deux points où « penser Godot » voulait dire refuser la solution Godot**
+- **Zéro corps physique** (vérifié par le test) : 3 000 `StaticBody3D` seraient
+  rédhibitoires en WebAssembly. Cônes et cylindres analytiques, comme le jeu d'origine.
+- **Pool de 7 `OmniLight3D`** pour ~30 feux de camp, réassignées chaque frame aux plus
+  proches du joueur. En Compatibility, le nombre d'omnis affectant un objet est limité :
+  une lumière par feu ferait clignoter ou disparaître l'éclairage (§10.3).
+
+**Ajout par rapport au jeu d'origine : une grille uniforme d'accélération.** Le test
+d'arbre est appelé **onze fois par frame** (dix pour l'anti-clipping caméra, une pour le
+hibou). En balayant les 3 000 arbres à chaque fois, cela ferait 33 000 itérations par
+frame — ce que le JS fait effectivement. Chaque arbre est inscrit dans les cellules que
+son feuillage touche, donc une interrogation ne regarde qu'une cellule. Le test est
+**identique**, seul le nombre de candidats change.
+
+**Recette** — `tests/test_world.gd`, 28/28 (17 du lot 3 + 11 du lot 4) :
+3 000 arbres, rendu en 10 `MultiMeshInstance3D` et non en nœuds individuels,
+**zéro `CollisionObject3D` dans toute la scène**, massifs et nuages instanciés,
+pool de 7 lumières, et **chacun des 3 000 arbres détecté au cœur de son feuillage**
+(c'est ce qui valide l'indexation de la grille : mal construite, elle renverrait
+« rien » sans que rien d'autre ne le signale).
+
+**Coûts mesurés :** semis de la forêt 507 ms, du village 17 ms.
+`.pck` 2,63 → **3,98 Mo** (les modèles de décor : 10 GLB + `cabin.obj`).
+
 ---
 
 ## Écarts constatés par rapport au plan
@@ -321,5 +361,6 @@ creux, hibou en vol au-dessus.
 |---|---|---|
 | 1 | **Le modèle du hibou n'est pas `barnowl.glb`.** Le jeu charge `modele-hibou/OwlWings_animation.glb` (**3,26 Mo**, avec son clip d'animation d'ailes). `docs/models/barnowl.glb` (9,4 Mo) est présent mais **jamais référencé** par `MODEL_URLS`. | Le §10.1 « rebudget de barnowl.glb » vise le mauvais fichier. Le vrai poste est `OwlWings_animation.glb` (3,26 Mo), et le budget total des modèles descend de 12,4 à ~6,3 Mo utiles. Allège le lot 12. |
 | 2 | Le plancher web transféré est de ~9 Mo (gzip), pas 20–40 Mo. | Risque 🔴 « poids du runtime » du §11 → rétrogradé à 🟡. |
+| 5 | **Godot importe un `.glb` en `PackedScene` mais un `.obj` en simple `Mesh`.** `cabin.obj` doit donc être enveloppé à la main dans un `MeshInstance3D`. Il est de plus livré sans `.mtl` (le jeu Three.js colorait ses pièces par nom : Roof / Cabin / Chimney / Door). | Les chalets reçoivent une teinte bois unique au lieu de quatre couleurs par pièce. Écart **visuel mineur, assumé** ; à reprendre au lot 5 si la calibration couleur le fait ressortir. |
 | 4 | **Les autoloads n'existent pas en mode `--script`.** Godot y remplace la `SceneTree`, donc aucun autoload n'est instancié — `Terrain` est introuvable à la compilation *comme* à l'exécution. | Les tests qui touchent une scène se lancent comme une **exécution normale du projet** (`godot --headless res://tests/test_world.tscn`). Les harnais sans autoload (parité du vol, parité du terrain, recette du hibou) restent en `--script`. |
 | 3 | **`Vector3`, `Quaternion` et `Basis` sont en flottants 32 bits** dans une compilation standard de Godot, alors que le `number` de JavaScript et le `float` scalaire de GDScript sont des 64 bits. Mesuré : `Vector3.x = 0.10000000149…` contre `0.10000000000…`. Le §5.4 ne redoutait que les écarts d'ULP sur `sin()` ; la vraie source de divergence est structurelle et bien plus grosse. | C'est l'origine des 0,43 % d'écart du lot 2 : il naît dès le premier pas (~4×10⁻⁷ u) puis se propage par intégration, mais reste **borné** parce que le modèle est dissipatif. **Conséquence directe pour le lot 3 : `terrain_height(x, z)` doit prendre et rendre des `float` scalaires et ne jamais faire transiter une coordonnée par un `Vector3`**, sous peine de tronquer le relief à 32 bits. Recompiler Godot en double précision n'est pas justifié (build custom, mémoire, templates web) pour 0,43 % sur 800 u de vol. |

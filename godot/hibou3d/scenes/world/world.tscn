@@ -1,7 +1,11 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/terrain_mesh.gd" id="1_terrain"]
 [ext_resource type="Shader" path="res://resources/shaders/water.gdshader" id="2_water"]
+[ext_resource type="Script" path="res://scripts/world/forest.gd" id="3_forest"]
+[ext_resource type="Script" path="res://scripts/world/mountain_scenery.gd" id="4_mountains"]
+[ext_resource type="Script" path="res://scripts/world/clouds.gd" id="5_clouds"]
+[ext_resource type="Script" path="res://scripts/world/village.gd" id="6_village"]
 
 [sub_resource type="ShaderMaterial" id="WaterMat_1"]
 render_priority = 0
@@ -21,3 +25,17 @@ script = ExtResource("1_terrain")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -3, 0)
 mesh = SubResource("WaterPlane_1")
 surface_material_override/0 = SubResource("WaterMat_1")
+
+[node name="Forest" type="Node3D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("3_forest")
+
+[node name="Mountains" type="Node3D" parent="."]
+script = ExtResource("4_mountains")
+
+[node name="Clouds" type="Node3D" parent="."]
+script = ExtResource("5_clouds")
+
+[node name="Village" type="Node3D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("6_village")
