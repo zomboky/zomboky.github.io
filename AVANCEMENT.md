@@ -56,7 +56,40 @@ Test du build dans un vrai navigateur (Chromium + Playwright sont préinstallés
 `playwright install`.** Le rendu passe par SwiftShader : les FPS mesurés dans le
 conteneur ne veulent rien dire, seule la bonne exécution compte.
 
-### 4. Règles de travail sur ce portage
+### 4. Repères dans `docs/hibou-3d.html` (6 296 lignes, tout le jeu dans un `<script type="module">`)
+
+| Système | Lignes | Porté ? |
+|---|---|---|
+| Constantes globales, `rnd`, `mulberry32` | 100-155 | ✅ lot 2 |
+| Renderer, scène, qualité adaptative | 157-229 | ⏭ lot 12 |
+| Cycle jour/nuit, ciel, lune, étoiles | 230-411 | ⏭ lot 5 |
+| Particules 3D (pool) | 412-566 | ⏭ lot 9 |
+| Volume ellipsoïde, grille de bordure | 579-631 | ⚠️ ellipsoïde porté (lot 2), grille au lot 5 |
+| Chargement GLB, `normalizeModel` | 634-748 | ✅ lot 1 |
+| **Terrain, eau, montagnes décoratives** | 749-1138 | ✅ lot 3 (`makeMountainScenery` → lot 4) |
+| Nuages instanciés | 1139-1221 | ⏭ lot 4 |
+| Pleine lune / lune de sang | 1222-1302 | ⏭ lot 8 |
+| Tempête + rochers | 1303-1457 | ⏭ lot 8 |
+| Météo dynamique | 1458-1586 | ⏭ lot 8 |
+| Forêts (3 000 arbres + colliders) | 1587-1683 | ⏭ lot 4 |
+| Hameaux, feux de camp, pool de lumières | 1684-1904 | ⏭ lot 4 |
+| Hibou, caméra, anti-clipping, battement | 1905-2083 | ✅ lot 1 |
+| Entrées clavier/souris/tactile | 2084-2465 | ✅ lot 1 (tactile hors périmètre) |
+| **Modèle de vol** | 2466-2806 | ✅ lot 2 |
+| Textures emoji (canvas) | 2807-2843 | ⏭ lot 7 |
+| Cadeau bonus, loot box | 2844-3001 | ⏭ lot 7 |
+| Branches, nid, score, combo | 3002-3117 | ⏭ lot 7 |
+| Rase-mottes | 3118-3145 | ⏭ lot 7 |
+| Ours (IA de meute) | 3146-3388 | ⏭ lot 7 |
+| Combat MP (canon, balles, dégâts) | 3389-4221 | ⏭ lot 10a |
+| IA du bot (4 difficultés) | 4222-4686 | ⏭ lot 10b |
+| Campagne (6 niveaux) | 3477-3600, 4687-4955 | ⏭ lot 10c |
+| Cinématiques | 3602-3705 | ⏭ lot 10d |
+| HUD + écrans (~1 000 lignes) | 4956-6010 | ⏭ lot 6 |
+| Boucle principale, init, reset | 6011-6296 | ⏭ lot 6/7 |
+| Multijoueur | `docs/scripts/hibou3d-multiplayer.js` | ⏭ lot 11 |
+
+### 5. Règles de travail sur ce portage
 
 - **Un lot = un commit** sur `claude/hibou3d-godot-port-o1yuew`, avec sa recette exécutée.
 - **Aucun lot ne commence avant que le précédent soit recetté** (PLAN_GODOT.md §8).
