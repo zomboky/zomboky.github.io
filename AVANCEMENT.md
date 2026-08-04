@@ -17,7 +17,7 @@
 ### État à l'instant T
 
 **Prochaine action :** *(voir « Tableau de bord » ci-dessous — le premier lot ⬜ ou 🟡)*
-**En cours :** Lot 2 — modèle de vol (le lot critique du portage, §9.2).
+**En cours :** Lot 3 — terrain analytique + eau (§9, lot 3).
 
 ### 1. Remonter l'environnement (~2 min, aucun accès réseau requis pour Godot)
 
@@ -85,7 +85,7 @@ conteneur ne veulent rien dire, seule la bonne exécution compte.
 |---|---|---|---|
 | 0 | Socle : projet, Compatibility, export web, CI | ✅ recetté | `.wasm` 36,3 Mo brut / **8,8 Mo gzip** |
 | 1 | Hibou + caméra | ✅ recetté | 11/11 vérifications, `tests/test_owl.gd` |
-| 2 | Modèle de vol ⭐ | ⬜ à faire | |
+| 2 | Modèle de vol ⭐ | ✅ recetté | écart **0,43 %** sur 818 u ; décrochage à ±50 ms |
 | 3 | Terrain analytique + eau ⭐ | ⬜ à faire | |
 | 4 | Décor instancié | ⬜ à faire | |
 | 5 | Ciel, jour/nuit, lumières | ⬜ à faire | |
@@ -173,6 +173,49 @@ un appui sur roulis gauche **incline l'horizon** — la caméra hérite bien du 
 
 **Coût web :** `.pck` 0,02 → **2,60 Mo** (le modèle du hibou). `.wasm` inchangé.
 
+### Lot 2 — Modèle de vol ⭐ ✅ (2026-08-04)
+
+Le lot qui décide si le portage « a le même goût ». **Recette quantitative tenue.**
+
+**Livré**
+- `scripts/flight/flight_model.gd` — port des **11 étapes** de `updateFlight()`, dans le
+  même ordre (leur enchaînement fait partie du résultat) : autorité des gouvernes selon la
+  vitesse air, inertie de rotation, incidence et coefficient de portance, décrochage
+  aérodynamique **et** « en cloche », les quatre forces, effet de sol, vent de tempête,
+  intégration semi-implicite, virage coordonné avec garde-fou anti-gimbal, bordure
+  ellipsoïde progressive, plancher terrain. Toutes les constantes du §2.3 recopiées.
+  Le modèle est **pur** : ni nœud, ni scène, ni serveur physique — il tient son propre
+  état et se teste hors jeu.
+- `scripts/util/rng.gd` — `mulberry32` porté à l'identique. Arithmétique entière 32 bits
+  donc **exact par construction** sur toutes les plateformes (contrairement au hash `sin()`
+  du terrain, §5.4). État tenu en non signé : `>>` sur un négatif serait un décalage
+  arithmétique en GDScript et propagerait le bit de signe.
+- `scripts/owl/owl_flight.gd` — réécrit : simple couche d'adaptation autour du modèle.
+- `tools/flight-parity/` — le harnais, avec son `README.md`.
+
+**Recette quantitative** (30 s à pas fixe de 1/60 s, séquence : décollage, virage serré,
+chandelle, décrochage, récupération, rase-mottes)
+
+| Mesure | Valeur | Seuil |
+|---|---|---|
+| Distance parcourue | JS 817,74 u / Godot 816,91 u | — |
+| Écart de position final | 3,51 u = **0,43 %** | < 1 % |
+| Écart de position maximal | 3,51 u = **0,43 %** | < 1 % |
+| Écart de vitesse maximal | 0,54 u/s | — |
+| Premier décrochage | JS 18,033 s / Godot 18,083 s → **50 ms** | ± 0,2 s |
+| Pas en désaccord sur le décrochage | 5 / 1800 | — |
+
+Reste à faire à la main : la **recette subjective** (« Rémi vole 5 minutes dans les deux
+versions et valide le feeling »). Aucun harnais ne la remplace.
+
+**Anti-dérive :** `check_drift.mjs` enregistre l'empreinte SHA-256 du corps de
+`updateFlight()`. Si le jeu Three.js change, la CI échoue et réclame une reprise de la
+transcription — sans quoi la recette de parité deviendrait un tampon de complaisance.
+
+**CI :** nouveau job `flight-parity` (empreinte → trace JS → trace Godot → verdict →
+recette du lot 1). Le verdict sort en code 1 : le plan interdit de passer au lot 3 avec
+un modèle « presque » porté, dont dépendent l'IA du bot (lot 10b) et le multijoueur (lot 11).
+
 ---
 
 ## Écarts constatés par rapport au plan
@@ -181,3 +224,4 @@ un appui sur roulis gauche **incline l'horizon** — la caméra hérite bien du 
 |---|---|---|
 | 1 | **Le modèle du hibou n'est pas `barnowl.glb`.** Le jeu charge `modele-hibou/OwlWings_animation.glb` (**3,26 Mo**, avec son clip d'animation d'ailes). `docs/models/barnowl.glb` (9,4 Mo) est présent mais **jamais référencé** par `MODEL_URLS`. | Le §10.1 « rebudget de barnowl.glb » vise le mauvais fichier. Le vrai poste est `OwlWings_animation.glb` (3,26 Mo), et le budget total des modèles descend de 12,4 à ~6,3 Mo utiles. Allège le lot 12. |
 | 2 | Le plancher web transféré est de ~9 Mo (gzip), pas 20–40 Mo. | Risque 🔴 « poids du runtime » du §11 → rétrogradé à 🟡. |
+| 3 | **`Vector3`, `Quaternion` et `Basis` sont en flottants 32 bits** dans une compilation standard de Godot, alors que le `number` de JavaScript et le `float` scalaire de GDScript sont des 64 bits. Mesuré : `Vector3.x = 0.10000000149…` contre `0.10000000000…`. Le §5.4 ne redoutait que les écarts d'ULP sur `sin()` ; la vraie source de divergence est structurelle et bien plus grosse. | C'est l'origine des 0,43 % d'écart du lot 2 : il naît dès le premier pas (~4×10⁻⁷ u) puis se propage par intégration, mais reste **borné** parce que le modèle est dissipatif. **Conséquence directe pour le lot 3 : `terrain_height(x, z)` doit prendre et rendre des `float` scalaires et ne jamais faire transiter une coordonnée par un `Vector3`**, sous peine de tronquer le relief à 32 bits. Recompiler Godot en double précision n'est pas justifié (build custom, mémoire, templates web) pour 0,43 % sur 800 u de vol. |

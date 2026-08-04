@@ -1,0 +1,23 @@
+{
+  "description": "Séquence de commandes scriptée pour la recette du lot 2 (PLAN_GODOT.md §9.2). Rejouée à l'identique en JavaScript et en GDScript, à pas fixe. Chaque segment tient jusqu'au segment suivant. pitch: +1 = piquer, -1 = cabrer. yaw/roll: +1 = vers la gauche.",
+  "dt": 0.016666666666666666,
+  "duration": 30.0,
+  "rng_seed": 20260804,
+  "ground_y": -3.0,
+  "ground_clear": 0.573,
+  "start_position": [0.0, 16.0, 0.0],
+  "segments": [
+    { "t": 0.0,  "label": "décollage : plein gaz, léger cabré",        "pitch": -0.35, "yaw": 0, "roll": 0,  "thrust": true,  "brake": false },
+    { "t": 3.0,  "label": "montée stabilisée",                          "pitch": 0,     "yaw": 0, "roll": 0,  "thrust": true,  "brake": false },
+    { "t": 5.0,  "label": "mise en virage : roulis à droite",           "pitch": 0,     "yaw": 0, "roll": -1, "thrust": true,  "brake": false },
+    { "t": 5.6,  "label": "virage serré tenu, cabré pour soutenir",     "pitch": -0.45, "yaw": 0, "roll": 0,  "thrust": true,  "brake": false },
+    { "t": 9.0,  "label": "sortie de virage : contre-braquage",         "pitch": 0,     "yaw": 0, "roll": 1,  "thrust": true,  "brake": false },
+    { "t": 9.6,  "label": "remise à plat",                              "pitch": 0,     "yaw": 0, "roll": 0,  "thrust": true,  "brake": false },
+    { "t": 11.0, "label": "chandelle : plein cabré jusqu'au décrochage", "pitch": -1,    "yaw": 0, "roll": 0,  "thrust": true,  "brake": false },
+    { "t": 17.0, "label": "récupération : nez en bas, moteur réduit",   "pitch": 0.6,   "yaw": 0, "roll": 0,  "thrust": false, "brake": true },
+    { "t": 20.0, "label": "reprise de vitesse en piqué",                "pitch": 0.15,  "yaw": 0, "roll": 0,  "thrust": true,  "brake": false },
+    { "t": 23.0, "label": "ressource : retour à l'horizontale",         "pitch": -0.5,  "yaw": 0, "roll": 0,  "thrust": true,  "brake": false },
+    { "t": 25.0, "label": "rase-mottes : lacet à gauche, vol tendu",    "pitch": 0,     "yaw": 0.5, "roll": 0, "thrust": true,  "brake": false },
+    { "t": 28.0, "label": "sortie : plein gaz, à plat",                 "pitch": 0,     "yaw": 0, "roll": 0,  "thrust": true,  "brake": false }
+  ]
+}

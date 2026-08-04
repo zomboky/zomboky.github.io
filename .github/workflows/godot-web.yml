@@ -8,10 +8,14 @@ on:
   push:
     paths:
       - 'godot/hibou3d/**'
+      - 'tools/flight-parity/**'
+      - 'docs/hibou-3d.html'
       - '.github/workflows/godot-web.yml'
   pull_request:
     paths:
       - 'godot/hibou3d/**'
+      - 'tools/flight-parity/**'
+      - 'docs/hibou-3d.html'
   workflow_dispatch:
 
 env:
@@ -87,3 +91,52 @@ jobs:
           name: hibou3d-web
           path: ${{ env.PROJECT_DIR }}/build/web
           if-no-files-found: error
+
+  flight-parity:
+    # Recette bloquante du lot 2 (PLAN_GODOT.md §9.2) : le modèle de vol porté
+    # doit suivre la trajectoire de l'original à moins de 1 % sur 30 s. C'est le
+    # cœur du feeling du jeu, et l'IA du bot comme le multijoueur en dépendent.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Cache Godot
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: ~/godot-bin
+          key: godot-${{ env.GODOT_VERSION }}-linux
+
+      - name: Installer Godot ${{ env.GODOT_VERSION }}
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p ~/godot-bin
+          curl -fsSL -o /tmp/godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d ~/godot-bin
+          mv ~/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot-bin/godot
+          chmod +x ~/godot-bin/godot
+
+      - name: La transcription JavaScript est-elle toujours à jour ?
+        run: node tools/flight-parity/check_drift.mjs
+
+      - name: Trace de référence (JavaScript)
+        run: node tools/flight-parity/run_js.mjs
+
+      - name: Trace du portage (Godot)
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          ~/godot-bin/godot --headless --import || true
+          ~/godot-bin/godot --headless --script res://tools/flight_parity.gd
+
+      - name: Verdict de parité
+        run: node tools/flight-parity/compare.mjs
+
+      - name: Recette du hibou et de la caméra (lot 1)
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: ~/godot-bin/godot --headless --script res://tests/test_owl.gd
