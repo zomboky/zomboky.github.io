@@ -494,11 +494,10 @@ Recette visuelle en navigateur (captures `canvas.toDataURL()` — voir Écart n�
 `page.screenshot()`) : navigation complète **Start → clic SOLO → Play → Échap → Paused →
 O → Réglages → glisser le curseur → clic extérieur → Paused → clic → Play** ; HUD lisible
 en 1280×720, aucune erreur console sur tout le parcours. La transition Play → Over
-(`_on_crashed_into_ground()`) n'a **pas** été déclenchée en conditions réelles — une
-plongée pilotée au clavier n'a pas suffi à toucher le sol dans la fenêtre de capture — mais
-repose sur le signal `OwlFlight.crashed_into_ground`, déjà exercé par le harnais de parité
-du lot 2, et sur les mêmes primitives de dessin que Start/Paused/Réglages, déjà vérifiées à
-l'écran. Régression : lots 1 (11/11), 3+4 (30/30), 5 (7/7) toujours au vert.
+(`_on_crashed_into_ground()`) n'avait **pas** pu être déclenchée en conditions réelles — une
+plongée pilotée au clavier n'a pas suffi à toucher le sol dans la fenêtre de capture.
+**Réserve levée au lot 7** : l'écran « CRASHÉ ! » a été observé deux fois en navigateur,
+le hibou étant cette fois livré à lui-même assez longtemps pour finir au sol. Régression : lots 1 (11/11), 3+4 (30/30), 5 (7/7) toujours au vert.
 
 **Coût web :** `.pck` 4,18 → **5,50 Mo** (+1,32 Mo : VT323 0,15 + Press Start 2P 0,12 +
 Noto Emoji 1,98 Mo bruts, avant compression réseau — poste dominé par le filet de secours
@@ -602,8 +601,19 @@ le hibou vole et où les branches apparaissent. Corrigé par une demande en atte
   consécutives.
 - Régression : lots 1 (11/11), 3+4 (30/30 + la nouvelle assertion sur les `Area3D`),
   5 (7/7), 6 (31/31) toujours au vert.
-- Recette visuelle en navigateur (`canvas.toDataURL()`, Écart n°14) : partie lancée,
-  branches et ours visibles dans la scène, aucune erreur console.
+- Recette visuelle en navigateur (`canvas.toDataURL()`, Écart n°14) : écran d'accueil,
+  partie lancée sur une carte régénérée, branches et leurs halos verts bien visibles
+  dans la scène, cadeau et son halo doré repérables de loin, **zéro erreur console**
+  sur tout le parcours.
+- **La réserve du lot 6 est levée** : la transition Play → Over, que la recette du
+  lot 6 n'avait pas réussi à déclencher en conditions réelles, a été observée deux fois
+  cette fois-ci — le hibou touche le sol, l'écran « CRASHÉ ! » s'affiche avec le score
+  final et l'invite à rejouer.
+- Deux glyphes vérifiés à la source plutôt qu'à l'œil, avec `FontFile.has_char()` :
+  `➔` (U+2794) n'est dans **aucune** des trois polices embarquées → corrigé en `->` ;
+  `É` **est** bien dans Press Start 2P, qui dessine simplement ses capitales accentuées
+  à hauteur de minuscule. Le « CRASHé ! » qu'on lit à l'écran est donc le rendu propre
+  de la police, identique dans le jeu d'origine — **à ne pas « corriger »**.
 
 **Coût web :** `.pck` 5,50 → **5,49 Mo**. Le lot n'ajoute qu'un modèle de 40 Ko et
 **aucune texture** : le halo radial et le terrain sont générés au démarrage, et les
@@ -624,7 +634,7 @@ baisse vient de la recompression du pack, pas d'un retrait.
 | 6 | **`sky.gdshader` n'est pas un portage direct de `makeSky()`.** Le jeu d'origine sème 1 600 `THREE.Points` individuels sur une texture canvas plaquée en fond de scène. Un shader de ciel Godot (`shader_type sky;`) n'a pas d'équivalent à « une texture 2D derrière la scène » : le dégradé est reconstruit par l'élévation du rayon de vue (`EYEDIR.y`) et les étoiles par une grille de cellules hachées sur la sphère céleste, chacune avec sa phase de scintillement propre. | Équivalent visuel, pas byte-identique : aucune des 1 600 positions/couleurs d'étoiles du jeu d'origine n'est reproduite au pixel près — non pertinent dans un dôme procédural. Pas de parité chiffrée prévue pour ce point, contrairement au terrain ou au vol (lot 5 n'est pas marqué ⭐ bloquant). |
 | 7 | **`moon.glb` n'existe pas** dans les assets fournis, comme `barnowl.glb` (écart n°1) : le §9 du plan le nomme mais aucun fichier de ce nom n'est livré. | Repli sur le même mécanisme que le jeu d'origine sans `models.moon` : sphère + texture de cratères procédurale générée au démarrage (`_make_moon_texture()`). Coût nul en poids de `.pck` (aucun fichier chargé), léger coût CPU au premier `_ready()` (512×512 px, une fois). |
 | 8 | **`HemisphereLight` (`fillLight`) n'est pas porté.** Godot n'a pas de nœud d'éclairage à deux couleurs ciel/sol séparées de l'ambiante principale. | Reflet du sol dans l'ambiante non reproduit — effet mineur, déjà couvert en pratique par `Environment.ambient_light_color` + le fog. Pas de contournement construit (pas de fausse lumière hémisphérique bricolée) : l'effort n'est pas proportionné à un effet aussi discret. |
-| 9 | **VT323/Press Start 2P ne couvrent aucun émoji**, et un `Font` Godot ne bascule jamais tout seul sur une police système pour un glyphe manquant (contrairement à un `<canvas>` de navigateur) — repéré à l'écran par Rémi lors de la recette visuelle du lot 6 (tofu partout : 🦉, ❤️, ⚡…). | Corrigé par un filet de secours `NotoEmoji-Regular.ttf` (contours **monochromes** — Noto Color Emoji, en bitmaps couleur, aurait pesé ~15× plus) posé une fois sur les deux polices (`HudDraw._static_init()`). Les glyphes encore hors de sa couverture (`←`/`→`, `▲`/`▼` — Formes géométriques/Flèches, pas Emoji) sont remplacés par de l'ASCII (`<-`/`->`, `^`/`v`) ; deux icônes decoratives de fin de ligne (🎁/🌿 dans le texte d'aide) restent en tofu à très petite taille — non gênant pour la lisibilité, à reprendre si besoin lors du calibrage visuel du lot 12. |
+| 9 | **VT323/Press Start 2P ne couvrent aucun émoji**, et un `Font` Godot ne bascule jamais tout seul sur une police système pour un glyphe manquant (contrairement à un `<canvas>` de navigateur) — repéré à l'écran par Rémi lors de la recette visuelle du lot 6 (tofu partout : 🦉, ❤️, ⚡…). | Corrigé par un filet de secours `NotoEmoji-Regular.ttf` (contours **monochromes** — Noto Color Emoji, en bitmaps couleur, aurait pesé ~15× plus) posé une fois sur les deux polices (`HudDraw._static_init()`). Les glyphes encore hors de sa couverture (`←`/`→`, `▲`/`▼` — Formes géométriques/Flèches, pas Emoji) sont remplacés par de l'ASCII (`<-`/`->`, `^`/`v`) ; deux icônes décoratives de fin de ligne (🎁/🌿 dans le texte d'aide) restent illisibles à très petite taille. **Précision apportée par le lot 7** : ce n'est pas un défaut de couverture — les mêmes glyphes sont parfaitement nets rendus en `Label3D` dans la scène 3D — mais la rastérisation d'un tracé d'émoji à `font_size = 12`, qui se réduit à une tache carrée. À reprendre au calibrage visuel du lot 12, en agrandissant ces deux glyphes plutôt qu'en changeant de police. Un troisième cas de la même famille a été trouvé et corrigé au lot 7 : le `➔` (U+2794, bloc Dingbats) de la barre de nid, remplacé par `->`. |
 | 10 | **Multijoueur/Campagne/Combat vs IA ne sont pas câblés sur l'écran Start.** Les quatre boutons de `drawStart()` sont recréés (mise en page identique), mais trois n'ont ni écran ni système derrière eux avant les lots 10-11. | `disabled = true` sur les trois : visibles (parité de mise en page), non cliquables (honnête sur ce qui marche). Le raccourci clavier `[M]` du JS n'est pas affiché, pour ne pas promettre un raccourci mort. |
 | 11 | **La pause n'est plus pilotée par la perte du pointer-lock** (`pointerlockchange`, un évènement web-spécifique que Godot ne relaie pas de façon fiable en export), mais par un basculement explicite de l'action `pause` (Échap). | Comportement perçu identique (Échap met en pause, clic/touche reprend, vérifié en recette visuelle) ; seul le mécanisme diffère. Documenté plutôt que reproduit à l'identique — reproduire fidèlement un évènement de plateforme absent serait un contournement plus fragile que la solution native Godot. |
 | 12 | **`retroBtn` (relief biseauté clair/sombre) n'est pas porté pour les vrais `Button`** des écrans (décision C, §4.2) : `StyleBoxFlat` n'a qu'une seule couleur de bordure. `HudDraw.style_button()` garde la couleur par mode et les états pressé/survolé/désactivé, sans le biseau. | Écart visuel mineur, assumé — `rrect`/`retroBtn`/`scanlines` restent portés à l'identique partout où le rendu reste en `_draw()` (HUD, chrome des écrans), qui est la majorité de la surface rétro à l'écran. |

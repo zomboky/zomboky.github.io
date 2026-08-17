@@ -102,9 +102,7 @@ func step(delta: float, owl_pos: Vector3, velocity: Vector3, blocked: bool = fal
 	_pillar_material.albedo_color = Color(GOLD.r, GOLD.g, GOLD.b,
 		0.16 + 0.1 * (0.5 + 0.5 * sin(_w * 1.3)))
 	_pillar.rotation.y += delta * 0.6
-	# Le pilier reste planté dans le sol pendant que le paquet flotte au-dessus :
-	# on annule le ballotement du parent sur sa position locale.
-	_pillar.position.y = ground_y.call(position.x, position.z) + PILLAR_HEIGHT / 2.0 - position.y
+	_update_pillar_height()
 
 
 func _spawn(owl_pos: Vector3, velocity: Vector3) -> void:
@@ -116,6 +114,16 @@ func _spawn(owl_pos: Vector3, velocity: Vector3) -> void:
 func _place(spawn_position: Vector3) -> void:
 	position = spawn_position
 	_base_y = spawn_position.y
+	# Recalé tout de suite, et pas seulement au pas suivant : le pilier fait 90 u
+	# de haut et s'allume en même temps que le paquet — une frame à la mauvaise
+	# altitude se verrait de loin.
+	_update_pillar_height()
+
+
+## Le pilier reste planté dans le sol pendant que le paquet flotte au-dessus : on
+## annule sur sa position locale le ballotement que lui impose son parent.
+func _update_pillar_height() -> void:
+	_pillar.position.y = ground_y.call(position.x, position.z) + PILLAR_HEIGHT / 2.0 - position.y
 
 
 func _set_active(value: bool) -> void:
