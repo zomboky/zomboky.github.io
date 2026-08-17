@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/screens.gd" id="1_screens"]
 [ext_resource type="PackedScene" path="res://scenes/ui/screen_start.tscn" id="2_start"]
 [ext_resource type="PackedScene" path="res://scenes/ui/screen_paused.tscn" id="3_paused"]
 [ext_resource type="PackedScene" path="res://scenes/ui/screen_over.tscn" id="4_over"]
 [ext_resource type="PackedScene" path="res://scenes/ui/screen_settings.tscn" id="5_settings"]
+[ext_resource type="PackedScene" path="res://scenes/ui/screen_lootbox.tscn" id="6_lootbox"]
 
 [node name="Screens" type="Control"]
 layout_mode = 3
@@ -26,6 +27,11 @@ layout_mode = 1
 visible = false
 
 [node name="ScreenOver" parent="." instance=ExtResource("4_over")]
+unique_name_in_owner = true
+layout_mode = 1
+visible = false
+
+[node name="ScreenLootbox" parent="." instance=ExtResource("6_lootbox")]
 unique_name_in_owner = true
 layout_mode = 1
 visible = false

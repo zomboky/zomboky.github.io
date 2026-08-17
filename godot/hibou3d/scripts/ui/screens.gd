@@ -11,19 +11,25 @@ extends Control
 ## repli `if (state === S.START || state === S.OVER) beginGame(); else if
 ## (state === S.PAUSED) requestFlightPointerLock();` en fin de handler JS.
 ##
-## Hors périmètre du lot 6 (aucun système derrière) : MP_LOBBY, CAMPAIGN_SELECT,
-## CAMPAIGN_LOCK, QUICK_SELECT, LEVEL_END, CUTSCENE, MP_DEAD, LOOT — ces états ne
-## sont jamais atteints tant que les lots 7/8/10/11 n'existent pas ; s'ils
-## l'étaient, cet écran resterait simplement vide plutôt que de planter.
+## Hors périmètre (aucun système derrière) : MP_LOBBY, CAMPAIGN_SELECT,
+## CAMPAIGN_LOCK, QUICK_SELECT, LEVEL_END, CUTSCENE, MP_DEAD — ces états ne sont
+## jamais atteints tant que les lots 10/11 n'existent pas ; s'ils l'étaient, cet
+## écran resterait simplement vide plutôt que de planter. LOOT, lui, est arrivé
+## avec le cadeau qui l'ouvre (lot 7).
 
 ## Émis quand une nouvelle partie doit démarrer (bouton SOLO, ou repli clic/
 ## touche sur Start/Over) — `main.gd` seul sait faire respawn le hibou.
 signal play_requested
+## Relais des deux temps de la roulette (lot 7) : le bonus prend effet, puis
+## l'écran rend la main. `main.gd` en fait l'application et le retour en vol.
+signal loot_granted(loot: Dictionary)
+signal loot_finished
 
 @onready var _start: ScreenStart = %ScreenStart
 @onready var _paused: ScreenPaused = %ScreenPaused
 @onready var _over: ScreenOver = %ScreenOver
 @onready var _settings: ScreenSettings = %ScreenSettings
+@onready var _lootbox: ScreenLootbox = %ScreenLootbox
 
 ## Câblé par `main.gd` : pilote `controls_enabled` et la sensibilité souris en
 ## direct depuis l'écran Réglages. `main.gd` l'assigne dans son propre `_ready()`,
@@ -44,6 +50,8 @@ func _ready() -> void:
 	GameState.state_changed.connect(_on_state_changed)
 	_start.solo_pressed.connect(func() -> void: play_requested.emit())
 	_settings.close_requested.connect(_close_settings)
+	_lootbox.loot_granted.connect(func(loot: Dictionary) -> void: loot_granted.emit(loot))
+	_lootbox.finished.connect(func() -> void: loot_finished.emit())
 	# Synchronise `controls_enabled` et la visibilité dès le départ : à l'état
 	# initial START, aucun `change_state()` n'a encore été appelé pour le faire.
 	_on_state_changed(GameState.state, GameState.state)
@@ -60,6 +68,7 @@ func _refresh_visibility() -> void:
 	_start.visible = state == GameState.State.START
 	_paused.visible = state == GameState.State.PAUSED and not _settings_open
 	_over.visible = state == GameState.State.OVER
+	_lootbox.visible = state == GameState.State.LOOT
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -96,10 +105,17 @@ static func _is_press(event: InputEvent) -> bool:
 	return false
 
 
-## Port de `toggleSettings()` : verrouillé pendant Over (et, au lot 7, Loot) —
-## ouvrir des réglages sur un écran de fin de partie n'a pas de sens.
+## Lance la roulette sur un lot déjà tiré. La bascule vers `S.LOOT` reste à
+## `main.gd` : cet objet ne décide pas de l'état du jeu, il l'affiche.
+func open_lootbox(loot: Dictionary) -> void:
+	_lootbox.open(loot)
+
+
+## Port de `toggleSettings()` : verrouillé pendant Over et pendant la roulette —
+## ouvrir des réglages sur un écran de fin de partie, ou au milieu d'une animation
+## qui rendra la main toute seule, n'a pas de sens.
 func _toggle_settings() -> void:
-	if GameState.state == GameState.State.OVER:
+	if GameState.state == GameState.State.OVER or GameState.state == GameState.State.LOOT:
 		return
 	_settings_open = not _settings_open
 	_settings.visible = _settings_open

@@ -1,0 +1,31 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/gameplay/bear.gd" id="1_bear"]
+[ext_resource type="Script" path="res://scripts/gameplay/glow.gd" id="2_glow"]
+
+[sub_resource type="SphereShape3D" id="Contact_1"]
+radius = 4.0
+
+[node name="Bear" type="Node3D"]
+script = ExtResource("1_bear")
+
+[node name="Visual" type="Node3D" parent="."]
+unique_name_in_owner = true
+
+[node name="Inner" type="Node3D" parent="Visual"]
+unique_name_in_owner = true
+
+[node name="Menace" type="MeshInstance3D" parent="Visual"]
+unique_name_in_owner = true
+script = ExtResource("2_glow")
+glow_size = 1.6
+glow_opacity = 0.0
+
+[node name="Contact" type="Area3D" parent="."]
+unique_name_in_owner = true
+collision_layer = 2
+collision_mask = 0
+monitoring = false
+
+[node name="Shape" type="CollisionShape3D" parent="Contact"]
+shape = SubResource("Contact_1")

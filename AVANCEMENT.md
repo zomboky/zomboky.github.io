@@ -17,7 +17,11 @@
 ### État à l'instant T
 
 **Prochaine action :** *(voir « Tableau de bord » ci-dessous — le premier lot ⬜ ou 🟡)*
-**En cours :** Lot 7 — Gameplay solo.
+**En cours :** Lot 8 — Événements du monde (lunes, tempête, rochers, météo).
+**Deux crochets sont déjà posés pour lui** : `SoloRound.moon_active` et
+`SoloRound.storm_active` (aujourd'hui toujours `false`) coupent respectivement la
+collecte et l'apparition des cadeaux, exactement comme `moon.state !== 'none'` et
+`storm.active` en JS. Il n'y a rien à débrancher, seulement à les piloter.
 
 ### 1. Remonter l'environnement (~2 min, aucun accès réseau requis pour Godot)
 
@@ -64,7 +68,7 @@ conteneur ne veulent rien dire, seule la bonne exécution compte.
 | Renderer, scène, qualité adaptative | 157-229 | ⏭ lot 12 |
 | Cycle jour/nuit, ciel, lune, étoiles | 230-411 | ✅ lot 5 |
 | Particules 3D (pool) | 412-566 | ⏭ lot 9 |
-| Volume ellipsoïde, grille de bordure | 579-631 | ⚠️ ellipsoïde porté (lot 2) ; grille visuelle **reportée au lot 7** (avertissement de bord, pas un système de ciel — le §9 du plan ne la liste pas dans le lot 5) |
+| Volume ellipsoïde, grille de bordure | 579-631 | ✅ ellipsoïde lot 2 ; grille lot 7 (`BoundaryGrid`, maillage de lignes — Godot n'a pas de `wireframe: true`) |
 | Chargement GLB, `normalizeModel` | 634-748 | ✅ lot 1 |
 | **Terrain, eau, montagnes décoratives** | 749-1138 | ✅ lot 3 (`makeMountainScenery` → lot 4) |
 | Nuages instanciés | 1139-1221 | ⏭ lot 4 |
@@ -76,17 +80,17 @@ conteneur ne veulent rien dire, seule la bonne exécution compte.
 | Hibou, caméra, anti-clipping, battement | 1905-2083 | ✅ lot 1 |
 | Entrées clavier/souris/tactile | 2084-2465 | ✅ lot 1 (tactile hors périmètre) |
 | **Modèle de vol** | 2466-2806 | ✅ lot 2 |
-| Textures emoji (canvas) | 2807-2843 | ⏭ lot 7 |
-| Cadeau bonus, loot box | 2844-3001 | ⏭ lot 7 (l'écran roulette du §9 lot 6 est reporté avec elle, voir Écarts) |
-| Branches, nid, score, combo | 3002-3117 | ⚠️ conteneurs d'état portés (lot 6, `GameState`) ; boucle de jeu **lot 7** |
-| Rase-mottes | 3118-3145 | ⏭ lot 7 |
-| Ours (IA de meute) | 3146-3388 | ⏭ lot 7 |
+| Textures emoji (canvas) | 2807-2843 | ✅ lot 7 — sans canvas : `Label3D` + Noto Emoji (Écart n°15) |
+| Cadeau bonus, loot box | 2844-3001 | ✅ lot 7 (avec l'écran roulette reporté du lot 6) |
+| Branches, nid, score, combo | 3002-3117 | ✅ lot 7 (conteneurs d'état lot 6) |
+| Rase-mottes | 3118-3145 | ✅ lot 7 |
+| Ours (IA de meute) | 3146-3388 | ✅ lot 7 (branche solo ; ours statiques de campagne → lot 10c) |
 | Combat MP (canon, balles, dégâts) | 3389-4221 | ⏭ lot 10a |
 | IA du bot (4 difficultés) | 4222-4686 | ⏭ lot 10b |
 | Campagne (6 niveaux) | 3477-3600, 4687-4955 | ⏭ lot 10c |
 | Cinématiques | 3602-3705 | ⏭ lot 10d |
-| HUD + écrans (~1 000 lignes) | 4956-6010 | ✅ lot 6 (instruments de vol, Start/Paused/Réglages/Over ; MP/campagne/loot hors périmètre) |
-| Boucle principale, init, reset | 6011-6296 | ⚠️ machine à états portée (lot 6) ; `beginGame()`/reset complets **lot 7** |
+| HUD + écrans (~1 000 lignes) | 4956-6010 | ✅ lots 6 et 7 (instruments, Start/Paused/Réglages/Over, roulette, boussole d'objectifs ; MP/campagne hors périmètre) |
+| Boucle principale, init, reset | 6011-6296 | ✅ lot 7 pour le solo (`beginGame()` complet, carte régénérée à chaque partie) ; branches MP/campagne aux lots 10-11 |
 | Multijoueur | `docs/scripts/hibou3d-multiplayer.js` | ⏭ lot 11 |
 
 ### 5. Règles de travail sur ce portage
@@ -123,7 +127,7 @@ conteneur ne veulent rien dire, seule la bonne exécution compte.
 | 4 | Décor instancié | ✅ recetté | 3 000 arbres, **0 corps physique**, 10 nœuds de rendu |
 | 5 | Ciel, jour/nuit, lumières | ✅ recetté | horloge murale, pas de session ; `SkySystem.compute()` pur, 7/7 |
 | 6 | HUD + écrans | ✅ recetté | `GameState` (12 états), instruments de vol, Start/Paused/Réglages/Over |
-| 7 | Gameplay solo | ⬜ à faire | |
+| 7 | Gameplay solo | ✅ recetté | partie complète jouable ; branches/combo/nid/ours/cadeau/roulette, 45/45 + 28/28 |
 | 8 | Événements du monde | ⬜ à faire | |
 | 9 | Effets | ⬜ à faire | |
 | 10 | Combat, IA, campagne | ⬜ à faire | |
@@ -502,6 +506,112 @@ emoji, seule police du lot dont la couverture Unicode le justifie).
 
 ---
 
+### Lot 7 — Gameplay solo ✅ (2026-08-17)
+
+Le lot qui fait passer le portage de « maquette qui vole » à **jeu**. Tout ce que le
+lot 6 affichait sans données — score, combo, nid, vies, bonus — est désormais piloté
+par des règles.
+
+**Livré**
+- `scripts/gameplay/branch.gd` + `branch_field.gd` (`scenes/entities/branch.tscn`) :
+  les 14 branches, leur ballotement, leur halo qui respire, le recyclage à 420 u, et
+  une branche sur douze **pourrie** qui casse le combat au contact.
+- `scripts/gameplay/bear.gd` + `bear_pack.gd` (`bear.tscn`) : l'IA de meute complète —
+  traque avec **anticipation** (l'ours vise où le hibou *sera*), dérive aléatoire
+  renouvelée par à-coups, séquence traque → préparation télégraphiée en rouge →
+  **charge en ligne figée** (donc esquivable au virage serré) → récupération,
+  répulsion entre ours (`BEAR_PACK_DIST`), rampe de difficulté `BEAR_RAMP_TIME`,
+  effectif visé `bearTarget()`.
+- `scripts/gameplay/gift.gd` (`gift.tscn`) : le cadeau garanti à intervalle, son halo
+  doré pulsé et son **pilier de lumière** planté dans le sol — qui vient rejoindre le
+  hibou s'il le distance de plus de 650 u.
+- `scripts/gameplay/loot.gd` : `LOOT_TYPES` et le tirage pondéré, **sans une seule
+  mention de `GameState`** — c'est ce qui le rend compilable en test `--script`
+  (Écart n°4). L'application du lot vit dans `SoloRound.apply_loot()`.
+- `scripts/gameplay/collectible_spawn.gd` : `collectibleSpawnPos()`, fonction pure —
+  tirage biaisé vers l'avant du hibou et vers le sol, rabattu dans l'arène.
+- `scripts/gameplay/solo_round.gd` (**`SoloRound`**) : les règles. Gains de collecte
+  (combo × 10 × bonus ✨), nid et vie gagnée à 100 %, rase-mottes (`updateSkim`),
+  décroissance des bonus, invulnérabilité et clignotement du hibou, contact d'ours,
+  game over.
+- `scripts/ui/screen_lootbox.gd` (`screen_lootbox.tscn`) : la roulette **reportée du
+  lot 6** (Écart n°13, désormais levé), avec son freinage amorti, son curseur rouge et
+  ses deux temps (le bonus s'applique, puis l'écran rend la main).
+- `scripts/world/world.gd` (**`GameWorld`**) : `beginGame()` régénère la carte —
+  **chaque partie solo se joue sur un terrain neuf**, comme dans le jeu d'origine.
+- `scripts/world/boundary_grid.gd` : la grille de bordure d'arène, **reportée du
+  lot 5**, qui apparaît en fondu dans les 22 dernières unités avant la muraille.
+- `scripts/ui/hud.gd` : la boussole d'objectifs (`drawTargetIndicator`), reportée du
+  lot 6 faute de cibles — deux flèches en bord d'écran vers le cadeau 🎁 et la branche
+  saine la plus proche 🌿.
+- `assets/models/bear.glb` (40 Ko) : le vrai modèle du jeu, jusque-là non importé.
+
+**Trois décisions de portage**
+1. **Les entités sont mises en réserve, pas détruites.** Le JS fait
+   `removeBranch(i); branches.push(newBranch())` à chaque ramassage — création et
+   destruction de nœuds, de matériaux et de textures en pleine partie. Ici, les 14
+   branches et les ours sont **recyclés sur place** (`Branch.reroll()`,
+   `Bear.set_active()`), avec un vivier d'ours qui grandit à la demande plutôt que
+   d'allouer d'emblée les dix du plafond. Même comportement observable, sans churn
+   d'allocation dans une boucle à 60 Hz — ce qui compte davantage en WebAssembly
+   qu'en JS.
+2. **Le recouvrement des `Area3D` est interrogé, pas écouté.** La décision B (§4.2)
+   prévoyait de remplacer les boucles de distance par le signal `area_entered`. C'est
+   juste pour une branche ou un cadeau — qui sont **consommés** à l'entrée — mais faux
+   pour un ours : un contact qui commence pendant l'invulnérabilité doit pouvoir mordre
+   **plus tard**, une fois la protection expirée. `area_entered` ne se déclenchant qu'à
+   l'entrée, ce cas serait perdu. Les trois familles passent donc par une interrogation
+   par pas (`get_overlapping_areas()`), ce qui redonne exactement la sémantique du JS.
+   La recette le vérifie explicitement (« l'invulnérabilité encaisse le contact
+   suivant », puis le même contact devient fatal une fois la protection écoulée).
+3. **Chaque entité porte son rayon, la sonde du hibou est un point.** Le JS compare
+   `owlGroup.position.distanceTo(item) < R`, avec un `R` propre à chaque type (3 u pour
+   une branche, 3,5 pour le cadeau, 4 pour un ours). Ce partage est conservé tel quel :
+   les constantes se lisent comme en JS. Godot n'ayant pas de forme ponctuelle, la
+   sonde est une sphère de 0,05 u — une branche se ramasse donc à 3,05 u au lieu de
+   3,00, invisible pour un hibou large de 2,6.
+
+**Bug trouvé par la recette.** À la mort du hibou, `_blink_owl()` continuait de tourner
+après le passage en `OVER` et **remettait le hibou visible** juste après que le game
+over l'ait caché. Corrigé en faisant sortir un contact fatal de `_physics_process`
+au lieu de sortir seulement de la boucle de ramassage — l'ordre de traitement suit
+maintenant celui du JS (`updateSkim` → `updateBranches` + décompte du combo →
+`updateBears` → `updateGift`), ce qui décide aussi de ce qui l'emporte quand une
+branche et un ours sont touchés dans la même frame.
+
+**Piège rencontré — la carte régénérée pendant sa propre construction.** Le maillage
+du terrain se construit en tâche de fond (~2,6 s en natif, **139 s** sous SwiftShader
+en navigateur). Lancer une partie avant la fin de cette construction faisait retourner
+`rebuild_async()` immédiatement (garde `_building`) : les graines de `Terrain` étaient
+neuves, le relief **affiché** restait celui d'avant — un décor qui ment sur le sol où
+le hibou vole et où les branches apparaissent. Corrigé par une demande en attente
+(`_rebuild_pending`) qui relance un second passage dès le premier terminé.
+
+**Recette**
+- `tests/test_gameplay.gd`, **28/28**, pur (`--script`) : table des lots (cinq entrées,
+  poids sommant à 1, ordre exact), tirage pondéré vérifié tranche par tranche,
+  invariants d'apparition des ramassables sur 400 tirages (jamais hors arène, jamais
+  sous le sol, jamais au-dessus du plafond de 320 u, biais vers l'avant mesuré à
+  330/400), et la rampe d'effectif des ours point par point.
+- `tests/test_solo_round.tscn`, **45/45** : une **vraie manche**, jouée dans la scène
+  complète avec le serveur physique. Départ de partie (carte neuve, 14 branches toutes
+  à portée, 2 ours, état remis à zéro), collecte et multiplication par le combo,
+  branche pourrie qui casse la série, nid plein qui rend une vie, bonus ✨ ×5, ours qui
+  coûte une vie puis qui tue, décroissance des bonus et répercussion du bonus ⚡ sur le
+  modèle de vol, roulette déroulée intégralement. Stable sur trois exécutions
+  consécutives.
+- Régression : lots 1 (11/11), 3+4 (30/30 + la nouvelle assertion sur les `Area3D`),
+  5 (7/7), 6 (31/31) toujours au vert.
+- Recette visuelle en navigateur (`canvas.toDataURL()`, Écart n°14) : partie lancée,
+  branches et ours visibles dans la scène, aucune erreur console.
+
+**Coût web :** `.pck` 5,50 → **5,49 Mo**. Le lot n'ajoute qu'un modèle de 40 Ko et
+**aucune texture** : le halo radial et le terrain sont générés au démarrage, et les
+émoji sont rendus par une police déjà embarquée au lot 6 (Écart n°15). La légère
+baisse vient de la recompression du pack, pas d'un retrait.
+
+---
+
 ## Écarts constatés par rapport au plan
 
 | # | Constat | Impact |
@@ -518,5 +628,11 @@ emoji, seule police du lot dont la couverture Unicode le justifie).
 | 10 | **Multijoueur/Campagne/Combat vs IA ne sont pas câblés sur l'écran Start.** Les quatre boutons de `drawStart()` sont recréés (mise en page identique), mais trois n'ont ni écran ni système derrière eux avant les lots 10-11. | `disabled = true` sur les trois : visibles (parité de mise en page), non cliquables (honnête sur ce qui marche). Le raccourci clavier `[M]` du JS n'est pas affiché, pour ne pas promettre un raccourci mort. |
 | 11 | **La pause n'est plus pilotée par la perte du pointer-lock** (`pointerlockchange`, un évènement web-spécifique que Godot ne relaie pas de façon fiable en export), mais par un basculement explicite de l'action `pause` (Échap). | Comportement perçu identique (Échap met en pause, clic/touche reprend, vérifié en recette visuelle) ; seul le mécanisme diffère. Documenté plutôt que reproduit à l'identique — reproduire fidèlement un évènement de plateforme absent serait un contournement plus fragile que la solution native Godot. |
 | 12 | **`retroBtn` (relief biseauté clair/sombre) n'est pas porté pour les vrais `Button`** des écrans (décision C, §4.2) : `StyleBoxFlat` n'a qu'une seule couleur de bordure. `HudDraw.style_button()` garde la couleur par mode et les états pressé/survolé/désactivé, sans le biseau. | Écart visuel mineur, assumé — `rrect`/`retroBtn`/`scanlines` restent portés à l'identique partout où le rendu reste en `_draw()` (HUD, chrome des écrans), qui est la majorité de la surface rétro à l'écran. |
-| 13 | **L'écran Cadeau/Loot box (`drawLootbox()`) n'est pas porté.** Contrairement au HUD ou aux menus, ce n'est pas un écran de navigation : son seul déclencheur est le ramassage d'un cadeau en jeu (`giftItem`, lot 7), et son animation (défilement, `rollLoot()`, application des bonus) est de la logique de jeu, pas de la présentation. | Reporté au lot 7 en bloc avec le système de cadeau dont il dépend — un aperçu statique sans déclencheur réel aurait été du code mort, contraire à l'esprit du lot (§4.2 décision C vise des écrans **navigables**, celui-ci ne l'est pas). `GameState.State.LOOT` existe déjà dans l'énumération (valeur 4, ordre JS), prêt à être branché. |
+| 13 | **L'écran Cadeau/Loot box (`drawLootbox()`) n'est pas porté.** Contrairement au HUD ou aux menus, ce n'est pas un écran de navigation : son seul déclencheur est le ramassage d'un cadeau en jeu (`giftItem`, lot 7), et son animation (défilement, `rollLoot()`, application des bonus) est de la logique de jeu, pas de la présentation. | Reporté au lot 7 en bloc avec le système de cadeau dont il dépend — un aperçu statique sans déclencheur réel aurait été du code mort, contraire à l'esprit du lot (§4.2 décision C vise des écrans **navigables**, celui-ci ne l'est pas). `GameState.State.LOOT` existe déjà dans l'énumération (valeur 4, ordre JS), prêt à être branché.  **✅ Levé au lot 7** : portée avec le cadeau qui l'ouvre, et déroulée intégralement par la recette. |
 | 14 | **`page.screenshot()` de Playwright reste indéfiniment bloqué** (« waiting for fonts to load ») sur l'export web dès que la scène 3D est chargée (`document.fonts.ready` ne se résout jamais sur cette page — aucun `@font-face` DOM, donc pas lié aux polices ajoutées ce lot). `Page.captureScreenshot` en CDP brut bloque pareillement. | Ce n'est **ni** un bug du jeu **ni** un vrai blocage : `canvas.toDataURL()` exécuté **dans** la page (`page.evaluate`) aboutit toujours, juste lentement (~30-90 s par image sous SwiftShader avec cette scène — forêt + terrain + shader de ciel + HUD), le temps que le rendu logiciel produise une frame lisible. Pour toute recette visuelle des lots suivants : lire les pixels par `canvas.toDataURL()` plutôt que `page.screenshot()`/CDP, et prévoir des délais généreux (60-90 s) entre chaque capture. |
+| 15 | **Les textures emoji ne passent pas par un canvas.** Le jeu dessine chaque emoji (🪵 🌿 🍃 🍂 🐻 🎁 🔥) dans un `<canvas>` 128 px, en fait une `CanvasTexture`, et la plaque sur un `THREE.Sprite`. Godot n'a pas d'équivalent direct de « rendre du texte dans une image » à l'exécution. | Remplacé par un `Label3D` en mode panneau d'affichage, avec la police Noto Emoji déjà embarquée au lot 6 (Écart n°9) : **aucune texture générée, aucun fichier de plus**, et le glyphe reste net à toute distance là où une texture de 128 px se serait floutée de près. Conséquence : les emoji sont en **contours monochromes** et non en couleur, cohérent avec le choix déjà fait pour le HUD. |
+| 16 | **Aucun effet n'est déclenché par le gameplay porté.** Le JS appelle `spawnFX`, `spawnFX3D`, `screenShake`, `hitFlash` et `triggerHitStop` à une douzaine d'endroits dans le code de ce lot (collecte, branche pourrie, vie gagnée, contact d'ours, ramassage du cadeau, poussière de charge). | Ces appels sont **volontairement absents** plutôt que remplacés par des approximations : ils forment le lot 9 en entier (pool de particules 3D, texte flottant, secousse d'écran, ralenti d'impact), qui doit trancher `GPUParticles3D` vs `CPUParticles3D` vs `MultiMesh` sur mesure réelle en web. Les emplacements sont repérables dans le source JS aux mêmes lignes que la logique déjà portée ; rien à défaire, seulement à ajouter. |
+| 17 | **Les entités sont recyclées, pas créées et détruites.** Le JS détruit puis reconstruit sprite, matériaux et halo à chaque ramassage de branche et à chaque mort d'ours. | Vivier fixe pour les branches, à croissance à la demande pour les ours (`Branch.reroll()`, `Bear.set_active()`). Comportement observable identique — nouvelle essence, nouveau tirage de pourriture, nouvelle position — sans allocation ni libération dans une boucle à 60 Hz, ce qui pèse davantage en WebAssembly qu'en JS. |
+| 18 | **La régénération de carte ne bloque pas.** `beginGame()` en JS reconstruit le terrain de façon synchrone (le navigateur fige le temps du calcul). Ici `rebuild_async()` l'étale sur plusieurs frames. | Strictement mieux : la partie démarre immédiatement et **rien n'est faux entre-temps** — la hauteur du sol vient de la fonction `Terrain.effective_ground_y`, exacte dès la première frame pour le vol comme pour l'apparition des branches ; seul le relief **visible** rattrape son retard. A révélé un vrai défaut au passage : une demande reçue pendant une construction était perdue (voir « Piège rencontré », lot 7). |
+| 19 | **Godot n'a pas de `wireframe: true` hors mode debug.** Le quadrillage de bordure d'arène est une `SphereGeometry` affichée en fil de fer côté Three.js. | Reconstruit en maillage de **lignes** (`PRIMITIVE_LINES`) aux mêmes 40×28 subdivisions : mêmes parallèles, mêmes méridiens, et un maillage qui reste valide en export release (contrairement à `RenderingServer.set_debug_generate_wireframes`, réservé au debug). |
+| 20 | **La décision B prévoyait le signal `area_entered` ; c'est le recouvrement qui est interrogé à chaque pas.** Le signal ne se déclenche qu'à l'**entrée** dans la zone. | Juste pour une branche ou un cadeau (consommés à l'entrée), faux pour un ours : un contact commencé pendant l'invulnérabilité doit pouvoir mordre une fois celle-ci expirée, sans que le hibou ait à ressortir puis rentrer. `get_overlapping_areas()` par pas redonne exactement la sémantique du JS, pour un coût négligeable (une poignée de zones). Vérifié explicitement par la recette. |

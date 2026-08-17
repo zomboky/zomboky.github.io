@@ -169,3 +169,13 @@ jobs:
       - name: Recette de la machine à états (lot 6)
         working-directory: ${{ env.PROJECT_DIR }}
         run: ~/godot-bin/godot --headless --script res://tests/test_game_state.gd
+
+      - name: Recette des règles de jeu (lot 7)
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: ~/godot-bin/godot --headless --script res://tests/test_gameplay.gd
+
+      - name: Recette de la partie solo (lot 7)
+        # Exécution normale du projet : ce harnais joue une vraie manche, il lui
+        # faut donc GameState, Terrain et le serveur physique (Area3D de ramassage).
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: ~/godot-bin/godot --headless res://tests/test_solo_round.tscn

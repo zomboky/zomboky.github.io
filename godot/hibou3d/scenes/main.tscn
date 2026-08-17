@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/debug_overlay.gd" id="1_debug"]
 [ext_resource type="Script" path="res://scripts/main.gd" id="4_main"]
@@ -8,6 +8,7 @@
 [ext_resource type="Shader" path="res://resources/shaders/sky.gdshader" id="6_sky_shader"]
 [ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="7_hud"]
 [ext_resource type="PackedScene" path="res://scenes/ui/screens.tscn" id="8_screens"]
+[ext_resource type="PackedScene" path="res://scenes/entities/entities.tscn" id="9_entities"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_sky"]
 shader = ExtResource("6_sky_shader")
@@ -54,6 +55,12 @@ directional_shadow_max_distance = 400.0
 [node name="Owl" parent="." instance=ExtResource("2_owl")]
 unique_name_in_owner = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 16, 0)
+
+[node name="Entities" parent="." instance=ExtResource("9_entities")]
+# Placé après `Owl` dans l'arbre, et c'est délibéré : les rappels
+# `_physics_process` suivent l'ordre des nœuds, or les règles de jeu lisent la
+# position du hibou telle que le modèle de vol vient de l'intégrer.
+unique_name_in_owner = true
 
 [node name="UI" type="CanvasLayer" parent="."]
 

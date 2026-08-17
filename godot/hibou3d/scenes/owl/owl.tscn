@@ -1,9 +1,12 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/owl/owl.gd" id="1_owl"]
 [ext_resource type="PackedScene" path="res://assets/models/owl_wings.glb" id="2_model"]
 [ext_resource type="Script" path="res://scripts/owl/owl_camera.gd" id="3_camera"]
 [ext_resource type="Script" path="res://scripts/owl/owl_flight.gd" id="4_flight"]
+
+[sub_resource type="SphereShape3D" id="Probe_1"]
+radius = 0.05
 
 [node name="Owl" type="Node3D"]
 script = ExtResource("1_owl")
@@ -23,6 +26,17 @@ unique_name_in_owner = true
 [node name="Camera3D" type="Camera3D" parent="."]
 unique_name_in_owner = true
 script = ExtResource("3_camera")
+
+[node name="PickupArea" type="Area3D" parent="."]
+# Sonde de ramassage (décision B, §4.2), volontairement quasi ponctuelle : voir
+# `SoloRound._resolve_pickups()`, qui explique le partage des rayons.
+unique_name_in_owner = true
+collision_layer = 0
+collision_mask = 2
+monitorable = false
+
+[node name="Shape" type="CollisionShape3D" parent="PickupArea"]
+shape = SubResource("Probe_1")
 
 [node name="Flight" type="Node" parent="."]
 script = ExtResource("4_flight")

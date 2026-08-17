@@ -98,6 +98,11 @@ func _run() -> void:
 		forest.get_child_count() > 0 and forest.get_child_count() < 40
 		and forest.get_child(0) is MultiMeshInstance3D)
 	_check("aucun arbre n'est un corps physique", _count_bodies(main) == 0)
+	# Le lot 7 a introduit des `Area3D` (sonde du hibou, ramassables, ours) : elles
+	# sont autorisées et attendues par la décision B, mais ne doivent surtout pas
+	# devenir des corps. Le compte ci-dessus ne porte donc QUE sur les `PhysicsBody3D`.
+	_check("les seules formes de collision du monde sont des zones de détection",
+		_count_areas(main) > 0)
 	# Un MultiMesh vide, ou dont l'AABB est restée à l'origine, se voit comme une
 	# forêt invisible — et rien d'autre ne le signalerait.
 	# Une essence est rendue par autant de MultiMesh que son modèle a de surfaces,
@@ -180,11 +185,19 @@ static func _forest_extent(forest: Forest) -> float:
 
 
 ## Compte les corps physiques de la scène. Il doit y en avoir zéro : ni terrain,
-## ni arbres, ni hibou (décision A du §4.2).
+## ni arbres, ni hibou (décision A du §4.2). Les `Area3D` du lot 7 ne comptent pas
+## — ce sont des zones de détection, elles ne simulent rien (décision B).
 static func _count_bodies(root: Node) -> int:
-	var count := 1 if root is CollisionObject3D else 0
+	var count := 1 if root is PhysicsBody3D else 0
 	for child in root.get_children():
 		count += _count_bodies(child)
+	return count
+
+
+static func _count_areas(root: Node) -> int:
+	var count := 1 if root is Area3D else 0
+	for child in root.get_children():
+		count += _count_areas(child)
 	return count
 
 

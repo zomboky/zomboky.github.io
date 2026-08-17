@@ -49,6 +49,7 @@ const DITHER_MAX := 1.08
 
 var _dither := Rng.new(DITHER_SEED)
 var _building := false
+var _rebuild_pending := false
 
 
 func _ready() -> void:
@@ -74,14 +75,25 @@ func rebuild() -> void:
 ##
 ## Seul l'échantillonnage des hauteurs est découpé : c'est lui qui domine le coût
 ## (`terrain_height()` fait des dizaines de `sin` par appel, et il y en a 58 000).
+##
+## Une demande reçue **pendant** une construction n'est pas perdue : elle est
+## notée, et un second passage repart des graines à jour dès le premier terminé.
+## Sans cela, lancer une partie solo avant la fin de la construction initiale
+## laisserait un relief affiché qui ne correspond plus à `Terrain` — un décor qui
+## ment sur le sol où le hibou vole et où les branches apparaissent (lot 7).
 func rebuild_async() -> void:
 	if _building:
+		_rebuild_pending = true
 		return
 	_building = true
-	var started := Time.get_ticks_usec()
-	_build_mesh(await _sample_heights_async())
+	var again := true
+	while again:
+		_rebuild_pending = false
+		var started := Time.get_ticks_usec()
+		_build_mesh(await _sample_heights_async())
+		_report(started, "réparti sur plusieurs frames")
+		again = _rebuild_pending
 	_building = false
-	_report(started, "réparti sur plusieurs frames")
 	build_finished.emit()
 
 
