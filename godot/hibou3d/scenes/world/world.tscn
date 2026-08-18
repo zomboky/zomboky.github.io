@@ -1,7 +1,8 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/world.gd" id="0_world"]
 [ext_resource type="Script" path="res://scripts/world/boundary_grid.gd" id="7_boundary"]
+[ext_resource type="Script" path="res://scripts/world/precipitation.gd" id="8_precip"]
 [ext_resource type="Script" path="res://scripts/world/terrain_mesh.gd" id="1_terrain"]
 [ext_resource type="Shader" path="res://resources/shaders/water.gdshader" id="2_water"]
 [ext_resource type="Script" path="res://scripts/world/forest.gd" id="3_forest"]
@@ -46,3 +47,7 @@ script = ExtResource("6_village")
 [node name="BoundaryGrid" type="MeshInstance3D" parent="."]
 unique_name_in_owner = true
 script = ExtResource("7_boundary")
+
+[node name="Precipitation" type="MultiMeshInstance3D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("8_precip")

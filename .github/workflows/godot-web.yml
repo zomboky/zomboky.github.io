@@ -179,3 +179,11 @@ jobs:
         # faut donc GameState, Terrain et le serveur physique (Area3D de ramassage).
         working-directory: ${{ env.PROJECT_DIR }}
         run: ~/godot-bin/godot --headless res://tests/test_solo_round.tscn
+
+      - name: Recette des événements du monde (lot 8)
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: ~/godot-bin/godot --headless --script res://tests/test_world_events.gd
+
+      - name: Recette de la tempête (lot 8)
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: ~/godot-bin/godot --headless res://tests/test_storm.tscn

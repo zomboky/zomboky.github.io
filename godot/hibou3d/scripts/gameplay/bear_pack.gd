@@ -13,10 +13,12 @@ extends Node3D
 ## le vivier grandit à la demande : une partie qui reste à deux ours n'en instancie
 ## jamais dix.
 
-## Plafond de l'effectif solo (`Math.min(..., 10)`). Les lunes du lot 8 le
-## dépasseront (12 en pleine lune, 18 en lune de sang) : le vivier n'ayant pas de
-## taille fixe, il suffira de relever ce plafond.
+## Plafond de l'effectif solo ordinaire (`Math.min(..., 10)`).
 const SOLO_MAX := 10
+## Sous une lune, l'effectif n'est plus calculé mais **imposé** : c'est tout le
+## principe de l'événement, un pic de pression qui ignore rampe et score (lot 8).
+const FULL_MOON_COUNT := 12
+const BLOOD_MOON_COUNT := 18
 ## `BEAR_RAMP_TIME` : durée, en secondes, pour que la meute atteigne sa pleine
 ## intensité — vitesse des ours et fréquence des charges comprises.
 const RAMP_TIME := 90.0
@@ -31,18 +33,41 @@ const BEAR_SCENE := preload("res://scenes/entities/bear.tscn")
 ## Hauteur de sol effective, `func(x, z) -> float`.
 var ground_y: Callable
 
+## Lune en cours, écrite par `SoloRound` à chaque pas. Un seul champ plutôt qu'un
+## paramètre voyageant par `step()`, `top_up()` **et** `spawn_one()` : la lune
+## change à la fois l'effectif visé et le gabarit des ours qui apparaissent.
+var moon_state: WorldEvents.Moon = WorldEvents.Moon.NONE
+
 var _bears: Array[Bear] = []
 
 
 ## Effectif visé — port de `bearTarget()`, branche solo (le multijoueur le met à
-## zéro, la campagne le fixe par niveau, les lunes le forcent : lots 8, 10 et 11).
+## zéro, la campagne le fixe par niveau : lots 10 et 11).
 ##
 ## Statique : c'est une règle de difficulté, pas un état de scène, et cela la rend
 ## vérifiable sans monter le moindre nœud (`tests/test_gameplay.gd`).
-static func target(round_time: float, score: int) -> int:
+## [param forced] court-circuite le calcul quand il est non nul (lunes).
+static func target(round_time: float, score: int, forced: int = 0) -> int:
+	if forced > 0:
+		return forced
 	var ramp: float = minf(round_time / RAMP_TIME, 1.0)
 	var base := roundi(lerpf(1.0, 2.0, ramp))
 	return mini(base + floori(score / 15.0), SOLO_MAX)
+
+
+## L'effectif visé à cet instant, lune comprise.
+func current_target(round_time: float, score: int) -> int:
+	return target(round_time, score, moon_count(moon_state))
+
+
+## L'effectif imposé par une lune, 0 hors événement.
+static func moon_count(moon: WorldEvents.Moon) -> int:
+	match moon:
+		WorldEvents.Moon.BLOOD:
+			return BLOOD_MOON_COUNT
+		WorldEvents.Moon.FULL:
+			return FULL_MOON_COUNT
+	return 0
 
 
 func active_count() -> int:
@@ -64,14 +89,14 @@ func reset(owl_pos: Vector3, velocity: Vector3) -> void:
 ## Fait apparaître un ours, en réactivant un nœud en réserve ou en en créant un.
 func spawn_one(owl_pos: Vector3, velocity: Vector3, round_time: float, score: int) -> void:
 	var bear := _take_idle()
-	bear.spawn(owl_pos, velocity, round_time, score, RAMP_TIME, ground_y)
+	bear.spawn(owl_pos, velocity, round_time, score, RAMP_TIME, ground_y, moon_state)
 
 
 ## Complète la meute jusqu'à l'effectif visé, d'un coup — appelé après une collecte
 ## de branche (`while (bears.length < bearTarget()) bears.push(newBear())` en JS :
 ## récolter attire les ours, c'est le prix du score).
 func top_up(owl_pos: Vector3, velocity: Vector3, round_time: float, score: int) -> void:
-	while active_count() < target(round_time, score):
+	while active_count() < current_target(round_time, score):
 		spawn_one(owl_pos, velocity, round_time, score)
 
 
@@ -83,9 +108,9 @@ func step(delta: float, owl_pos: Vector3, velocity: Vector3, slow_mul: float,
 			continue
 		if not bear.step(delta, owl_pos, velocity, slow_mul, _bears, ground_y):
 			bear.set_active(false)
-			if active_count() < target(round_time, score):
+			if active_count() < current_target(round_time, score):
 				spawn_one(owl_pos, velocity, round_time, score)
-	if active_count() < target(round_time, score) and randf() < TRICKLE_CHANCE:
+	if active_count() < current_target(round_time, score) and randf() < TRICKLE_CHANCE:
 		spawn_one(owl_pos, velocity, round_time, score)
 
 

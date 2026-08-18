@@ -23,6 +23,7 @@ extends Node3D
 @onready var mountains: MountainScenery = $Mountains
 @onready var village: Village = %Village
 @onready var boundary_grid: BoundaryGrid = %BoundaryGrid
+@onready var precipitation: Precipitation = %Precipitation
 
 
 ## Nouvelle carte. Le **maillage** du terrain est reconstruit en tâche de fond

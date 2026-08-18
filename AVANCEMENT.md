@@ -17,11 +17,14 @@
 ### État à l'instant T
 
 **Prochaine action :** *(voir « Tableau de bord » ci-dessous — le premier lot ⬜ ou 🟡)*
-**En cours :** Lot 8 — Événements du monde (lunes, tempête, rochers, météo).
-**Deux crochets sont déjà posés pour lui** : `SoloRound.moon_active` et
-`SoloRound.storm_active` (aujourd'hui toujours `false`) coupent respectivement la
-collecte et l'apparition des cadeaux, exactement comme `moon.state !== 'none'` et
-`storm.active` en JS. Il n'y a rien à débrancher, seulement à les piloter.
+**En cours :** Lot 9 — Effets (particules 3D, texte flottant, secousse d'écran,
+ralenti d'impact, fumée, cascade de combo).
+**Ce lot est déjà entièrement repéré** : les lots 7 et 8 ont porté la logique de
+jeu **sans** ses effets (Écart n°16), et chaque emplacement d'appel à `spawnFX`,
+`spawnFX3D`, `screenShake`, `hitFlash` et `triggerHitStop` est signalé dans le
+source JS aux mêmes lignes que la logique déjà portée. Il n'y a rien à défaire,
+seulement à ajouter — après l'arbitrage `GPUParticles3D` / `CPUParticles3D` /
+`MultiMesh` sur mesure réelle en web, qui est le vrai sujet du lot.
 
 ### 1. Remonter l'environnement (~2 min, aucun accès réseau requis pour Godot)
 
@@ -72,9 +75,9 @@ conteneur ne veulent rien dire, seule la bonne exécution compte.
 | Chargement GLB, `normalizeModel` | 634-748 | ✅ lot 1 |
 | **Terrain, eau, montagnes décoratives** | 749-1138 | ✅ lot 3 (`makeMountainScenery` → lot 4) |
 | Nuages instanciés | 1139-1221 | ⏭ lot 4 |
-| Pleine lune / lune de sang | 1222-1302 | ⏭ lot 8 |
-| Tempête + rochers | 1303-1457 | ⏭ lot 8 |
-| Météo dynamique | 1458-1586 | ⏭ lot 8 |
+| Pleine lune / lune de sang | 1222-1302 | ✅ lot 8 (`WorldEvents`, visuel dans `SkySystem`) |
+| Tempête + rochers | 1303-1457 | ✅ lot 8 (`WorldEvents` + `RockStorm`/`Rock`) |
+| Météo dynamique | 1458-1586 | ✅ lot 8 (`Precipitation` + météo dans `SkySystem`) |
 | Forêts (3 000 arbres + colliders) | 1587-1683 | ⏭ lot 4 |
 | Hameaux, feux de camp, pool de lumières | 1684-1904 | ⏭ lot 4 |
 | Hibou, caméra, anti-clipping, battement | 1905-2083 | ✅ lot 1 |
@@ -128,7 +131,7 @@ conteneur ne veulent rien dire, seule la bonne exécution compte.
 | 5 | Ciel, jour/nuit, lumières | ✅ recetté | horloge murale, pas de session ; `SkySystem.compute()` pur, 7/7 |
 | 6 | HUD + écrans | ✅ recetté | `GameState` (12 états), instruments de vol, Start/Paused/Réglages/Over |
 | 7 | Gameplay solo | ✅ recetté | partie complète jouable ; branches/combo/nid/ours/cadeau/roulette, 45/45 + 28/28 |
-| 8 | Événements du monde | ⬜ à faire | |
+| 8 | Événements du monde | ✅ recetté | lunes, tempête, 46 rochers, pluie/neige/éclairs ; 49/49 + 22/22 |
 | 9 | Effets | ⬜ à faire | |
 | 10 | Combat, IA, campagne | ⬜ à faire | |
 | 11 | Multijoueur | ⬜ à faire | |
@@ -622,6 +625,99 @@ baisse vient de la recompression du pack, pas d'un retrait.
 
 ---
 
+### Lot 8 — Événements du monde ✅ (2026-08-17)
+
+Le ciel n'est plus un décor : il se couvre, gronde, et lâche des cailloux.
+
+**Livré**
+- `scripts/world/world_events.gd` (**`WorldEvents`**) : les trois horloges —
+  pleine lune, lune de sang, tempête, épisodes de pluie — avec leur **exclusion
+  mutuelle dans les deux sens**, le préavis de 2 s pendant lequel la lune se
+  remplit, les rafales pulsées de la tempête, et les raccourcis de debug **L**
+  (pleine lune), **K** (lune de sang), **T** (tempête), déjà présents dans
+  l'`InputMap` depuis le lot 0.
+- `scripts/gameplay/rock.gd` + `rock_storm.gd` (`scenes/entities/rock.tscn`) :
+  jusqu'à 46 rochers en vol, chute accélérée jusqu'à une vitesse terminale,
+  emportés par le vent, retirés au contact du sol — et **fatals au contact**,
+  quel que soit le nombre de vies.
+- `scripts/world/precipitation.gd` (**`Precipitation`**) : 900 gouttes qui suivent
+  le hibou, deviennent des flocons au-dessus de la ligne de neige (plus gros, huit
+  fois plus lents, et ils voltigent au lieu de tomber droit).
+- `scripts/world/sky.gd` : la lune enfle et rougit avec `moon_fill_progress`, sa
+  lumière teinte tout le décor en rouge pendant une lune de sang, le brouillard se
+  resserre de moitié par mauvais temps, et les éclairs éclatent par-dessus.
+- Câblage : le vent arrive au `FlightModel.storm` déjà prévu depuis le lot 2 ; sous
+  une lune, `BearPack` impose **12** ours (pleine) ou **18** (de sang) — au-delà du
+  plafond ordinaire de 10 — et les ours qui naissent alors sont plus rapides et
+  vivent moins longtemps ; la collecte et les cadeaux se suspendent.
+
+**Trois décisions de portage**
+1. **`WorldEvents` n'est pas un autoload.** Le §4.4 en liste six ; celui-ci n'y
+   est pas, et il n'y avait pas de raison de l'y ajouter : c'est un état de
+   **manche**, pas un service global, et il se remet à zéro à chaque `beginGame()`
+   comme le score. Il vit donc en nœud sous `Main`, et `main.gd` le relie à ses
+   cinq lecteurs — exactement comme il relie déjà le hibou à la forêt.
+2. **La pluie est un `MultiMesh`, pas un système de particules.** Les 900 gouttes
+   ont une logique explicite (ancrage autour du hibou, mémoire du sol, voltige des
+   flocons) qu'un `GPUParticles3D` aurait fallu réécrire en shader. Le `MultiMesh`
+   garde le port 1:1 — et les transformations partent au GPU **en un seul appel**
+   (`MultiMesh.buffer`) plutôt qu'en 900 `set_instance_transform()`, parce qu'à
+   cette cadence c'est le coût des appels qui domine, pas le calcul.
+3. **Les rochers sont des icosaèdres construits à la main.** Three.js fournit
+   `IcosahedronGeometry` ; Godot n'a que des sphères UV, dont les pôles et les
+   quadrilatères ne ressemblent en rien à un galet. La géométrie est donc bâtie
+   ici — subdivision, projection sur la sphère, puis **taille au bruit** — en
+   quatre variantes construites une seule fois pour tout le jeu, et produites
+   **non indexées** avec une normale par facette, ce qui donne le rendu à facettes
+   du `flatShading: true` que Godot n'expose pas comme un interrupteur.
+
+**Bug trouvé par la recette.** À la fin d'une tempête, les rochers encore en l'air
+**continuaient leur chute** : un caillou lâché juste avant la bourrasque finale
+pouvait tuer bien après que le vent soit retombé. Le jeu d'origine les balaie
+(`deactivateStorm()`, ligne 1325) ; le signal `storm_ended` est désormais branché
+sur `RockStorm.clear_all()`.
+
+**Un compteur mort, volontairement non porté.** `rockInvul` est déclaré, remis à
+zéro et décrémenté dans le jeu d'origine — mais **jamais** mis à une valeur
+positive : le test `rockInvul <= 0` y est donc toujours vrai. Le porter aurait fait
+croire à une protection contre les rochers qui n'existe pas. Seul le bonus 🦉
+protège, et c'est ce qui est implémenté. Voir Écart n°21.
+
+**Recette**
+- `tests/test_world_events.gd`, **49/49**, pur (`--script`) : la machine à états
+  poussée à la seconde près, ce qu'aucune recette visuelle ne permettrait — une
+  lune dure 10 s, une tempête 20, et les délais entre événements se comptent en
+  dizaines de secondes. Vérifiés : le préavis de remplissage, l'extinction **à la
+  durée exacte** (à 0,05 s près, type de lune identifié avant l'extinction plutôt
+  qu'accepté dans une fourchette), l'absence de lune en plein jour, l'exclusion
+  mutuelle **dans les deux sens**, les rafales qui varient bien entre 0,60 et 2,40,
+  la pluie qui ne tombe pas sous une lune, les éclairs réservés à la tempête et
+  qui s'éteignent même jeu en pause, et l'effectif d'ours imposé par les lunes.
+- `tests/test_storm.tscn`, **22/22** : la tempête dans la vraie scène — rochers qui
+  tombent et dont la chute **accélère**, vivier plafonné à 46, vent répercuté au
+  modèle de vol, brouillard qui se resserre, pluie levée, rocher fatal malgré cinq
+  vies, et le ménage de fin de tempête. La chute est mesurée sur un rocher **isolé
+  du vivier** : une première version du test suivait un rocher pris dans la
+  tempête, que le recyclage lui volait en cours de mesure (il « montait » de 229 u).
+- Régression : lots 1 (11/11), 3+4 (31/31), 5 (7/7), 6 (31/31), 7 (28/28 + 45/45)
+  toujours au vert. CI complétée de deux étapes.
+- Recette visuelle en navigateur (`canvas.toDataURL()`, Écart n°14), **zéro erreur
+  console** : sous **T**, la pluie tombe en biais poussée par le vent et un rocher
+  taillé roule dans le décor ; sous **K**, le monde entier vire au rouge — la
+  lumière de la lune de sang teinte le relief, les arbres et les bâtiments, pas
+  seulement le ciel.
+- Un enseignement de la recette : maintenir **T** puis relâcher pour passer à **K**
+  ne montre pas la lune, parce que la tempête court encore ses 20 s restantes et
+  que l'exclusion mutuelle fait son travail. Ce n'est pas un défaut — c'est
+  exactement le comportement que le test headless vérifie — mais il faut deux
+  passages distincts pour voir les deux événements.
+
+**Coût web :** `.pck` 5,49 → **5,52 Mo** (+0,03). Le lot n'ajoute **aucun asset** :
+rochers, gouttes et quadrillage sont générés au démarrage, et la pluie réutilise la
+texture de halo déjà partagée depuis le lot 7.
+
+---
+
 ## Écarts constatés par rapport au plan
 
 | # | Constat | Impact |
@@ -646,3 +742,7 @@ baisse vient de la recompression du pack, pas d'un retrait.
 | 18 | **La régénération de carte ne bloque pas.** `beginGame()` en JS reconstruit le terrain de façon synchrone (le navigateur fige le temps du calcul). Ici `rebuild_async()` l'étale sur plusieurs frames. | Strictement mieux : la partie démarre immédiatement et **rien n'est faux entre-temps** — la hauteur du sol vient de la fonction `Terrain.effective_ground_y`, exacte dès la première frame pour le vol comme pour l'apparition des branches ; seul le relief **visible** rattrape son retard. A révélé un vrai défaut au passage : une demande reçue pendant une construction était perdue (voir « Piège rencontré », lot 7). |
 | 19 | **Godot n'a pas de `wireframe: true` hors mode debug.** Le quadrillage de bordure d'arène est une `SphereGeometry` affichée en fil de fer côté Three.js. | Reconstruit en maillage de **lignes** (`PRIMITIVE_LINES`) aux mêmes 40×28 subdivisions : mêmes parallèles, mêmes méridiens, et un maillage qui reste valide en export release (contrairement à `RenderingServer.set_debug_generate_wireframes`, réservé au debug). |
 | 20 | **La décision B prévoyait le signal `area_entered` ; c'est le recouvrement qui est interrogé à chaque pas.** Le signal ne se déclenche qu'à l'**entrée** dans la zone. | Juste pour une branche ou un cadeau (consommés à l'entrée), faux pour un ours : un contact commencé pendant l'invulnérabilité doit pouvoir mordre une fois celle-ci expirée, sans que le hibou ait à ressortir puis rentrer. `get_overlapping_areas()` par pas redonne exactement la sémantique du JS, pour un coût négligeable (une poignée de zones). Vérifié explicitement par la recette. |
+| 21 | **`rockInvul` du jeu d'origine est un compteur mort.** Il est déclaré (ligne 100), remis à zéro dans `beginGame()` et décrémenté chaque frame, mais **aucune ligne ne lui donne jamais de valeur positive** — le test `rockInvul <= 0` qui garde le contact avec les rochers est donc toujours vrai. | Non porté. Reproduire un compteur qui ne se déclenche jamais aurait fait croire, à la lecture du code Godot, à une protection contre les rochers qui n'existe pas dans le jeu. Le contact est donc gardé par le seul bonus 🦉 (`buffs.invincible`), qui, lui, fonctionne dans les deux versions. |
+| 22 | **`WorldEvents` n'est pas un autoload**, contrairement aux six services du §4.4. | C'est un état de **manche** (remis à zéro à chaque `beginGame()`, comme le score), pas un service global : il vit en nœud sous `Main`, que `main.gd` relie à ses cinq lecteurs. Un autoload aurait survécu aux parties et fait porter à un singleton un état qui appartient à la partie en cours. |
+| 23 | **La pluie n'est pas un système de particules.** `THREE.Points` n'a pas d'équivalent direct, et un `GPUParticles3D` aurait obligé à réécrire en shader une logique explicite (ancrage autour du hibou, mémoire de la hauteur du sol, voltige des flocons). | Portée en `MultiMesh` de quads en mode panneau d'affichage : port 1:1 de la logique, et les 900 transformations partent au GPU **en un seul appel** (`MultiMesh.buffer`) plutôt qu'en 900 appels individuels. La texture de halo est celle déjà partagée depuis le lot 7 : zéro octet ajouté au `.pck`. |
+| 24 | **Godot n'a pas d'`IcosahedronGeometry` ni d'interrupteur `flatShading`.** Les rochers du jeu sont des icosaèdres subdivisés, taillés au bruit, rendus à facettes. | Géométrie construite à la main (subdivision, projection sur la sphère, perturbation par un bruit **fonction de la position** — ce qui suffit à ce que deux sommets confondus bougent ensemble sans géométrie indexée), produite **non indexée** avec une normale par facette : c'est ce qui donne le rendu à facettes. Quatre variantes bâties une seule fois pour tout le jeu. |

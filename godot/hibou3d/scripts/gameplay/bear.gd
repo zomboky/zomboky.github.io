@@ -87,8 +87,11 @@ func set_active(value: bool) -> void:
 
 ## Fait naître l'ours près du hibou — port du corps de `newBear()`.
 ## [param round_time] pilote la rampe de difficulté, [param score] la vitesse.
+## [param moon] : sous une lune, l'ours est plus rapide et vit moins longtemps —
+## un pic bref et violent, là où un ours ordinaire est une menace qui dure.
 func spawn(owl_pos: Vector3, velocity: Vector3, round_time: float, score: int,
-		ramp_time: float, ground_y: Callable) -> void:
+		ramp_time: float, ground_y: Callable,
+		moon: WorldEvents.Moon = WorldEvents.Moon.NONE) -> void:
 	# Une fois sur deux, l'ours apparaît DEVANT le hibou, sur sa trajectoire :
 	# fuir tout droit, c'est foncer dans les prochains.
 	var dir: Vector3
@@ -115,11 +118,22 @@ func spawn(owl_pos: Vector3, velocity: Vector3, round_time: float, score: int,
 
 	# Rampe de début de partie : les premiers ours sont plus lents et chargent
 	# moins souvent, puis rejoignent la pleine intensité en `ramp_time` secondes.
+	# Les lunes, elles, sont des pics à pleine intensité d'emblée : la rampe ne
+	# s'applique pas, sans quoi l'événement n'aurait aucun mordant en début de partie.
 	var ramp: float = minf(round_time / ramp_time, 1.0)
-	var speed_ramp := lerpf(0.55, 1.0, ramp)
+	var under_moon := moon != WorldEvents.Moon.NONE
+	var speed_ramp := 1.0 if under_moon else lerpf(0.55, 1.0, ramp)
 
-	_life = roundi(randf_range(1000.0, 2000.0))
-	_speed_base = (11.0 + minf(score * 0.15, 10.0)) * speed_ramp
+	match moon:
+		WorldEvents.Moon.BLOOD:
+			_life = roundi(randf_range(400.0, 900.0))
+			_speed_base = (22.0 + minf(score * 0.15, 10.0)) * speed_ramp
+		WorldEvents.Moon.FULL:
+			_life = roundi(randf_range(300.0, 600.0))
+			_speed_base = (16.0 + minf(score * 0.15, 10.0)) * speed_ramp
+		_:
+			_life = roundi(randf_range(1000.0, 2000.0))
+			_speed_base = (11.0 + minf(score * 0.15, 10.0)) * speed_ramp
 	_lead = randf_range(0.5, 1.5)
 	_drift = Vector3.ZERO
 	_drift_timer = 0.0

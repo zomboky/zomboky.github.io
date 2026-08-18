@@ -15,10 +15,15 @@ extends Node3D
 @onready var world: GameWorld = $World
 @onready var sky: SkySystem = $Sky
 @onready var round_rules: SoloRound = $Entities
+@onready var events: WorldEvents = $Events
 @onready var hud: Hud = $UI/Hud
 @onready var screens: Screens = $UI/Screens
 
 @onready var _flight: OwlFlight = owl.get_node("Flight")
+
+## Niveau de mauvais temps lissé, dans [0, 1]. Amorti frame après frame vers
+## `WorldEvents.weather_target()` : un ciel ne se couvre pas d'un coup.
+var _weather_level := 0.0
 
 
 func _ready() -> void:
@@ -47,6 +52,12 @@ func _ready() -> void:
 	round_rules.owl = owl
 	round_rules.owl_flight = _flight
 	round_rules.pickup_area = owl.get_node("PickupArea")
+	round_rules.world_events = events
+	world.precipitation.ground_y = Terrain.effective_ground_y
+	# `deactivateStorm()` balaie les rochers encore en l'air (ligne 1325) : sans
+	# cela, un caillou lâché juste avant la fin continuerait sa chute et pourrait
+	# tuer bien après que le vent soit retombé.
+	events.storm_ended.connect(round_rules.rocks.clear_all)
 	round_rules.owl_died.connect(_game_over)
 	round_rules.gift_opened.connect(_on_gift_opened)
 	_flight.crashed_into_ground.connect(_on_crashed_into_ground)
@@ -64,6 +75,8 @@ func begin_game() -> void:
 	world.regenerate()
 	GameState.reset_round()
 	_flight.model.reset()
+	events.reset()
+	world.precipitation.reset(_flight.model.position)
 	round_rules.begin()
 	owl.visible = true
 	GameState.change_state(GameState.State.PLAY)
@@ -102,3 +115,38 @@ func _on_loot_finished() -> void:
 	GameState.change_state(GameState.State.PLAY)
 	round_rules.resume_after_loot()
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+## Les événements du monde n'avancent **qu'en jeu** : une lune ne se lève pas
+## derrière un écran de pause. Port de leur place dans la branche `S.PLAY` de
+## `update()` (lignes 6096-6102).
+func _physics_process(delta: float) -> void:
+	if GameState.state != GameState.State.PLAY:
+		return
+	# Aucune lune ne se déclenche naturellement en plein jour : l'événement lit
+	# l'heure au ciel plutôt que de la recalculer.
+	events.day_factor = sky.day_factor
+	events.step(delta)
+	# Le modèle de vol ne connaît pas les événements : c'est ici qu'il reçoit le
+	# vent, exactement comme il reçoit le bonus ⚡ depuis `SoloRound`.
+	var storm := _flight.model.storm
+	storm.active = events.storm_active
+	storm.wind_angle = events.wind_angle
+	storm.wind_force = events.wind_force
+
+
+## Le **rendu** de la météo, lui, tourne toujours — y compris derrière un menu :
+## « la pluie ne se fige pas » (commentaire de `updateWeatherFX`, ligne 1535). Le
+## niveau de mauvais temps est amorti ici et non dans `WorldEvents`, qui n'a pas à
+## savoir qu'un ciel met quelques secondes à se plomber.
+func _process(delta: float) -> void:
+	events.fade_lightning(delta)
+	_weather_level += (events.weather_target() - _weather_level) * minf(1.0, 1.2 * delta)
+
+	sky.moon_fill_progress = events.moon_fill_progress
+	sky.moon_blood = events.moon_state == WorldEvents.Moon.BLOOD
+	sky.weather_level = _weather_level
+	sky.lightning_flash = events.lightning_flash
+
+	world.precipitation.step(delta, owl.global_position, _weather_level,
+		events.storm_active, events.wind_angle, events.wind_force)

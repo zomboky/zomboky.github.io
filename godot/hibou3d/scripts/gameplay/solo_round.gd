@@ -40,22 +40,19 @@ const INVUL_AFTER_LOOT := 90
 ## Demi-période du clignotement d'invulnérabilité, en millisecondes.
 const BLINK_PERIOD_MS := 80
 
-## Ces deux drapeaux sont la place réservée aux **événements du monde (lot 8)** :
-## sous une lune, la collecte s'arrête (survie pure) et le compteur de combo gèle ;
-## sous une lune ou une tempête, aucun cadeau n'apparaît. Rien ne les met à `true`
-## aujourd'hui — c'est le lot 8 qui les branchera, sans retoucher ce fichier.
-var moon_active := false
-var storm_active := false
-
 ## Injectés par `main.gd` : le hibou piloté, sa couche de vol (position et vitesse
-## font autorité côté modèle) et sa sonde de ramassage.
+## font autorité côté modèle), sa sonde de ramassage, et les événements du monde
+## (lot 8) — sous une lune la collecte s'arrête (survie pure) et le combo gèle ;
+## sous une lune ou une tempête, aucun cadeau n'apparaît.
 var owl: Owl
 var owl_flight: OwlFlight
 var pickup_area: Area3D
+var world_events: WorldEvents
 
 @onready var branches: BranchField = %Branches
 @onready var bears: BearPack = %Bears
 @onready var gift: Gift = %Gift
+@onready var rocks: RockStorm = %Rocks
 
 ## Secondes écoulées dans la manche — pilote la rampe de difficulté des ours.
 var round_time := 0.0
@@ -68,6 +65,7 @@ func _ready() -> void:
 	branches.ground_y = Terrain.effective_ground_y
 	bears.ground_y = Terrain.effective_ground_y
 	gift.ground_y = Terrain.effective_ground_y
+	rocks.ground_y = Terrain.effective_ground_y
 
 
 ## Remet la manche à neuf et repeuple le monde autour du hibou — la part
@@ -82,6 +80,8 @@ func begin() -> void:
 	branches.reset(owl_pos, velocity)
 	bears.reset(owl_pos, velocity)
 	gift.reset()
+	rocks.owl_collide_radius = owl.collide_radius
+	rocks.clear_all()
 
 
 ## Applique le lot tiré — port de `applyGiftLoot()` (ligne 2939). Vit ici et non
@@ -123,10 +123,14 @@ func _physics_process(delta: float) -> void:
 	# et un ours sont touchés dans la même frame.
 	var touched := _touched_entities()
 
+	var moon_active := world_events != null and world_events.is_moon_active()
+	var storm_active := world_events != null and world_events.storm_active
+	bears.moon_state = world_events.moon_state if world_events != null else WorldEvents.Moon.NONE
+
 	_update_skim(delta, owl_pos)
 
 	# Sous une lune, la collecte s'arrête net : plus de ballotement, plus de
-	# recyclage, et le combo se fige au lieu de s'écouler (lot 8).
+	# recyclage, et le combo se fige au lieu de s'écouler.
 	if not moon_active:
 		branches.step(owl_pos, velocity)
 		for entity in touched:
@@ -146,7 +150,38 @@ func _physics_process(delta: float) -> void:
 			_open_gift()
 			break
 
+	_step_rocks(delta, owl_pos, velocity)
+	for entity in touched:
+		if entity is Rock and (entity as Rock).active:
+			_rock_contact(entity as Rock)
+			return  # partie terminée : plus rien à faire cette frame
+
 	_blink_owl()
+
+
+## Les rochers de tempête tombent et finissent leur course. Ils ne sont pilotés
+## que par le vent : c'est le seul système du lot 8 qui vit dans les entités,
+## parce que c'est le seul qui touche le hibou.
+func _step_rocks(delta: float, owl_pos: Vector3, velocity: Vector3) -> void:
+	if world_events == null:
+		return
+	rocks.step(delta, owl_pos, velocity, world_events.storm_active,
+		world_events.wind_angle, world_events.wind_force)
+
+
+## Contact avec un rocher — port du bloc de punition de `updateRocks()` (ligne
+## 1436). Contrairement à l'ours, le rocher ne retire pas une vie : il **tue net**,
+## comme le sol.
+##
+## Le `rockInvul` du jeu d'origine n'est pas porté : il y est déclaré, remis à
+## zéro et décrémenté, mais **jamais** mis à une valeur positive — le test
+## `rockInvul <= 0` est donc toujours vrai. Porter un compteur mort aurait fait
+## croire à une protection qui n'existe pas ; le bonus 🦉, lui, protège bien.
+func _rock_contact(rock: Rock) -> void:
+	if GameState.buffs.invincible > 0.0:
+		return
+	rock.set_active(false)
+	owl_died.emit("rock")
 
 
 ## Décroissance des bonus, en secondes — `buffs.x = Math.max(0, buffs.x - dt)`.
